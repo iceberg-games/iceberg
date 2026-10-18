@@ -34,6 +34,9 @@ export function earnSource(reason = '') {
 
 const LOADOUT_DEBOUNCE_MS = 600;
 /** Event cosmetics (earnOnly / eventOnly / unlock: 'quest') are granted by quests and never sold. Same rule as the server sync. */
+/** Limited-time shop item (Cosmetics' `event: '<id>'`): buyable only while that event is live. */
+export const eventOfItem = (item) => (item && (item.event ?? item.eventId)) || null;
+const EVENT_SALE_MSG = { event_not_started: 'On sale when the Natural Disasters event starts', event_ended: 'This was a limited-time item: the event has ended' };
 export const isGrantOnly = (item) => !!(item && (item.earnOnly || item.eventOnly || item.grantOnly || item.unlock === 'quest'));
 
 export class Economy {
@@ -199,6 +202,10 @@ export class Economy {
     const item = COSMETIC_BY_ID[id];
     if (!item) return { ok: false, reason: 'Unknown item' };
     if (isGrantOnly(item)) return { ok: false, reason: 'Earn this in the Natural Disasters event' };
+    if (!this.owns(id)) {                                        // owned copies are kept forever; only new sales are gated
+      const av = this.itemAvailability(id);
+      if (!av.forSale) return { ok: false, reason: EVENT_SALE_MSG[av.state] || 'Not for sale', code: av.state };
+    }
     if (!this.remote) {
       const res = this.backend.purchase(this.profile, item);
       if (res.ok) {
@@ -401,8 +408,43 @@ export class Economy {
   }
   /** Event window from the server ({ eventId, title, startsAt, endsAt, claimUntil, active, serverNow }); guests: local window. */
   async eventStatus(eventId) {
-    if (this.remote) { try { return await this.remote.eventStatus(eventId); } catch (e) { return { eventId, active: false, error: 'network', serverNow: new Date().toISOString() }; } }
+    if (this.remote) {
+      try {
+        const st = await this.remote.eventStatus(eventId);
+        if (st && !st.error) {
+          const prev = this._evCache?.[eventId];
+          (this._evCache ||= {})[eventId] = { status: st, at: Date.now(), offset: (Date.parse(st.serverNow) || Date.now()) - Date.now() };
+          if (!prev) bus.emit('shop:availability', { eventId });     // shop can re-render 'Limited time' badges
+        }
+        return st;
+      } catch (e) { return { eventId, active: false, error: 'network', serverNow: new Date().toISOString() }; }
+    }
     return this.backend.eventStatus(eventId);
+  }
+  /**
+   * Shop availability of a cosmetic (sync; signed-in uses the last event_status, refreshed every 60 s in the background).
+   * -> { forSale, limited, eventId?, state?: 'live'|'event_not_started'|'event_ended'|'unknown', startsAt?, endsAt?, msLeft? }
+   * Limited items (Cosmetics' `event: '<id>'`, not earnOnly) are sold only while the event is live (no grace); the
+   * server's buy_cosmetic enforces the same rule and refuses with reason 'event_not_started' / 'event_ended'.
+   * Before the first fetch returns, state is 'unknown' and a buy goes to the server, which decides.
+   */
+  itemAvailability(id, now = Date.now()) {
+    const item = COSMETIC_BY_ID[id], ev = eventOfItem(item);
+    if (!item) return { forSale: false, limited: false, state: 'unknown_item' };
+    if (isGrantOnly(item)) return { forSale: false, limited: !!ev, eventId: ev, state: 'not_for_sale' };
+    if (!ev) return { forSale: true, limited: false };
+    let st, t = now;
+    if (!this.remote) st = this.backend.eventStatus(ev, now);
+    else {
+      const c = this._evCache?.[ev];
+      if (!c || now - c.at > 60000) { if (!this._evPending?.[ev]) { (this._evPending ||= {})[ev] = this.eventStatus(ev).finally(() => { delete this._evPending[ev]; }); } }
+      if (!c) return { forSale: true, limited: true, eventId: ev, state: 'unknown' };
+      st = c.status; t = now + c.offset;
+    }
+    const s0 = st.startsAt ? Date.parse(st.startsAt) : null, e0 = st.endsAt ? Date.parse(st.endsAt) : null;
+    const state = e0 != null && t >= e0 ? 'event_ended' : (s0 == null || t < s0) ? 'event_not_started' : st.active === false ? 'event_ended' : 'live';
+    return { forSale: state === 'live', limited: true, eventId: ev, state, startsAt: st.startsAt || null, endsAt: st.endsAt || null,
+      msLeft: state === 'live' && e0 != null ? e0 - t : null };
   }
   /** Grant the quest's reward cosmetic once. Resolves { granted, itemId, alreadyClaimed?, reason? }. */
   async claimQuestReward(questId) {

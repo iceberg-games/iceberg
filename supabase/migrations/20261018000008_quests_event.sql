@@ -4,6 +4,8 @@
 --                         per-call max, minimum interval and hourly cap, inside the quest's active window
 --   claim_quest_reward()  grants the reward cosmetic exactly once (inventory PK + claimed_at)
 --   catalog_items.grant_only  event cosmetics: cannot be bought, not importable from guest saves
+--   catalog_items.event_id    buyable limited-time cosmetics: buy_cosmetic sells them only while that event
+--                         is live (starts_at <= now < ends_at, active; no grace). Owned copies are kept forever.
 --   game_consumable_prices + buy_consumable()  paid one-use items (e.g. Apple heal, Bigger Storm),
 --                         price synced from the game's config.js CONSUMABLE_PRICES_BB, idempotent per ref
 
@@ -27,6 +29,20 @@ create policy game_events_read on public.game_events for select to anon, authent
 revoke insert, update, delete on public.game_events from anon, authenticated;
 grant select on public.game_events to anon, authenticated;     -- writes: set_event_window (admins) / SQL editor
 insert into public.game_events (id, title) values ('natural_disasters', 'Natural Disasters Hunt') on conflict (id) do nothing;
+
+alter table public.catalog_items add column if not exists event_id text references public.game_events(id);
+
+-- 'live' | 'event_not_started' | 'event_ended' for a shop sale window (no claim grace). Unknown/null event = 'live'.
+create or replace function public._event_sale_state(p_event_id text) returns text
+language sql stable security definer set search_path = public as $$
+  select case
+    when p_event_id is null or e.id is null then 'live'
+    when e.ends_at is not null and now() >= e.ends_at then 'event_ended'
+    when e.starts_at is null or now() < e.starts_at then 'event_not_started'
+    when not e.active then 'event_ended'
+    else 'live' end
+  from (select 1) one left join public.game_events e on e.id = p_event_id $$;
+revoke all on function public._event_sale_state(text) from public, anon, authenticated;
 
 create table if not exists public.quest_defs (
   quest_id        text primary key check (quest_id ~ '^[a-z0-9_]{1,60}$'),
@@ -94,7 +110,7 @@ grant select on public.quest_progress to authenticated;     -- read own rows; wr
 -- grant-only (event) cosmetics can't be bought
 create or replace function public.buy_cosmetic(p_item_id text) returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare v_uid uuid := public._uid(); v_item public.catalog_items; v_bal bigint;
+declare v_uid uuid := public._uid(); v_item public.catalog_items; v_bal bigint; v_state text;
 begin
   select * into v_item from public.catalog_items where id = p_item_id and active;
   if not found then return jsonb_build_object('ok', false, 'reason', 'unknown_item'); end if;
@@ -102,6 +118,10 @@ begin
   perform 1 from public.profiles where id = v_uid for update;     -- serialize purchases per user
   if exists (select 1 from public.inventory where user_id = v_uid and item_id = p_item_id) then
     return jsonb_build_object('ok', false, 'reason', 'already_owned', 'coins', (select coins from public.profiles where id = v_uid));
+  end if;
+  v_state := public._event_sale_state(v_item.event_id);           -- limited-time shop items: only while the event is live
+  if v_state <> 'live' then
+    return jsonb_build_object('ok', false, 'reason', v_state, 'event', v_item.event_id, 'coins', (select coins from public.profiles where id = v_uid));
   end if;
   v_bal := public._credit(v_uid, -v_item.price, 'purchase', 'shop', 'Bought ' || v_item.name, 'buy:' || p_item_id);
   if v_bal is null then
@@ -129,6 +149,8 @@ begin
   select coalesce(array_agg(c.id), '{}') into v_items from (
     select distinct c.id from jsonb_array_elements_text(case when jsonb_typeof(p_local->'owned') = 'array' then p_local->'owned' else '[]'::jsonb end) o(id)
     join public.catalog_items c on c.id = o.id and c.active and not c.premium and not c.grant_only and c.price <= public._cfg('migration_max_item_price')
+     and (c.event_id is null or exists (select 1 from public.game_events e where e.id = c.event_id      -- limited items: from event start
+          and e.starts_at is not null and now() >= e.starts_at and (e.ends_at is null or now() < e.ends_at + e.claim_grace)))  -- to end + grace
     limit public._cfg('migration_max_items')) c;
   insert into public.inventory (user_id, item_id, source) select v_uid, unnest(v_items), 'migration' on conflict do nothing;
   update public.profiles set

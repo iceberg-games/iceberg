@@ -163,6 +163,19 @@ export const QUESTS = [
 - `economy.buy()` refuses them on the client too.
 - They can only enter an inventory through `claim_quest_reward` (or an admin).
 
+### Limited-time shop items (Cosmetics)
+
+- A buyable cosmetic (not `earnOnly`) with **`event: '<eventId>'`** (for example `storm_goggles`, `hail_umbrella` with `event: 'natural_disasters'`) is sold **only while that event is live**: `starts_at <= now < ends_at` and `active`. There is no claim grace for sales.
+- The sync stores the tag as `catalog_items.event_id` and creates the `game_events` row if it is missing (unscheduled).
+- `buy_cosmetic` refuses outside the window with `{ ok:false, reason:'event_not_started' | 'event_ended', event, coins }`. An unscheduled event (`starts_at` null) counts as not started; a paused event (`active=false`) counts as ended.
+- **Owned copies are kept forever** (equip, colours, loadout all keep working). `already_owned` is checked before the window.
+- Guest import (`migrate_local_profile`) brings a limited item over only from the event start until `ends_at + claim_grace`.
+- Client: `economy.itemAvailability(id[, now])` is synchronous and returns `{ forSale, limited, eventId?, state?, startsAt?, endsAt?, msLeft? }`. `state` is `'live' | 'event_not_started' | 'event_ended' | 'not_for_sale' | 'unknown'`.
+  - Signed in, it uses the last `event_status`, refreshed in the background every 60 s and corrected by `serverNow`. Before the first answer it is `'unknown'`, and a buy then goes to the server, which decides. Bus `shop:availability` fires when the first answer arrives.
+  - Guests use the local event window.
+  - `economy.buy(id)` applies the same rule and returns `{ ok:false, code:'event_not_started'|'event_ended', reason:<message> }`. A server refusal rolls back and emits `economy:rejected` with `reason` set to the server reason.
+- Shop UI (Cosmetics / ui.js owner): show a "Limited time" badge with `msLeft` when `limited && forSale`. After the event, hide unowned items or show "Event ended" (`state === 'event_ended' && !economy.owns(id)`).
+
 ### Paid items in a game: gears and consumables
 
 - **Permanent** items (e.g. the Green Balloon) are gears. Put them in `GEAR_PRICES_BB` in config.js and sell them with `economy.buyGear(gameId, gearId, price)` (the existing `buy_gear` RPC).
