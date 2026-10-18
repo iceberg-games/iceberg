@@ -764,7 +764,8 @@ if (want('portal')) {
       pe: document.getElementById('storm-layer') && getComputedStyle(document.getElementById('storm-layer')).pointerEvents, frames: window.icebergPortal.storm.layer?.stats.frames ?? 0,
       drops: window.icebergPortal.storm.layer?.stats.drops ?? 0, rain: document.querySelector('.storm-rain') && getComputedStyle(document.querySelector('.storm-rain')).display }));
     const seen = () => { localStorage.setItem('iceberg:v1:eventSeen:natural_disasters:device', 'x'); };
-    [c, p] = await fresh({}, seen); await p.goto(BASE); await p.waitForSelector('#view-games .game-card'); await p.waitForTimeout(1200);
+    [c, p] = await fresh({}, seen); await p.goto(BASE); await p.waitForSelector('#view-games .game-card');
+    await p.waitForFunction(() => (window.icebergPortal.storm.layer?.stats.frames ?? 0) > 5, null, { timeout: 10000 }).catch(() => {});   // slow under load
     let st = await stormState(p);
     check('storm theme: on while the event is active (layer behind content, pointer-events none, rain animating)', st.cls && st.layer && st.pe === 'none' && st.frames > 5 && st.drops > 40, JSON.stringify(st));
     await p.click('#games-sort button[data-sort="popular"]');
