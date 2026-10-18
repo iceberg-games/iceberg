@@ -21,6 +21,8 @@ create table if not exists public.quest_defs (
   max_per_call    integer not null default 1 check (max_per_call between 1 and 1000),
   min_interval_ms integer not null default 2000 check (min_interval_ms between 0 and 3600000),
   max_per_hour    integer not null default 60 check (max_per_hour between 1 and 100000),
+  max_per_minute  integer check (max_per_minute is null or max_per_minute between 1 and 10000),
+  description     text check (description is null or char_length(description) <= 200),
   active          boolean not null default true,
   updated_at      timestamptz not null default now(),
   check (ends_at is null or starts_at is null or ends_at > starts_at)
@@ -32,6 +34,8 @@ create table if not exists public.quest_progress (
   last_at      timestamptz,
   hour_start   timestamptz,
   hour_count   integer not null default 0,
+  minute_start timestamptz,
+  minute_count integer not null default 0,
   completed_at timestamptz,
   claimed_at   timestamptz,
   primary key (user_id, quest_id)
@@ -131,13 +135,13 @@ language sql stable as $$ select q.active and (q.starts_at is null or now() >= q
 
 create or replace function public._quest_json(q public.quest_defs, p public.quest_progress) returns jsonb
 language sql stable as $$
-  select jsonb_build_object('id', q.quest_id, 'gameId', q.game_id, 'title', q.title, 'goal', q.goal,
+  select jsonb_build_object('id', q.quest_id, 'gameId', q.game_id, 'title', q.title, 'description', q.description, 'goal', q.goal,
     'progress', least(coalesce(p.count, 0), q.goal), 'completed', p.completed_at is not null or coalesce(p.count, 0) >= q.goal, 'claimed', p.claimed_at is not null,
     'itemId', q.reward_item_id, 'eventId', q.event_id, 'startsAt', q.starts_at, 'endsAt', q.ends_at, 'live', public._quest_live(q))
 $$;
 
 -- Add progress. Server-side limits: delta 1..max_per_call, >= min_interval_ms between calls,
--- <= max_per_hour per rolling clock hour, only while the quest is live, capped at goal.
+-- <= max_per_minute per minute window (too_fast), <= max_per_hour per hour window, only while the quest is live, capped at goal.
 create or replace function public.quest_progress(p_quest_id text, p_delta integer default 1) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare v_uid uuid := public._uid(); q public.quest_defs; p public.quest_progress; v_add int; v_wait bigint;
@@ -155,11 +159,16 @@ begin
     return jsonb_build_object('ok', false, 'reason', 'too_fast', 'retryAfterMs', v_wait, 'quest', public._quest_json(q, p));
   end if;
   if p.hour_start is null or now() - p.hour_start >= interval '1 hour' then p.hour_start := now(); p.hour_count := 0; end if;
-  v_add := least(p_delta, q.max_per_hour - p.hour_count, q.goal - p.count);
+  if p.minute_start is null or now() - p.minute_start >= interval '1 minute' then p.minute_start := now(); p.minute_count := 0; end if;
+  if q.max_per_minute is not null and p.minute_count >= q.max_per_minute then
+    return jsonb_build_object('ok', false, 'reason', 'too_fast', 'retryAfterMs', ceil(extract(epoch from (p.minute_start + interval '1 minute' - now())) * 1000), 'quest', public._quest_json(q, p));
+  end if;
+  v_add := least(p_delta, q.max_per_hour - p.hour_count, q.goal - p.count, coalesce(q.max_per_minute - p.minute_count, p_delta));
   if v_add <= 0 then
     return jsonb_build_object('ok', false, 'reason', 'hourly_cap', 'retryAfterMs', ceil(extract(epoch from (p.hour_start + interval '1 hour' - now())) * 1000), 'quest', public._quest_json(q, p));
   end if;
   update public.quest_progress set count = count + v_add, last_at = now(), hour_start = p.hour_start, hour_count = p.hour_count + v_add,
+    minute_start = p.minute_start, minute_count = p.minute_count + v_add,
     completed_at = case when count + v_add >= q.goal then now() else null end
   where user_id = v_uid and quest_id = p_quest_id returning * into p;
   return jsonb_build_object('ok', true, 'added', v_add, 'quest', public._quest_json(q, p));

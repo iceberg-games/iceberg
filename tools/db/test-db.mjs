@@ -516,6 +516,18 @@ await t('disaster game: Green Balloon via buy_gear, Apple/Bigger Storm via buy_c
   assert.equal(led[0].s, -185);                                                                          // 150 + 10 + 25
 });
 
+
+await t("quests: Game Maker format (reward/event/maxPerMinute) syncs; per-minute cap -> too_fast, next minute ok", async () => {
+  const d = (await su(db, `select reward_item_id, event_id, max_per_minute, min_interval_ms, max_per_hour, description from public.quest_defs where quest_id = 'nd_quest_birg_hq'`))[0];
+  assert.deepEqual(d, { reward_item_id: 'meteor_pet', event_id: 'natural_disasters', max_per_minute: 10, min_interval_ms: 0, max_per_hour: 600, description: 'Find the 5 frozen meteor shards hidden in the cabin.' });
+  const u = await createUser(db, { username: 'ev_minute' });
+  let ok = 0, last;
+  for (let i = 0; i < 12; i++) { last = await rpc(db, u, 'quest_progress', { p_quest_id: 'nd_quest_birg_hq', p_delta: 1 }); if (last.ok) ok += last.added; }
+  assert.equal(ok, 10); assert.equal(last.reason, 'too_fast'); assert.ok(last.retryAfterMs > 0 && last.retryAfterMs <= 60000);
+  await su(db, `update public.quest_progress set minute_start = minute_start - interval '61 seconds' where user_id = $1`, [u]);
+  assert.equal((await rpc(db, u, 'quest_progress', { p_quest_id: 'nd_quest_birg_hq', p_delta: 1 })).added, 1);
+  assert.equal((await rpc(db, null, 'get_quests', { p_game_id: 'birg-hq' }))[0].description, 'Find the 5 frozen meteor shards hidden in the cabin.');
+});
 await db.close();
 for (const r of results) console.log(r[0], r[1], r[2] ? '\n     ' + r[2] : '');
 const failed = results.filter(r => r[0] === 'FAIL').length;

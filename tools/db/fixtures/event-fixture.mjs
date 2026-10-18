@@ -1,3 +1,4 @@
+import { normalizeQuest } from '../../../scripts/sync-catalog.mjs';
 // Test fixture for the Natural Disasters event, shaped exactly like the files Game Maker and
 // Cosmetics will add (until their branches land). Used by tools/db/test-db.mjs and the e2e test.
 export const ND_GAME_ID = 'natural-disaster-survival';
@@ -18,8 +19,9 @@ export const QUESTS = [
     eventId: 'natural-disasters', startsAt: '2026-10-01T00:00:00Z', endsAt: '2099-01-01T00:00:00Z', maxPerCall: 5, minIntervalMs: 1000, maxPerHour: 40 },
   { id: 'nd_quest_giant_obby', gameId: 'giant-rainbow-obby', title: 'Reach stage 50 in Giant Rainbow Obby', goal: 50, rewardItemId: 'lightning_back',
     eventId: 'natural-disasters', startsAt: '2026-10-01T00:00:00Z', endsAt: '2099-01-01T00:00:00Z', maxPerCall: 10, minIntervalMs: 0, maxPerHour: 200 },
-  { id: 'nd_quest_birg_hq', gameId: 'birg-hq', title: 'Warm up by the BIRG HQ fire 3 times', goal: 3, rewardItemId: 'meteor_pet',
-    eventId: 'natural-disasters', startsAt: '2026-10-01T00:00:00Z', endsAt: '2099-01-01T00:00:00Z' },
+  // Game Maker's own field names (event/natural-disasters branch): reward / event / maxPerMinute / description
+  { id: 'nd_quest_birg_hq', gameId: 'birg-hq', title: 'Fallen Star', description: 'Find the 5 frozen meteor shards hidden in the cabin.', goal: 20,
+    event: 'natural_disasters', reward: 'meteor_pet', rewardName: 'Frozen Meteor Pet', maxPerMinute: 10 },
 ];
 /** sync-catalog sources with the event fixture merged in */
 export function withEvent(src) {
@@ -29,6 +31,6 @@ export function withEvent(src) {
     games: src.games.some(g => g.id === ND_GAME_ID) ? src.games : [...src.games, { id: ND_GAME_ID, publishedAt: '2026-10-18T00:00:00Z', active: true, from: 'fixture' }],
     gears: [...src.gears.filter(g => g.gameId !== ND_GAME_ID), ...Object.entries(GEAR_PRICES_BB).map(([gearId, price]) => ({ gameId: ND_GAME_ID, gearId, price, from: 'fixture' }))],
     consumables: [...(src.consumables || []).filter(c => c.gameId !== ND_GAME_ID), ...Object.entries(CONSUMABLE_PRICES_BB).map(([itemId, price]) => ({ gameId: ND_GAME_ID, itemId, price, from: 'fixture' }))],
-    quests: [...(src.quests || []).filter(x => !QUESTS.some(y => y.id === x.id)), ...QUESTS.map(x => ({ ...x, from: 'fixture' }))],
+    quests: [...(src.quests || []).filter(x => !QUESTS.some(y => y.id === x.id)), ...QUESTS.map(x => ({ ...normalizeQuest(x), from: 'fixture' }))],
   };
 }
