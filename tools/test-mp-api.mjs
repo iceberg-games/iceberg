@@ -29,7 +29,7 @@ function emitPresence(topic, joins, leaves) {
 const members = [];                              // server roster order (joined_at)
 function makeRemote(username) {
   return { signedIn: true, accessToken: 't', realtimeConfig: { url: 'x', anonKey: 'y' },
-    async mpJoin() { if (!members.some(m => m.username === username)) members.push({ username, displayName: username.toUpperCase(), joinedAt: new Date(Date.now() + members.length).toISOString(), equipped: {} });
+    async mpJoin() { if (!members.some(m => m.username === username)) members.push({ username, displayName: username.toUpperCase(), joinedAt: new Date(Date.now() + members.length).toISOString(), equipped: username === 'ana' ? { hat: 'tornado_hat' } : {} });
       return { ok: true, instance: 1, topic: 'game:g:1', cap: 12, sendHz: 10, roster: members.slice(), serverNow: new Date(Date.now() + 5000).toISOString() }; },
     async mpHeartbeat() { return { ok: true, sendHz: 10, roster: members.slice(), serverNow: new Date(Date.now() + 5000).toISOString() }; },
     async mpLeave() { const i = members.findIndex(m => m.username === username); if (i >= 0) members.splice(i, 1); } };
@@ -99,7 +99,8 @@ await sleep(1500);
 const nb = C.mp.nearby(10);
 assert.deepEqual(nb.map(p => [p.id, p.name]), [['ana', 'ANA']], 'nearby(10) ' + JSON.stringify(nb));
 assert.deepEqual(nb[0].position, { x: 3, y: 0, z: 4 });
-assert.deepEqual(C.mp.nearby(100).map(p => p.id), ['ana', 'ben']);
+assert.equal(nb[0].hat, 'tornado_hat');                                             // from the roster loadout
+assert.deepEqual(C.mp.nearby(100).map(p => [p.id, p.hat]), [['ana', 'tornado_hat'], ['ben', null]]);
 assert.deepEqual(C.mp.nearby(-1), []);
 // a non-host can't forge state
 const forged = []; A.mp.onState('round', (val) => forged.push(val));

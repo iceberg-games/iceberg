@@ -395,7 +395,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
   }
 
   /** Remote players within `radius` world units of the local player, nearest first:
-   *  [{ id, name, position: { x, y, z } }]. Excludes the local player and avatars without a position yet.
+   *  [{ id, name, position: { x, y, z }, hat }] (hat = equipped hat id from the roster loadout, or null). Excludes the local player and avatars without a position yet.
    *  Position = the newest received roster sample (not frame-dependent; ~100 ms ahead of the drawn avatar). Empty when solo / not joined. */
   function nearby(radius = Infinity) {
     if (!s) return [];
@@ -405,7 +405,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     for (const [id, o] of s.others) {
       if (!o.avatar?.root?.visible) continue;
       const q = o.samples?.[o.samples.length - 1], p = q ? { x: q.x, y: q.y, z: q.z } : o.avatar.root.position, d = Math.hypot(p.x - me.x, p.y - me.y, p.z - me.z);
-      if (d <= r) out.push({ id, name: s.roster.get(id)?.displayName || id, position: { x: p.x, y: p.y, z: p.z }, d });
+      if (d <= r) { const ro = s.roster.get(id); out.push({ id, name: ro?.displayName || id, position: { x: p.x, y: p.y, z: p.z }, hat: ro?.equipped?.hat ?? null, d }); }
     }
     return out.sort((a, b) => a.d - b.d).map(({ d, ...rest }) => rest);
   }
