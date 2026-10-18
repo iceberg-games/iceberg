@@ -10,6 +10,8 @@ class FakeCtx { currentTime = 0; destination = {};
   createGain() { return { gain: param(), connect() {} }; }
   createOscillator() { return { type: '', frequency: param(), connect() {}, start() { starts++; }, stop() {} }; } }
 globalThis.window = { AudioContext: FakeCtx };
+// release merge: runtime.js now pulls in cosmetics' audio assets (.ogg via avatar.js); stub asset imports in Node
+await import('node:module').then(m => m.register('../tools/asset-stub-loader.mjs', import.meta.url));
 const { playSfx } = await import('../src/studio/runtime.js');
 const { isMuted } = await import('../src/audio/uiSounds.js');
 const results = [];

@@ -153,7 +153,7 @@ if (want('site')) {
     const c1 = await b.newContext({ viewport: { width: 1280, height: 860 } });
     const p1 = await c1.newPage(); const e1 = []; watch(p1, e1);
     const BIGM = /\.(glb|gltf|mp3|ogg|wav|m4a)(\?|$)/i, portalMedia = [];
-    p1.on('request', r => { if (BIGM.test(r.url())) portalMedia.push(r.url()); });
+    p1.on('request', r => { if (BIGM.test(r.url()) && !/\/audio\/ui\//.test(r.url())) portalMedia.push(r.url()); });   // UI click sounds (audio/ui/) are the portal's own
     await p1.goto(BASE);
     await p1.waitForSelector('#view-games .game-card');
     check('site: portal at root lists games', (await p1.$$('#view-games .game-card')).length >= 3);
@@ -166,7 +166,7 @@ if (want('site')) {
     await p1.waitForTimeout(1500);
     const shellKeys = await p1.evaluate(async () => { const out = []; for (const k of await caches.keys()) for (const r of await (await caches.open(k)).keys()) out.push(r.url); return out; });
     check('pwa: shell precache holds no models/audio (big media load on demand)', shellKeys.length >= 3 && !shellKeys.some(u => BIGM.test(u)), shellKeys.filter(u => BIGM.test(u)).join(' ') || shellKeys.length);
-    check('site: portal page downloads no models/audio', portalMedia.length === 0, portalMedia.join(' '));
+    check('site: portal page downloads no game models/audio (UI click sounds excepted)', portalMedia.length === 0, portalMedia.join(' '));
     if (existsSync(resolve(ROOT, 'src/games/cornerBakery'))) {
       const cb = await c1.newPage(); const ecb = []; watch(cb, ecb);
       const glb = cb.waitForResponse(r => /bakery-props-[\w-]+\.glb/.test(r.url()), { timeout: 30000 }).catch(() => null);
