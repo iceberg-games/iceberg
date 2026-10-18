@@ -31,6 +31,9 @@ export class UI {
     bus.on('rocket:colors', (c) => this.avatar.setRocketColors(c));
     bus.on('cosmetic:colors', (c) => this.avatar.setCosmeticColors(c));
     bus.on('models:changed', () => this.refreshDrawer());
+    // Limited-time shop items: re-render when server time / event status arrives, and tick countdowns.
+    bus.on('shop:availability', () => this.refreshDrawer());
+    setInterval(() => { if (this.drawerName === 'shop') this.refreshDrawer(); }, 30000);
     bus.on('game:loaded', ({ def, game }) => this._onGameLoaded(def, game));
     bus.on('game:unloaded', () => { this.hud.classList.add('hidden'); this.closeDrawer(); this.setBuild(false); });
     engine.input.onKey((e) => this._onKey(e));
@@ -203,10 +206,16 @@ export class UI {
     const cards = h('div.cards', COSMETICS.filter(filter).map(c => {
       const owned = e.owns(c.id), eq = e.isEquipped(c.id), afford = e.coins >= c.price;
       let action;
+      const av = c.earnOnly ? null : this._availability(c);
+      let limitBadge = null;
       if (owned) action = h('button.btn.equip' + (eq ? '.on' : ''), { onclick: () => { e.toggleEquip(c.id); this.toast(`${eq ? 'Unequipped' : 'Equipped'} ${c.name}`, c.icon); } }, eq ? 'Unequip' : 'Equip');
       else if (c.earnOnly) action = this._earnBadge(c);
+      else if (av && av.state === 'event_ended') action = h('button.btn.disabled.event-ended', { disabled: true }, 'Event ended');
+      else if (av && av.state === 'event_not_started') action = h('button.btn.disabled.coming-soon', { disabled: true }, 'Coming soon');
       else action = h('button.btn.buy' + (afford ? '' : '.disabled'), { onclick: () => this._buy(c) }, afford ? 'Buy' : `Need ${(c.price - e.coins).toLocaleString()}`);
-      return h('div.card' + (c.premium ? '.premium' : '') + (owned ? '.owned' : ''), { 'data-id': c.id },
+      if (av && av.limited && av.forSale && !owned) limitBadge = h('div.limited-badge', { style: 'display:inline-block;margin:2px auto 4px;padding:2px 8px;border-radius:999px;background:linear-gradient(90deg,#ff7a1a,#ff3d6e);color:#fff;font-size:11px;font-weight:700' }, `⏳ Limited time${av.msLeft > 0 ? ' · ' + this._fmtLeft(av.msLeft) + ' left' : ''}`);
+      return h('div.card' + (c.premium ? '.premium' : '') + (owned ? '.owned' : '') + (av?.state === 'event_ended' && !owned ? '.ended' : ''), { 'data-id': c.id, style: av?.state === 'event_ended' && !owned ? 'opacity:0.6' : null },
+        limitBadge,
         h('div.card-icon', c.icon), h('div.card-name', c.name),
         c.desc ? h('div.card-desc', c.desc) : null,
         h('div.price', owned ? (eq ? '✔ Equipped' : 'Owned') : c.earnOnly ? '🎁 Free event reward' : `${CURRENCY.icon} ${c.price.toLocaleString()} BB`),
@@ -252,11 +261,26 @@ export class UI {
     return h('div.earn-badge', { style, title: c.earnIn ? `Complete the ${c.earnIn} quest to unlock` : 'Earned through event quests' }, '🌪️ Earn in Natural Disasters', c.earnIn ? sub(c.earnIn) : null);
   }
 
+  // Publisher's limited-time API (guarded: older economies lack it).
+  _availability(c) {
+    const e = this.economy;
+    if (typeof e.itemAvailability !== 'function') return null;
+    try { return e.itemAvailability(c.id) || null; } catch { return null; }
+  }
+  _fmtLeft(ms) {
+    const m = Math.floor(ms / 60000), d = Math.floor(m / 1440), hh = Math.floor((m % 1440) / 60), mm = m % 60;
+    return d ? `${d}d ${hh}h` : hh ? `${hh}h ${mm}m` : `${Math.max(1, mm)}m`;
+  }
   _buy(c) {
-    const r = this.economy.buy(c.id);
+    const r = this.economy.buy(c.id) || { ok: false, reason: 'Could not buy right now' };
+    if (r && typeof r.then === 'function') { r.then((x) => this._buyResult(c, x || {}), () => this.toast('Could not buy right now. Try again soon.', '⚠️')); return; }
+    this._buyResult(c, r);
+  }
+  _buyResult(c, r) {
+    if (!r.ok && (r.code === 'event_ended' || r.code === 'event_not_started')) { this.toast(r.reason || (r.code === 'event_ended' ? `${c.name}: event has ended` : `${c.name}: coming soon`), '⏳'); this.refreshDrawer(); return; }
     if (r.ok) { this.economy.equip(c.id); this.toast(`Bought & equipped ${c.name}!`, c.icon); }
     else if (r.reason === 'Not enough coins') { this.toast(`Not enough ${CURRENCY.name} for ${c.name}`, '😕'); }
-    else this.toast(r.reason, '⚠️');
+    else this.toast(r.reason || 'Could not buy right now', '⚠️');
   }
 
   _locker() {

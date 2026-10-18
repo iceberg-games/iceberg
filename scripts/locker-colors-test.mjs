@@ -4,7 +4,7 @@ const url = 'file://' + (process.argv[2] || new URL('../dist/index.html', import
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 const SETS = { base: [['earmuffs', 'Cranberry'], ['snowglobe_pack', 'Gold Ribbon'], ['cocoa_mug', 'Mint'], ['frost_lantern', 'Aurora Green'], ['penguin_pal', 'Sky Scarf'], ['cable_sweater', 'Fjord Blue'], ['frost_specs', 'Rose Copper'], ['owl_hood', 'Tawny']],
-  nd: [['storm_goggles', 'Siren Red'], ['hail_umbrella', 'Cherry'], ['aurora_skin', 'Violet Sky'], ['ice_skates', 'Berry']] };
+  nd: [['storm_goggles', 'Siren Red'], ['hail_umbrella', 'Cherry'], ['aurora_skin', 'Violet Sky'], ['ice_skates', 'Berry'], ['storm_slicker', 'Glacier Blue']] };
 const LIST = SETS[process.env.SET || 'base'];
 const errs = []; page.on('pageerror', e => errs.push(e.message));
 await page.goto(url); await page.waitForFunction(() => window.iceberg);
