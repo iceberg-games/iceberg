@@ -86,6 +86,8 @@ export function normalizeQuest(qd) {
   if (o.maxPerMinute != null) { o.minIntervalMs ??= 0; o.maxPerHour ??= Math.min(100000, o.maxPerMinute * 60); }
   return o;
 }
+/** Display-only cosmetic field (Cosmetics); validated, not stored on the server (the client reads cosmetics.js). */
+export const RARITIES = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 export const isGrantOnly = (c) => !!(c && (c.earnOnly || c.eventOnly || c.grantOnly || c.unlock === 'quest'));
 const priceOf = (c) => (isGrantOnly(c) && c.price == null ? 0 : c.price);
 
@@ -126,6 +128,7 @@ export function validate({ items, phrases, gears = [], games = [], featured = []
     if (!c || typeof c.id !== 'string' || !/^[a-z0-9_]{1,40}$/.test(c.id)) errs.push(`bad item id: ${JSON.stringify(c && c.id)}`);
     else if (seen.has(c.id)) errs.push(`duplicate item id: ${c.id}`);
     seen.add(c?.id);
+    if (c?.rarity != null && !RARITIES.includes(c.rarity)) errs.push(`item ${c.id}: rarity must be one of ${RARITIES.join('/')} (got ${JSON.stringify(c.rarity)})`);
     if (!Number.isInteger(priceOf(c)) || priceOf(c) < 0) errs.push(`item ${c?.id}: price must be a non-negative integer (got ${c?.price})`);
     if (!c?.slot) errs.push(`item ${c?.id}: missing slot`);
     if (!c?.name) errs.push(`item ${c?.id}: missing name`);

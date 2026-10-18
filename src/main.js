@@ -4,6 +4,7 @@ import './style.css';
 import { backend, modelStore, modelPrefs } from './backend/LocalBackend.js';
 import { Economy } from './core/economy.js';
 import { bindQuests } from './core/quests.js';
+import { getAudioListener, setAudioCamera } from './core/audio.js';
 import { bus } from './core/events.js';
 import { Avatar } from './game/avatar.js';
 import { ModelLibrary } from './game/models.js';
@@ -70,7 +71,10 @@ async function boot() {
   const me = remote ? { username: economy.profile.username, displayName: economy.profile.displayName } : null;
   const gameChat = mountGameChat({ engine, avatar, remote, me, root: document.body,
     speak: (username, text, ms) => mp.speak(username, text, ms), onSent: () => mp.hintChat() });
-  const mp = createMultiplayer({ engine, getRemote: () => remote, bubbles: gameChat.bubbles, me: () => me });
+  // ONE AudioListener on the camera, shared by cosmetics/games/sfx (core/audio.js). The local avatar gets it now.
+  setAudioCamera(engine.camera);
+  try { avatar.attachWindAudio?.(getAudioListener()); } catch (e) { console.warn('audio listener', e); }
+  const mp = createMultiplayer({ engine, getRemote: () => remote, bubbles: gameChat.bubbles, me: () => me, getListener: getAudioListener });
   mp.onChatHint(() => gameChat.pollNow());
   addEventListener('pagehide', () => { mp.leave(); });
   bus.on('economy:rejected', (e) => ui.toast(e.action === 'buy' ? 'The server said no to that purchase; your Birg Bucks were refunded.' : 'Not enough Birg Bucks on the server.', '⚠️'));
@@ -104,7 +108,7 @@ async function boot() {
   menu.showTitle();
 
   // Handy hooks for automated tests / debugging in the console.
-  window.iceberg = { engine, mobileStudio, economy, quests, avatar, models, music, ui, menu, backend, remote, gameChat, mp, play: (id) => play(findGame(id)), edit, goHome };
+  window.iceberg = { engine, mobileStudio, economy, quests, getAudioListener, avatar, models, music, ui, menu, backend, remote, gameChat, mp, play: (id) => play(findGame(id)), edit, goHome };
   if (SITE_ROOT) registerServiceWorker(SITE_ROOT);
 }
 
