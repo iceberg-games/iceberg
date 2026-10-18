@@ -6,7 +6,12 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview --port 4173",
-    "test": "node scripts/e2e.mjs"
+    "test": "node scripts/e2e.mjs",
+    "build:site": "node scripts/build-site.mjs",
+    "dev:backend": "node tools/db/dev-server.mjs --data .devdb --static dist-site --static-port 8080",
+    "db:test": "node tools/db/test-db.mjs",
+    "db:migrate:local": "node scripts/migrate.mjs --local .devdb",
+    "catalog:check": "node scripts/sync-catalog.mjs --check"
   },
   "keywords": [],
   "author": "",
