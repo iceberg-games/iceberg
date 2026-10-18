@@ -44,6 +44,9 @@ const BUILDERS = {
   earmuffs(_rc, color) { return buildEarmuffs(color); },
   snowglobe_pack(_rc, color) { return buildSnowGlobe(color); },
   cocoa_mug(_rc, color) { return buildCocoaMug(color); },
+  storm_goggles(_rc, color) { return buildStormGoggles(color); },
+  hail_umbrella(_rc, color) { return buildHailUmbrella(color); },
+  ice_skates(_rc, color) { return buildIceSkates(color); },
   tornado_hat(_rc, color) { return buildTornadoHat(color); },
   lightning_back(_rc, color) { return buildLightningBack(color); },
   meteor_pet(_rc, color) { return buildMeteorPet(color); },
@@ -982,6 +985,182 @@ function buildBlizzardHat(color) {
   return { bone: 'head', object: g };
 }
 
+function buildStormGoggles(color) {
+  const g = new THREE.Group();
+  const frame = std('#2b3038', { roughness: 0.5, metalness: 0.3 });
+  const rubber = std('#15181d', { roughness: 0.9 });
+  const metal = std('#aeb8c4', { metalness: 0.9, roughness: 0.25 });
+  // animated radar HUD on the visor
+  const cv = document.createElement('canvas'); cv.width = 256; cv.height = 96;
+  const ctx = cv.getContext('2d'), tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  let hud = color;
+  const blips = [[0.3, 0.4], [0.62, 0.7], [0.8, 0.3]];
+  const drawHud = (a) => {
+    const c = new THREE.Color(hud), css = (k) => `rgba(${c.r * 255 | 0},${c.g * 255 | 0},${c.b * 255 | 0},${k})`;
+    ctx.fillStyle = '#0b1a24'; ctx.fillRect(0, 0, 256, 96);
+    const grd = ctx.createLinearGradient(0, 0, 0, 96); grd.addColorStop(0, css(0.35)); grd.addColorStop(1, css(0.1)); ctx.fillStyle = grd; ctx.fillRect(0, 0, 256, 96);
+    for (const cx of [64, 192]) {
+      ctx.strokeStyle = css(0.6); ctx.lineWidth = 1.5;
+      for (const r of [14, 28, 40]) { ctx.beginPath(); ctx.arc(cx, 48, r, 0, Math.PI * 2); ctx.stroke(); }
+      ctx.beginPath(); ctx.moveTo(cx - 42, 48); ctx.lineTo(cx + 42, 48); ctx.moveTo(cx, 6); ctx.lineTo(cx, 90); ctx.stroke();
+      const sw = ctx.createConicGradient ? ctx.createConicGradient(a - 0.8, cx, 48) : null;
+      if (sw) { sw.addColorStop(0, css(0)); sw.addColorStop(0.12, css(0.75)); sw.addColorStop(0.125, css(0)); ctx.fillStyle = sw; ctx.beginPath(); ctx.arc(cx, 48, 40, 0, Math.PI * 2); ctx.fill(); }
+      ctx.strokeStyle = css(1); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(cx, 48); ctx.lineTo(cx + Math.cos(a) * 40, 48 + Math.sin(a) * 40); ctx.stroke();
+      for (const [bx, by] of blips) { const x = cx - 40 + bx * 80, y = 8 + by * 80, ang = Math.atan2(y - 48, x - cx); const fade = ((a - ang) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2); ctx.fillStyle = css(Math.max(0.15, 1 - fade / 3)); ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill(); }
+    }
+    ctx.fillStyle = css(0.9); ctx.font = 'bold 10px monospace'; ctx.fillText('WIND 87', 104, 14); ctx.fillText('▲ F3', 112, 90);
+    tex.needsUpdate = true;
+  };
+  drawHud(0);
+  const lens = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: '#ffffff', emissiveIntensity: 0.9, roughness: 0.05, metalness: 0.2, transparent: true, opacity: 0.95 });
+  const Y = 0.37, Z = 0.33;
+  // strap wrapping the head + buckle
+  g.add(mesh(new THREE.BoxGeometry(0.665, 0.09, 0.665), rubber, 0, Y, 0));
+  g.add(mesh(new THREE.BoxGeometry(0.08, 0.1, 0.03), metal, 0, Y, -0.335));
+  // chunky frame with rounded visor
+  g.add(mesh(new RoundedBoxGeometry(0.6, 0.2, 0.07, 3, 0.03), frame, 0, Y, Z));
+  const visor = mesh(new THREE.PlaneGeometry(0.52, 0.15), lens, 0, Y, Z + 0.036); visor.castShadow = false; g.add(visor);
+  g.add(mesh(new THREE.BoxGeometry(0.03, 0.15, 0.02), frame, 0, Y, Z + 0.04)); // nose divider
+  for (const s of [-1, 1]) {
+    g.add(rotated(mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.05, 12), metal, s * 0.31, Y, Z - 0.01), 'z', Math.PI / 2));
+    const vent = mesh(new THREE.BoxGeometry(0.06, 0.02, 0.02), rubber, s * 0.18, Y + 0.105, Z + 0.02); g.add(vent);
+  }
+  // brow lamp with glow, plus a little antenna
+  const lampM = std('#ffffff', { emissive: color, emissiveIntensity: 1.2 });
+  g.add(mesh(new RoundedBoxGeometry(0.12, 0.06, 0.06, 2, 0.015), frame, 0, Y + 0.14, Z + 0.0));
+  g.add(rotated(mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.012, 14), lampM, 0, Y + 0.14, Z + 0.033), 'x', Math.PI / 2));
+  const glowM = new THREE.SpriteMaterial({ map: softDotTexture(), color, transparent: true, opacity: 0.6, depthWrite: false, blending: THREE.AdditiveBlending });
+  const glow = new THREE.Sprite(glowM); glow.scale.setScalar(0.14); glow.position.set(0, Y + 0.14, Z + 0.05); g.add(glow);
+  g.add(mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.16, 6), metal, 0.25, Y + 0.17, Z - 0.03));
+  const tip = mesh(new THREE.SphereGeometry(0.015, 8, 6), lampM, 0.25, Y + 0.255, Z - 0.03); g.add(tip);
+  let a = 0, acc = 0, t = 0;
+  g.userData.tick = (dt) => {
+    a += dt * 2.4; acc += dt; t += dt;
+    if (acc > 1 / 20) { acc = 0; drawHud(a); }   // 20 fps HUD redraw
+    glowM.opacity = 0.45 + Math.sin(t * 4) * 0.15; tip.visible = Math.sin(t * 6) > -0.2;
+  };
+  g.userData.setColor = (c) => { hud = c; drawHud(a); lampM.emissive.set(c); glowM.color.set(c); };
+  return { bone: 'head', object: g };
+}
+
+function buildIceSkates(color) {
+  const g = new THREE.Group();
+  const leather = std(color, { roughness: 0.55 });
+  const cuff = std(_tint(color, '#ffffff', 0.18), { roughness: 0.9 });
+  const sole = std('#3b2a1e', { roughness: 0.7 });
+  const steel = std('#e8eef5', { metalness: 0.55, roughness: 0.25 });
+  const laceM = std('#fbfbf6', { roughness: 0.9 });
+  function skate() {
+    const s = new THREE.Group();
+    s.add(mesh(new RoundedBoxGeometry(0.34, 0.13, 0.15, 3, 0.05), leather, 0.02, 0, 0));          // foot
+    s.add(mesh(new RoundedBoxGeometry(0.17, 0.3, 0.16, 3, 0.05), leather, -0.07, 0.17, 0));       // shaft
+    s.add(mesh(new RoundedBoxGeometry(0.19, 0.06, 0.18, 2, 0.025), cuff, -0.07, 0.33, 0));        // padded cuff
+    s.add(mesh(new THREE.BoxGeometry(0.36, 0.03, 0.155), sole, 0.02, -0.075, 0));
+    s.add(mesh(new THREE.BoxGeometry(0.08, 0.06, 0.155), sole, -0.12, -0.1, 0));                  // heel
+    for (const x of [-0.12, 0.13]) s.add(mesh(new THREE.BoxGeometry(0.04, 0.07, 0.03), steel, x, -0.125, 0));
+    s.add(mesh(new THREE.BoxGeometry(0.42, 0.035, 0.018), steel, 0.01, -0.17, 0));                // blade
+    s.add(rotated(mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.018, 16, 1, false, 0, Math.PI), steel, 0.22, -0.17, 0), 'x', Math.PI / 2)); // curled toe pick
+    for (let i = 0; i < 4; i++) {                                                                  // criss-cross laces on the front
+      const y = 0.04 + i * 0.07;
+      for (const sgn of [-1, 1]) s.add(rotated(mesh(new THREE.BoxGeometry(0.01, 0.014, 0.15), laceM, 0.02, y + 0.06, 0), 'x', sgn * 0.45));
+    }
+    return s;
+  }
+  const front = skate(); front.position.set(0.24, -0.02, 0.35); front.rotation.set(0, 0, -0.35); front.scale.setScalar(0.9);
+  const back = skate(); back.position.set(0.24, -0.02, -0.35); back.rotation.set(0, Math.PI, 0.35); back.scale.setScalar(0.9);
+  // laces on the front face need to sit on the shaft front: shift
+  g.add(front, back);
+  const curve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0.2, 0.28, 0.35), new THREE.Vector3(0.28, 0.5, 0.29), new THREE.Vector3(0.3, 0.56, 0),
+    new THREE.Vector3(0.28, 0.5, -0.29), new THREE.Vector3(0.2, 0.28, -0.35)]);
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 32, 0.015, 6), laceM));
+  g.userData.setColor = (c) => { leather.color.set(c); cuff.color.copy(_tint(c, '#ffffff', 0.18)); };
+  return { bone: 'torso', object: g };
+}
+
+function buildHailUmbrella(color) {
+  const g = new THREE.Group(); g.position.set(0, -0.95, 0.31); g.rotation.z = 0.22; g.rotation.x = -0.06; // lean the canopy over the head
+  const ribs = 8, R = 0.66, top = 2.12;
+  // canopy: alternating panel shades + scalloped trim
+  const panelA = std(color, { roughness: 0.55, side: THREE.DoubleSide, flatShading: true });
+  const panelB = std(_tint(color, '#ffffff', 0.18), { roughness: 0.55, side: THREE.DoubleSide, flatShading: true });
+  const trimM = std(_tint(color, '#000000', 0.35), { roughness: 0.6 });
+  const metal = std('#c9d2db', { metalness: 0.9, roughness: 0.25 });
+  const canopy = new THREE.Group(); canopy.position.y = top; g.add(canopy);
+  for (let i = 0; i < ribs; i++) {
+    const a0 = i / ribs * Math.PI * 2, a1 = (i + 1) / ribs * Math.PI * 2;
+    const geo = new THREE.BufferGeometry();
+    const pt = (a, r) => { const sag = Math.pow(r / R, 1.6) * 0.22; return [Math.cos(a) * r, -sag, Math.sin(a) * r]; };
+    const v = [];
+    const segs = 4;
+    for (let k = 0; k < segs; k++) {
+      const r0 = k / segs * R, r1 = (k + 1) / segs * R;
+      const p00 = pt(a0, r0), p01 = pt(a1, r0), p10 = pt(a0, r1), p11 = pt(a1, r1), pm = pt((a0 + a1) / 2, r1 * 0.97);
+      v.push(...p00, ...p10, ...pm, ...p00, ...pm, ...p01, ...p01, ...pm, ...p11);
+    }
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(v, 3)); geo.computeVertexNormals();
+    canopy.add(mesh(geo, i % 2 ? panelA : panelB));
+    // rib + tip
+    const tipP = pt(a0, R);
+    const tipV = new THREE.Vector3(...tipP), rib = mesh(new THREE.CylinderGeometry(0.006, 0.006, tipV.length(), 5), metal, tipP[0] / 2, tipP[1] / 2 - 0.004, tipP[2] / 2);
+    rib.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tipV.clone().normalize()); canopy.add(rib);
+    canopy.add(mesh(new THREE.SphereGeometry(0.018, 8, 6), trimM, ...tipP));
+  }
+  canopy.add(rotated(mesh(new THREE.TorusGeometry(R * 0.985, 0.012, 6, 48), trimM, 0, -0.215, 0), 'x', Math.PI / 2));
+  canopy.add(mesh(new THREE.ConeGeometry(0.03, 0.12, 10), metal, 0, 0.06, 0));          // ferrule
+  canopy.add(mesh(new THREE.SphereGeometry(0.03, 10, 8), trimM, 0, 0.0, 0));
+  // shaft + crook handle in the fist
+  g.add(mesh(new THREE.CylinderGeometry(0.016, 0.016, top + 0.05, 8), metal, 0, top / 2 - 0.02, 0));
+  const handle = mesh(new THREE.TorusGeometry(0.06, 0.022, 8, 16, Math.PI), std('#6b4426', { roughness: 0.5 }), -0.06, -0.04, 0);
+  handle.rotation.z = Math.PI; g.add(handle);
+  g.add(mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.12, 10), std('#6b4426', { roughness: 0.5 }), 0, 0.02, 0));
+  // hailstones: instanced, fall onto the canopy and bounce off
+  const HN = 22, hail = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.028, 0), std('#eef8ff', { roughness: 0.15, transparent: true, opacity: 0.92, flatShading: true }), HN);
+  hail.castShadow = false; g.add(hail);
+  const st = [], dm = new THREE.Object3D();
+  const spawn = (h, first) => { const a = Math.random() * 6.28, r = Math.sqrt(Math.random()) * R * 0.9; h.x = Math.cos(a) * r; h.z = Math.sin(a) * r; h.y = top + 0.5 + (first ? Math.random() * 0.8 : Math.random() * 0.3); h.vx = 0; h.vz = 0; h.vy = -1.2; h.bounced = false; h.life = 0; };
+  for (let i = 0; i < HN; i++) { const h = {}; spawn(h, true); st.push(h); }
+  const surf = (x, z) => top - Math.pow(Math.min(1, Math.hypot(x, z) / R), 1.6) * 0.22 + 0.03;
+  const step = (dt) => {
+    for (let i = 0; i < HN; i++) {
+      const h = st[i]; h.vy -= 4.5 * dt; h.x += h.vx * dt; h.y += h.vy * dt; h.z += h.vz * dt; h.life += dt;
+      const inside = Math.hypot(h.x, h.z) < R;
+      if (inside && !h.bounced && h.y <= surf(h.x, h.z)) {
+        const r = Math.hypot(h.x, h.z) || 1;   // bounce outward along the slope
+        h.y = surf(h.x, h.z); h.vy = 0.9 + Math.random() * 0.4; h.vx = h.x / r * (0.5 + Math.random() * 0.4); h.vz = h.z / r * (0.5 + Math.random() * 0.4); h.bounced = true;
+      }
+      if (h.y < top - 0.9 || h.life > 3) spawn(h, false);
+      dm.position.set(h.x, h.y, h.z); dm.rotation.set(h.life * 5, h.life * 3, 0); dm.updateMatrix(); hail.setMatrixAt(i, dm.matrix);
+    }
+    hail.instanceMatrix.needsUpdate = true;
+  };
+  step(0.016);
+  g.userData.tick = (dt) => step(Math.min(dt, 0.05));
+  g.userData.setColor = (c) => { panelA.color.set(c); panelB.color.copy(_tint(c, '#ffffff', 0.18)); trimM.color.copy(_tint(c, '#000000', 0.35)); };
+  return { bone: 'armR', object: g };
+}
+
+// Aurora shimmer for shimmer skins: patches skin materials once; uAur=0 means no effect.
+function addAuroraShimmer(mat, uniforms) {
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, uniforms);
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vAurPos;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvAurPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vAurPos; uniform float uAur, uAurTime; uniform vec3 uAurColor;')
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        if (uAur > 0.0) {
+          float b1 = sin(vAurPos.y * 7.0 + vAurPos.x * 3.0 - uAurTime * 1.6) * 0.5 + 0.5;
+          float b2 = sin(vAurPos.y * 11.0 - vAurPos.z * 4.0 + uAurTime * 1.1) * 0.5 + 0.5;
+          vec3 shift = 0.5 + 0.5 * cos(6.2832 * (vec3(0.0, 0.33, 0.67) + vAurPos.y * 0.35 + uAurTime * 0.08));
+          vec3 aur = mix(uAurColor, shift, 0.45);
+          float keep = smoothstep(0.12, 0.45, dot(diffuseColor.rgb, vec3(0.333)));   // keep face features dark
+          totalEmissiveRadiance += aur * (pow(b1, 3.0) * 0.55 + pow(b2, 4.0) * 0.35 + 0.12) * uAur * keep;
+        }`);
+  };
+  mat.customProgramCacheKey = () => 'aurora-shimmer';
+  mat.needsUpdate = true;
+}
+
 export class Avatar {
   constructor() {
     this.root = new THREE.Group();
@@ -990,6 +1169,10 @@ export class Avatar {
     const faceMat = new THREE.MeshStandardMaterial({ map: faceTexture(), color: DEFAULT.skin, roughness: 0.6 }); // per-avatar face canvas, texture & material
     this.faceMat = faceMat;
     // talking state (driven by animate(); no timers)
+    // aurora shimmer skin (shared uniforms across skin materials of this avatar)
+    this._aurU = { uAur: { value: 0 }, uAurTime: { value: 0 }, uAurColor: { value: new THREE.Color('#8fe8ff') } };
+    for (const m of [this.mats.skin, this.mats.arms, faceMat]) addAuroraShimmer(m, this._aurU);
+    this._shimmerId = null;
     this._talkLeft = 0;        // ms of auto talking remaining (talk())
     this._talkManual = false;  // setTalking(true)
     this._talkClock = 0; this._mouthFrame = 0; this._mouthSeq = 0; this._talkActive = false;
@@ -1017,6 +1200,7 @@ export class Avatar {
   }
 
   setColors({ skin, shirt, pants }) {
+    this._lastColors = { skin, shirt, pants };
     this.mats.skin.color.set(skin || DEFAULT.skin);
     this.faceMat.color.set(skin || DEFAULT.skin);
     this.mats.torso.color.set(shirt || DEFAULT.torso);
@@ -1185,10 +1369,14 @@ export class Avatar {
     if (profile.cosmeticColors) this.cosmeticColors = { ...profile.cosmeticColors };
     for (const slot of Object.keys(this.attached)) this._detach(slot);
     let skin = null, shirt = null, pants = null;
+    this._shimmerId = null; this._aurU.uAur.value = 0;
     for (const [slot, id] of Object.entries(profile.equipped || {})) {
       const item = COSMETIC_BY_ID[id];
       if (!item) continue;
-      if (item.kind === 'skin') skin = item.color;
+      if (item.kind === 'skin') {
+        skin = (item.customizable && this.cosmeticColors[id]) || item.color;
+        if (item.shimmer) { this._shimmerId = id; this._aurU.uAur.value = 1; this._aurU.uAurColor.value.set(skin); }
+      }
       else if (item.kind === 'shirt') { shirt = item.color; pants = item.pants; }
       else if (BUILDERS[id]) {
         const { bone, object, extras } = BUILDERS[id](this.rocketColors, this.cosmeticColors[id] || item.defaultColor);
@@ -1218,6 +1406,7 @@ export class Avatar {
     this.cosmeticColors = { ...this.cosmeticColors, [id]: color };
     const o = Object.values(this.attached).find(o => o.userData.cosmeticId === id);
     o?.userData.setColor?.(color);
+    if (this._shimmerId === id) { this._aurU.uAurColor.value.set(color); this.setColors({ ...this._lastColors, skin: color }); }
   }
   setCosmeticColors(colors) { for (const [id, c] of Object.entries(colors || {})) this.setCosmeticColor(id, c); }
   hasRocket() { return Object.values(this.attached).some(o => o.userData.cosmeticId === 'icerocket'); }
@@ -1307,6 +1496,7 @@ export class Avatar {
     else if (this.hasRocket() && Math.random() < 0.15) this._emitTrail(1);
     this._updateTrail(dt);
     this._updateWind(dt);
+    if (this._shimmerId) this._aurU.uAurTime.value += dt;
     for (const o of Object.values(this.attached)) o.userData.tick?.(dt);
     this._updateTalk(dt);
   }
