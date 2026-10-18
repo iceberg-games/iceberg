@@ -7,8 +7,8 @@ export const GAME_ID = 'natural-disaster-survival';
 export const SURVIVE_REWARD_BB = 5;
 /** At most this many BB from survival per play session (10 rounds). The server also caps game earnings per day. */
 export const SESSION_EARN_CAP_BB = 50;
-/** Earn source/reason. Proposed server cap row: source 'disaster_survival', 5 per call, 100 per day. */
-export const EARN_SOURCE = 'disaster_survival';
+/** Earn source/reason: economy.earn(pay, reason, { source: 'disaster_survival' }). */
+export const EARN_SOURCE = 'disaster_survival';   // Publisher migration: capped at 9 BB per call, 100 BB per day
 export const EARN_REASON = 'Natural Disaster Survival round survived';
 
 /** Permanent gears (economy.buyGear / ownsGear, scoped to this game only). Read by scripts/sync-catalog.mjs. */
