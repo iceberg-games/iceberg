@@ -149,6 +149,8 @@ if (want('site')) {
     // --- player 1: guest progress, then sign up -> migration
     const c1 = await b.newContext({ viewport: { width: 1280, height: 860 } });
     const p1 = await c1.newPage(); const e1 = []; watch(p1, e1);
+    const BIGM = /\.(glb|gltf|mp3|ogg|wav|m4a)(\?|$)/i, portalMedia = [];
+    p1.on('request', r => { if (BIGM.test(r.url())) portalMedia.push(r.url()); });
     await p1.goto(BASE);
     await p1.waitForSelector('#view-games .game-card');
     check('site: portal at root lists games', (await p1.$$('#view-games .game-card')).length >= 3);
@@ -158,6 +160,20 @@ if (want('site')) {
     check('pwa: manifest loads (relative scope, icons)', man.ok && man.scope === './' && man.icons >= 2, JSON.stringify(man));
     const iconOk = await p1.evaluate(async () => (await fetch('icons/icon-512.png')).ok);
     check('pwa: icons served', iconOk);
+    await p1.waitForTimeout(1500);
+    const shellKeys = await p1.evaluate(async () => { const out = []; for (const k of await caches.keys()) for (const r of await (await caches.open(k)).keys()) out.push(r.url); return out; });
+    check('pwa: shell precache holds no models/audio (big media load on demand)', shellKeys.length >= 3 && !shellKeys.some(u => BIGM.test(u)), shellKeys.filter(u => BIGM.test(u)).join(' ') || shellKeys.length);
+    check('site: portal page downloads no models/audio', portalMedia.length === 0, portalMedia.join(' '));
+    if (existsSync(resolve(ROOT, 'src/games/cornerBakery'))) {
+      const cb = await c1.newPage(); const ecb = []; watch(cb, ecb);
+      const glb = cb.waitForResponse(r => /bakery-props-[\w-]+\.glb/.test(r.url()), { timeout: 30000 }).catch(() => null);
+      await cb.goto(BASE + 'play/?game=corner-bakery');
+      const gr = await glb;
+      check('corner-bakery: props .glb served beside play/ and loads on demand', !!gr && gr.ok() && gr.url().startsWith(BASE + 'play/'), gr ? gr.status() + ' ' + gr.url() : 'no request');
+      await cb.waitForTimeout(2500);
+      check('corner-bakery: starts on the site build without errors', ecb.length === 0, ecb.join(' | '));
+      await cb.close();
+    }
     await p1.evaluate(() => localStorage.setItem('iceberg:v1:profile', JSON.stringify({ coins: 300, demoGranted: 0, owned: ['cap', 'icerocket'], equipped: { hat: 'cap', back: 'icerocket' },
       cosmeticColors: { earmuffs: '#2f6f4a' }, rocketColors: { body: '#ff0000', fins: '#3f8fd0', trim: '#7fe3ff' } })));
     await p1.click('#p-signin-open');
