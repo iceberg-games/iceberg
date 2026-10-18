@@ -19,10 +19,12 @@ export function attachRealtime(server, { db, uidForToken, anonKey }) {
   let bucket = { t: Math.floor(Date.now() / 1000), n: 0 };
   const count = (n = 1) => { const t = Math.floor(Date.now() / 1000); if (t !== bucket.t) { stats.perSecond.push(bucket); if (stats.perSecond.length > 600) stats.perSecond.shift(); bucket = { t, n: 0 }; } bucket.n += n; stats.events += n; };
 
+  const sockets = new Set();
   server.on('upgrade', (req, sock) => {
     const url = new URL(req.url, 'http://x');
     if (url.pathname !== '/realtime/v1/websocket' || url.searchParams.get('apikey') !== anonKey) { sock.end('HTTP/1.1 401 Unauthorized\r\n\r\n'); return; }
     const accept = createHash('sha1').update(req.headers['sec-websocket-key'] + GUID).digest('base64');
+    sockets.add(sock); sock.on('close', () => sockets.delete(sock));
     sock.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
     const conn = { sock, joined: new Map(), token: null, alive: true };   // joined: topic -> member
     const out = (msg) => { if (!conn.alive) return; count(); try { sock.write(frame(JSON.stringify(msg))); } catch { /* closed */ } };
@@ -109,6 +111,8 @@ export function attachRealtime(server, { db, uidForToken, anonKey }) {
 
   return {
     stats,
+    /** Test helper: cut every Realtime socket (like a network drop / server restart). Returns how many. */
+    dropAll: () => { const n = sockets.size; for (const k of sockets) k.destroy(); return n; },
     topicMembers: (topic) => [...(topics.get(topic) || [])].map(m => m.key),
     maxPerSecond: (sinceMs = 0) => Math.max(0, ...stats.perSecond.filter(b => b.t * 1000 >= sinceMs).map(b => b.n), bucket.t * 1000 >= sinceMs ? bucket.n : 0),
     eventsSince: (sinceMs) => stats.perSecond.filter(b => b.t * 1000 >= sinceMs).reduce((n, b) => n + b.n, 0) + (bucket.t * 1000 >= sinceMs ? bucket.n : 0),

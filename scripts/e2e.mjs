@@ -420,7 +420,8 @@ if (want('mp')) {
     check('mp: 3 players auto-placed in the same instance', ia.instance === 1 && ib.instance === 1 && ic.instance === 1 && ia.topic === 'game:frost-fields:1', JSON.stringify([ia.instance, ib.instance, ic.instance]));
     let seen = true; try { await waitOthers('mp_ana', ['mp_ben', 'mp_cat']); await waitOthers('mp_ben', ['mp_ana', 'mp_cat']); await waitOthers('mp_cat', ['mp_ana', 'mp_ben']); } catch { seen = false; }
     check('mp: every client sees the other two avatars', seen, JSON.stringify((await info('mp_ana')).others));
-    check('mp: cosmetics come from the server roster (ANA wears her earmuffs for others)', (await info('mp_ben')).others.find(o => o.username === 'mp_ana')?.equipped.includes('earmuffs'), JSON.stringify((await info('mp_ben')).others));
+    const anaHat = await pages.mp_ana.evaluate(() => window.iceberg.economy.profile.equipped.hat);    // earmuffs, or tornado_hat (same slot) on the release branch
+    check('mp: cosmetics come from the server roster (others see the hat ANA equipped)', !!anaHat && (await info('mp_ben')).others.find(o => o.username === 'mp_ana')?.equipped.includes(anaHat), JSON.stringify({ anaHat, others: (await info('mp_ben')).others }));
     check('mp: chat room is per instance', (await pages.mp_ana.evaluate(() => window.iceberg.gameChat.room)) === 'game:frost-fields:1');
     // movement + interpolation
     const startB = (await info('mp_ben')).others.find(o => o.username === 'mp_ana').pos;
@@ -587,6 +588,12 @@ if (want('mobile')) {
   const r = spawnSync('node', ['scripts/mobile-release-e2e.mjs', out], { cwd: ROOT, encoding: 'utf8' });
   const sum = (r.stdout.match(/\d+\/\d+ mobile release checks passed/) || [''])[0]; if (sum) console.log(`  ${sum}`);
   check('mobile: 2 phones: portal lists only mobile-playable games, one joystick in Studio games (scripts/mobile-release-e2e.mjs)', r.status === 0, (r.stdout + r.stderr).split('\n').filter(l => /FAIL|Error/.test(l)).join('\n').slice(-1500));
+}
+
+if (want('mp2')) {
+  const r = spawnSync('node', ['scripts/mp-two-browser.mjs'], { cwd: ROOT, encoding: 'utf8' });
+  const sum = (r.stdout.match(/\d+\/\d+ two-browser multiplayer checks passed/) || [''])[0]; if (sum) console.log(`  ${sum}`);
+  check('mp: two real browsers, own accounts: move, join friend, chat bubbles both ways, no free text, leave, cap 12, reconnect (scripts/mp-two-browser.mjs)', r.status === 0, (r.stdout + r.stderr).split('\n').filter(l => /FAIL|Error/.test(l)).join('\n').slice(-1500));
 }
 
 console.log('\n' + results.map(r => `${r[0]}  ${r[1]}${r[0] === 'FAIL' && r[2] ? '\n      ' + String(r[2]).replace(/\n/g, '\n      ') : ''}`).join('\n'));
