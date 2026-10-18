@@ -653,6 +653,56 @@ await t('limited-time shop items: buy_cosmetic sells event items only while the 
   assert.match(toSQL({ items, phrases: [] }), /insert into public\.game_events \(id, title\) values\n  \('zz_sale2'/);
   assert.deepEqual(validate({ items: [{ ...items[0], event: 'Bad Id!' }], phrases: [] }).length, 1);
 });
+
+await t('dev access (0009): is_dev false by default, dev_accounts RLS, admin-only writes, dev-access.mjs SQL', async () => {
+  const { devAccessSQL, toUsername } = await import(resolve(ROOT, 'scripts/dev-access.mjs'));
+  const D = await createUser(db, { username: 'gooberr478' }), N = await createUser(db, { username: 'zz_nondev' });
+  assert.equal(await rpc(db, null, 'is_dev'), false);                                          // anon
+  assert.equal(await rpc(db, N, 'is_dev'), false);
+  assert.equal(await rpc(db, D, 'is_dev'), false);
+  // clients can never write the table
+  await denied(as(db, N, tx => tx.query(`insert into public.dev_accounts (user_id) values ($1)`, [N])));
+  await denied(as(db, D, tx => tx.query(`insert into public.dev_accounts (user_id) values ($1)`, [D])));
+  await denied(as(db, null, tx => tx.query(`select * from public.dev_accounts`)));
+  await denied(rpc(db, N, 'set_dev_account', { p_username: 'zz_nondev', p_on: true }));      // not admin
+  await denied(rpc(db, null, 'set_dev_account', { p_username: 'zz_nondev', p_on: true }));
+  // script (runs as the DB owner via the Management API): username and synthetic email both resolve
+  assert.equal(toUsername('GooBerr478@users.iceberg.invalid'), 'gooberr478');
+  assert.throws(() => toUsername('bad name'));
+  let r = (await su(db, devAccessSQL('add', 'gooberr478', { note: "Colin's account" })))[0];
+  assert.deepEqual([r.found, Number(r.changed)], [true, 1]);
+  r = (await su(db, devAccessSQL('add', 'gooberr478@users.iceberg.test')))[0];                 // idempotent, note kept
+  assert.deepEqual([r.found, Number(r.changed)], [true, 1]);
+  r = (await su(db, devAccessSQL('add', 'nobody_here')))[0];
+  assert.deepEqual([r.found, Number(r.changed)], [false, 0]);
+  assert.equal(await rpc(db, D, 'is_dev'), true);
+  assert.equal(await rpc(db, N, 'is_dev'), false);
+  // RLS: a dev reads only their own row; others read nothing
+  assert.equal((await as(db, D, tx => tx.query(`select note from public.dev_accounts`))).rows.map(x => x.note).join(), "Colin's account");
+  assert.equal((await as(db, N, tx => tx.query(`select * from public.dev_accounts`))).rows.length, 0);
+  await denied(as(db, D, tx => tx.query(`delete from public.dev_accounts where user_id = $1`, [D])));
+  await denied(as(db, D, tx => tx.query(`update public.dev_accounts set note = 'x'`)));
+  // admins count as devs and can manage the list through the RPC
+  const C = await createUser(db, { username: 'zz_boss_dev' });
+  assert.equal(await rpc(db, C, 'is_dev'), false);
+  await su(db, `update public.profiles set is_admin = true where id = $1`, [C]);                 // SQL editor, as for featured games
+  assert.equal(await rpc(db, C, 'is_dev'), true);
+  assert.equal((await rpc(db, C, 'set_dev_account', { p_username: 'zz_nondev', p_on: true, p_note: 'tester' })).ok, true);
+  assert.equal(await rpc(db, N, 'is_dev'), true);
+  assert.equal((await rpc(db, C, 'set_dev_account', { p_username: 'zz_nondev', p_on: false })).ok, true);
+  assert.equal(await rpc(db, N, 'is_dev'), false);
+  assert.equal((await rpc(db, C, 'set_dev_account', { p_username: 'no_such_one', p_on: true })).reason, 'no_such_user');
+  const list = (await su(db, devAccessSQL('list'))).filter(x => ['gooberr478', 'zz_boss_dev', 'zz_nondev'].includes(x.username));
+  assert.deepEqual(list.map(x => [x.username, x.source]), [['gooberr478', 'dev_accounts'], ['zz_boss_dev', 'admin']]);
+  assert.ok(!JSON.stringify(list).includes(D));                                                // no ids in output
+  r = (await su(db, devAccessSQL('remove', 'gooberr478')))[0];
+  assert.deepEqual([r.found, Number(r.changed)], [true, 1]);
+  assert.equal(await rpc(db, D, 'is_dev'), false);
+  assert.throws(() => devAccessSQL('drop', 'x'));
+  // additive: re-running the migration is a no-op
+  const { readFileSync } = await import('node:fs');
+  await db.exec(readFileSync(resolve(ROOT, 'supabase/migrations/20261018000009_dev_access.sql'), 'utf8'));
+});
 await db.close();
 for (const r of results) console.log(r[0], r[1], r[2] ? '\n     ' + r[2] : '');
 const failed = results.filter(r => r[0] === 'FAIL').length;

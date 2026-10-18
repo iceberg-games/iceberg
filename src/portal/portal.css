@@ -47,3 +47,9 @@ body.portal-page #portal { min-height: 100vh; position: relative; }
 .p-sort button.on { background: var(--ice-500); color: #fff; }
 .gc-stats { font-size: 12px; font-weight: 700; color: #4f7395; margin-top: 4px; }
 .p-sound { flex: none; }
+/* Developers only (is_dev): the 'New Update' pill directly under the username / balance row */
+.p-dev-row { display: flex; justify-content: flex-end; margin: 10px 0 0; }
+.dev-update { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; border-radius: 999px; background: linear-gradient(90deg, #ff9f1c, #ff6b6b);
+  color: #fff; font-weight: 800; font-size: 14px; text-decoration: none; box-shadow: 0 4px 14px rgba(255,107,107,.35); white-space: nowrap; }
+.dev-update:hover { filter: brightness(1.06); }
+@media (max-width: 640px) { .p-dev-row { justify-content: stretch; } .dev-update { flex: 1; justify-content: center; font-size: 15px; padding: 11px 14px; } }

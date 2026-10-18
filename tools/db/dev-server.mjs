@@ -24,7 +24,7 @@ const STATIC_PORT = Number(arg('--static-port', 8080));
 export const ANON_KEY = process.env.ICEBERG_DEV_ANON_KEY || 'dev-anon-key';
 const TOKEN_TTL = 3600;
 
-export async function startDevServer({ port = PORT, dataDir = DATA, staticDir = STATIC, staticPort = STATIC_PORT, quiet = false } = {}) {
+export async function startDevServer({ port = PORT, dataDir = DATA, staticDir = STATIC, staticPort = STATIC_PORT, quiet = false, anonKey = ANON_KEY } = {}) {
   const db = await createDb({ dataDir: dataDir || undefined });
   const access = new Map();   // token -> { uid, exp }
   const refresh = new Map();  // token -> uid
@@ -75,11 +75,11 @@ export async function startDevServer({ port = PORT, dataDir = DATA, staticDir = 
       if (req.method === 'OPTIONS') return send(res, 204);
       const url = new URL(req.url, 'http://x');
       if (url.pathname === '/health') return send(res, 200, { ok: true });
-      if (req.headers.apikey !== ANON_KEY) return send(res, 401, { message: 'Invalid API key' });
+      if (req.headers.apikey !== anonKey) return send(res, 401, { message: 'Invalid API key' });
       const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
       const tok = access.get(bearer);
       const uid = tok && tok.exp > Date.now() / 1000 ? tok.uid : null;
-      if (bearer && bearer !== ANON_KEY && !uid && url.pathname.startsWith('/rest/')) return send(res, 401, { code: 'PGRST301', message: 'JWT expired' });
+      if (bearer && bearer !== anonKey && !uid && url.pathname.startsWith('/rest/')) return send(res, 401, { code: 'PGRST301', message: 'JWT expired' });
 
       if (url.pathname === '/auth/v1/signup' && req.method === 'POST') {
         const { email, password, data } = await readBody(req);
@@ -124,7 +124,7 @@ export async function startDevServer({ port = PORT, dataDir = DATA, staticDir = 
   await new Promise(ok => server.listen(port, ok));
   let staticServer = null;
   if (staticDir) staticServer = await serveStatic(resolve(staticDir), staticPort);
-  if (!quiet) console.log(`[dev-backend] API http://localhost:${port} (anon key "${ANON_KEY}", data ${dataDir || 'in-memory'})` +
+  if (!quiet) console.log(`[dev-backend] API http://localhost:${port} (anon key "${anonKey}", data ${dataDir || 'in-memory'})` +
     (staticServer ? `\n[dev-backend] site http://localhost:${staticPort}/` : ''));
   return { db, server, staticServer, realtime, close: async () => { server.close(); staticServer?.close(); await db.close(); } };
 }
