@@ -18,6 +18,9 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+// expected portal 'Newest' order: every non-retired game in src/data/gameMeta.js, newest publishedAt first
+const NEWEST_ORDER = Object.entries((await import(resolve(ROOT, 'src/data/gameMeta.js'))).GAME_META)
+  .filter(([, m]) => !m.retired && m.publishedAt).sort((a, b) => Date.parse(b[1].publishedAt) - Date.parse(a[1].publishedAt)).map(([id]) => id).join();
 // Parallel runs (other worktrees/agents) must not share the temp dir or ports: a second run used to
 // rmSync the first run's built site mid-test (-> waitForSelector timeouts). Each run takes a free slot.
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -345,7 +348,7 @@ if (want('site')) {
     await p1.reload(); await p1.waitForSelector('#games-grid .game-card');
     const order = async (sort) => { await p1.click(`#games-sort button[data-sort="${sort}"]`); await p1.waitForTimeout(150); return p1.$$eval('#games-grid .game-card', e => e.map(x => x.dataset.game)); };
     const newest = await order('newest'), popular = await order('popular'), active = await order('active');
-    check('tabs: Newest = publish date, newest first', newest.join() === 'giant-rainbow-obby,birg-hq,frost-fields', newest.join());
+    check('tabs: Newest = publish date, newest first', newest.join() === NEWEST_ORDER, newest.join());
     check('tabs: Most Popular = 7-day plays (deduped), ties by all-time then newest', popular[0] === 'birg-hq' && popular.indexOf('giant-rainbow-obby') < popular.indexOf('frost-fields'), popular.join());
     check('tabs: Most Active Players = live heartbeats', active[0] === 'frost-fields' && /2 playing now/.test(await p1.$eval('#games-grid .game-card', e => e.textContent)), active.join());
     await p1.screenshot({ path: resolve(SHOTS, 'portal-featured-tabs.png') });
@@ -375,7 +378,7 @@ if (want('site')) {
     await p.reload(); await p.waitForSelector('#featured-banner .fb-slide'); await p.waitForSelector('#games-grid .game-card');
     check('offline: featured banner from site featured.json', (await p.$eval('#featured-banner .fb-slide', e => e.dataset.game)) === 'giant-rainbow-obby');
     const ord = async (sort) => { await p.click(`#games-sort button[data-sort="${sort}"]`); await p.waitForTimeout(150); return p.$$eval('#games-grid .game-card', e => e.map(x => x.dataset.game)); };
-    check('offline: Newest uses local publish dates', (await ord('newest')).join() === 'giant-rainbow-obby,birg-hq,frost-fields');
+    check('offline: Newest uses local publish dates', (await ord('newest')).join() === NEWEST_ORDER);
     const pop = await ord('popular');
     check('offline: Most Popular = local plays in last 7 days (8-day-old plays ignored)', pop[0] === 'frost-fields' && pop[1] === 'birg-hq', pop.join());
     await ord('active');
