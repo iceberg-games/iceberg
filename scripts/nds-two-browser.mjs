@@ -88,6 +88,9 @@ const waitNds = (pl, fn, arg, ms = 20000) => pl.game.waitForFunction(fn, arg, { 
 let pa, pb;
 try {
   pa = await player(A, 'Ana'); pb = await player(B, 'Ben');
+  // A wears the Frost Tornado Hat (local test DB only): nearby() on B must report it
+  await dev.db.exec(`insert into public.inventory (user_id, item_id) select id, 'tornado_hat' from public.profiles where username = '${A}' on conflict do nothing;
+    update public.profiles set equipped = '{"hat":"tornado_hat"}'::jsonb where username = '${A}';`);
   await openGame(pa, `play/?game=${GAME}`);
   await new Promise(r => setTimeout(r, 1500));                       // A joins first -> A is host
   await openGame(pb, `play/?game=${GAME}`);
@@ -104,6 +107,8 @@ try {
   // nearby: put both on the same spot, then far apart
   const nb = await pb.game.evaluate(() => window.iceberg.mp.nearby(1e6).map(p => [p.id, typeof p.name, typeof p.position?.x]));
   check('mp.nearby(r) on B lists A with {id, name, position}', nb.length === 1 && nb[0][0] === A && nb[0][1] === 'string' && nb[0][2] === 'number', JSON.stringify(nb));
+  const hats = [await pb.game.evaluate(() => window.iceberg.mp.nearby(1e6).map(p => p.hat)), await pa.game.evaluate(() => window.iceberg.mp.nearby(1e6).map(p => p.hat))];
+  check("mp.nearby hat: B sees A's 'tornado_hat', A sees B's null", JSON.stringify(hats) === JSON.stringify([['tornado_hat'], [null]]), JSON.stringify(hats));
   // god mode on both so everyone survives; host starts the round now
   await pa.game.evaluate(() => { window.iceberg.engine.game.nds.godMode = true; }); await pb.game.evaluate(() => { window.iceberg.engine.game.nds.godMode = true; });
   const before = sa.roundState?.n || sa.round || 0;
