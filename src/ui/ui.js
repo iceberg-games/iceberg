@@ -203,7 +203,9 @@ export class UI {
     const e = this.economy;
     const filter = (c) => this.shopCat === 'all' || c.slot === this.shopCat || (this.shopCat === 'acc' && ['neck', 'back', 'hand'].includes(c.slot)) || (this.shopCat === 'winter' && c.winter) || (this.shopCat === 'premium' && c.premium);
     const tabs = h('div.tabs', CATS.map(([id, label]) => h('button.tab' + (this.shopCat === id ? '.sel' : ''), { onclick: () => { this.shopCat = id; this.refreshDrawer(); } }, label)));
-    const cards = h('div.cards', COSMETICS.filter(filter).map(c => {
+    // Release A (Colin): event items stay hidden until their event starts (economy.shopVisible; owned items always show).
+    const listed = (c) => typeof this.economy.shopVisible !== 'function' || this.economy.shopVisible(c.id);
+    const cards = h('div.cards', COSMETICS.filter(filter).filter(listed).map(c => {
       const owned = e.owns(c.id), eq = e.isEquipped(c.id), afford = e.coins >= c.price;
       let action;
       const av = c.earnOnly ? null : this._availability(c);
