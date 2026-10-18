@@ -8,6 +8,10 @@ const SETS = { base: [['earmuffs', 'Cranberry'], ['snowglobe_pack', 'Gold Ribbon
 const LIST = SETS[process.env.SET || 'base'];
 const errs = []; page.on('pageerror', e => errs.push(e.message));
 await page.goto(url); await page.waitForFunction(() => window.iceberg);
+// Release A hides/refuses event items until natural_disasters starts: move only the event window to "live".
+await page.evaluate(() => { const b = window.iceberg.economy.backend; if (!b?.eventStatus) return; const real = b.eventStatus.bind(b), H = 3600e3;
+  b.eventStatus = (id, now = Date.now()) => ({ ...real(id, now), startsAt: new Date(now - 24 * H).toISOString(), endsAt: new Date(now + 6 * 24 * H).toISOString(), active: true }); });
+
 await page.evaluate(async (ids) => {
   const { economy } = window.iceberg; economy.demoGrant(5000);
   for (const id of ids) { economy.buy?.(id) ?? economy.purchase?.(id); economy.equip(id); }
