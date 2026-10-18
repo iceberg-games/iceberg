@@ -11,6 +11,7 @@ export const GAME_META = {
   'frost-fields':       { publishedAt: '2026-10-16T21:54:06-07:00', mobile: true },  // walk/jump/coins; build mode via taps
   'corner-bakery':      { publishedAt: '2026-10-18T00:26:09-07:00', mobile: true },  // publishedAt = release A deploy time
   //                     tap buttons for every station action (cbr mobile HUD) + shared joystick
+  'natural-disaster-survival': { mobile: true },  // tap HUD (items, Hunt), joystick + jump; Publisher sets publishedAt on release
   'rainbow-obby':       { publishedAt: '2026-10-16T22:11:58-07:00', retired: true },  // replaced by Giant Rainbow Obby
 };
 
