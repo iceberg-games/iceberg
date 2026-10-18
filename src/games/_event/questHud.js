@@ -10,7 +10,7 @@ const CSS = `
 .ndq .b i{display:block;height:100%;background:linear-gradient(90deg,#5fd0ff,#c27bff);transition:width .3s}
 .ndq .r{font-size:11px;opacity:.95}.ndq .r code{opacity:.6;font-size:10px}
 .ndq.done{border-color:#ffd34d}.ndq.done .b i{background:linear-gradient(90deg,#ffd34d,#ff9f1c)}
-.ndq.mobile{top:auto;bottom:auto;top:58px;left:6px;width:168px;padding:5px 8px 6px}
+.ndq.mobile{top:auto;bottom:auto;top:calc(128px + env(safe-area-inset-top,0px));left:6px;width:168px;padding:5px 8px 6px}
 .ndq.mobile .d{display:none}.ndq.mobile .n{font-size:12px}.ndq.mobile .r code{display:none}
 `;
 let refs = 0, styleEl = null;

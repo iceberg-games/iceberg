@@ -117,7 +117,7 @@ export class DisasterUI {
   /** Animated popup card (never blocks touch: pointer-events none). kind: round|warning|survived|eliminated|reward|bought|info.
    *  Popups of the same 'slot' replace each other; reward/bought stack below the main one. Sound is played by the caller (POPUP_SFX). */
   popup(kind, { icon = '', title = '', sub = '', count = null, ms = 2600 } = {}, onHide = null) {
-    const slot = kind === 'reward' || kind === 'bought' ? 'b' : 'a';
+    const slot = (kind === 'reward' || kind === 'bought') && !this.root.classList.contains('m') ? 'b' : 'a';
     this._pops = this._pops || {};
     let el = this._pops[slot];
     if (!el) { el = this._pops[slot] = document.createElement('div'); this.root.append(el); }

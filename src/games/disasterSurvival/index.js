@@ -647,7 +647,8 @@ export default {
       const names = (res.survivors || []).map(id => (id === net.selfId ? 'You' : id));
       lastSurvivors = names.length;
       const subTxt = (names.length ? names.slice(0, 8).join(', ') + (names.length > 8 ? ` +${names.length - 8}` : '') : 'No players made it') + (lastBotSurv ? ` · ${lastBotSurv} bot${lastBotSurv === 1 ? '' : 's'}` : '');
-      setTimeout(() => live && popup('info', { icon: '🏁', title: `Round ${res.n} survivors`, sub: subTxt, ms: 3200 }, false), 2000);
+      const mob = ui.root.classList.contains('m');
+      setTimeout(() => { if (live && roundState?.n === res.n && (api.phase === 'results' || api.phase === 'intermission')) popup('info', { icon: '🏁', title: `Round ${res.n} survivors`, sub: subTxt, ms: 3000 }, false); }, mob ? 4200 : 2200);
       api.lastResults = res;
     });
     net.onEvent('storm', (e) => { if (net.isHost() && e.from !== net.selfId && !stormQueued && findDisaster(e.id)) { stormQueued = e.id; ui.setStormQueued(findDisaster(e.id).name); } });
@@ -698,8 +699,9 @@ export default {
           save.survived++; save.streak = (save.streak || 0) + 1; save.best = Math.max(save.best, save.streak);
           const pay = C.survivalPayout(paid);
           audio.stinger('win', 0.9, 'survive');
-          popup('survived', { icon: '🎉', title: 'YOU SURVIVED!', sub: `${botSurv} other${botSurv === 1 ? '' : 's'} made it · streak ${save.streak}`, ms: 3500 }, false);
-          if (pay > 0) { paid += pay; economy.earn(pay, C.EARN_REASON); setTimeout(() => live && popup('reward', { title: `+${pay} Birg Bucks`, sub: `${C.SESSION_EARN_CAP_BB - paid} BB left to earn this session`, ms: 2600 }), 700); }
+          const mob = ui.root.classList.contains('m'); // phones: one card at a time (survived, then reward), so nothing stacks over the HUD
+          popup('survived', { icon: '🎉', title: 'YOU SURVIVED!', sub: `${botSurv} other${botSurv === 1 ? '' : 's'} made it · streak ${save.streak}`, ms: mob ? 2000 : 3500 }, false);
+          if (pay > 0) { paid += pay; economy.earn(pay, C.EARN_REASON); setTimeout(() => live && popup('reward', { title: `+${pay} Birg Bucks`, sub: `${C.SESSION_EARN_CAP_BB - paid} BB left to earn this session`, ms: mob ? 1900 : 2600 }), mob ? 2200 : 700); }
           else popup('reward', { icon: '🧊', title: 'Session reward limit reached', sub: 'Keep playing for the quest and bragging rights!', ms: 2600 }, false);
           tracker.add(1);
         } else { save.streak = 0; popup('info', { icon: dIcon, title: `${name} is over`, sub: `${botSurv} survivor${botSurv === 1 ? '' : 's'}`, ms: 3000 }); }
