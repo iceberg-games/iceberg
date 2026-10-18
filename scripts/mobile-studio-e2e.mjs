@@ -151,6 +151,8 @@ try {
   ok('Test plays the game (not editing)', !play.editing && play.running && play.id === draft.id && play.blocks >= 1, JSON.stringify(play));
   ok('player starts at the mobile spawn', Math.abs(play.player[0] + 4) <= 2.5 && Math.abs(play.player[2] - 4) <= 2.5, JSON.stringify(play.player));
   ok('Mobile Studio bar hidden while testing, joystick shown', !(await p.isVisible('#mobile-studio')) && (await p.isVisible('#touch-stick')));
+  const sticks = await G(() => [...document.querySelectorAll('#touch-stick, .rt-touch .joy')].filter(e => e.offsetParent !== null && getComputedStyle(e).display !== 'none').length);
+  ok('only one joystick while test-playing (runtime controls defer to the shared one)', sticks === 1, `${sticks} visible`);
   const cv = await G(() => document.querySelector('#game-canvas').getBoundingClientRect().height);
   ok('canvas back to full screen while testing', Math.abs(cv - 667) <= 1, String(cv));
   ok('back-to-editor button shown', await p.isVisible('#back-to-editor'));

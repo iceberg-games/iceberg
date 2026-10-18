@@ -11,6 +11,7 @@ import { translate } from './nlscript.js';
 import { GEARS, Backpack, creatorGearsOf, gearMods } from './gears.js';
 import { sampleAnimation } from './animation.js';
 import { bus } from '../core/events.js';
+import { getDeviceMode, onDeviceChange } from '../core/device.js';
 
 const HW = 0.42, H = 2.6;
 const sfxCtx = () => (window.__icebergSfx ||= new (window.AudioContext || window.webkitAudioContext)());
@@ -309,6 +310,17 @@ export async function createRuntime(ctx, doc) {
     jump.addEventListener('pointerdown', (e) => { engine.input.keys.add('Space'); e.stopPropagation(); });
     jump.addEventListener('pointerup', () => engine.input.keys.delete('Space'));
   }
+  // Only ONE set of touch controls: when the app's shared joystick (ui/touchControls.js, #touch-ui,
+  // shown in Mobile mode) is active, hide these runtime controls; they remain for coarse-pointer
+  // devices in Computer mode (where #touch-ui is hidden) and builds without the shared controls.
+  const syncTouch = () => {
+    if (!touchUI) return;
+    const shared = typeof document !== 'undefined' && document.getElementById('touch-ui') && getDeviceMode() === 'mobile';
+    touchUI.style.display = shared ? 'none' : '';
+    if (shared) { touchUI.querySelector('.knob').style.transform = ''; }
+  };
+  syncTouch();
+  const offDevice = touchUI ? onDeviceChange(syncTouch) : null;
 
   // ---- per-frame ----
   const touching = new Set();
@@ -389,7 +401,7 @@ export async function createRuntime(ctx, doc) {
       }
     },
     dispose() {
-      removeEventListener('keydown', onKey); backpack.clear(); resetEffects(); ui.remove();
+      removeEventListener('keydown', onKey); offDevice?.(); backpack.clear(); resetEffects(); ui.remove();
       engine.input.analog = null; engine.input.keys.delete('Space'); engine.renderer.domElement.style.cursor = '';
       for (const b of bursts) scene.remove(b.points);
       for (const e of entries) clearTimeout(e._doorT);
