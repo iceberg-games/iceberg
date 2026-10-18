@@ -140,6 +140,7 @@ await check('stats: record visit (deduped) + heartbeat → live player', async (
   const g = (await rpc(null, 'list_game_stats')).find(x => x.gameId === 'frost-fields');
   assert.ok(g.playing >= 1 && g.visits7d >= 1, JSON.stringify(g));
   await rpc(A(), 'game_leave');
+  if (mgmt) await mgmt.mgmtQuery(`begin; update public.game_visit_days set count = count - 1 where game_id = 'frost-fields' and day = (now() at time zone 'utc')::date; delete from public.game_visit_days where count <= 0; update public.games set visits = greatest(visits - 1, 0) where game_id = 'frost-fields'; commit;`);   // undo the test's own +1 (player-facing stats)
 });
 
 if (!process.argv.includes('--keep')) await check('cleanup: only the zz_test_publisher_* users and their rows removed', cleanup);
