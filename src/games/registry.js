@@ -4,6 +4,7 @@
 import frostFields from './frostFields.js';
 import birgHQ from './birgHQ.js';
 import giantRainbowObby from './giantObby/index.js';
+import cornerBakery from './cornerBakery/index.js';
 import { creatorDef, customGameDef } from './customGame.js';
 import { backend } from '../backend/LocalBackend.js';
 
@@ -11,6 +12,7 @@ export const BUILTIN_GAMES = [
   frostFields,
   birgHQ,
   giantRainbowObby,
+  cornerBakery,
 ];
 export const CREATOR = creatorDef;
 
