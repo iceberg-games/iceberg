@@ -12,12 +12,25 @@
 //      cosmetics from the server roster, cap + overflow instance, Join friend from the portal,
 //      Realtime Authorization, junk/spoofed broadcasts dropped, message budget.
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync, unlinkSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const TMP = '/tmp/iceberg-test';
+// Parallel runs (other worktrees/agents) must not share the temp dir or ports: a second run used to
+// rmSync the first run's built site mid-test (-> waitForSelector timeouts). Each run takes a free slot.
+const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+let SLOT = 0;
+for (; SLOT < 10; SLOT++) {
+  const lock = `/tmp/iceberg-e2e-${SLOT}.lock`;
+  try { writeFileSync(lock, String(process.pid), { flag: 'wx' }); break; }
+  catch { const pid = +readFileSync(lock, 'utf8'); if (!alive(pid)) { writeFileSync(lock, String(process.pid)); break; } }
+}
+if (SLOT === 10) throw new Error('e2e: 10 runs already in progress');
+process.on('exit', () => { try { if (readFileSync(`/tmp/iceberg-e2e-${SLOT}.lock`, 'utf8') === String(process.pid)) unlinkSync(`/tmp/iceberg-e2e-${SLOT}.lock`); } catch { /* gone */ } });
+if (SLOT) console.log(`e2e: another run is in progress, using slot ${SLOT} (ports +${SLOT * 20}, /tmp/iceberg-test-${SLOT})`);
+const PORT = (n) => n + SLOT * 20;
+const TMP = SLOT ? `/tmp/iceberg-test-${SLOT}` : '/tmp/iceberg-test';
 const SHOTS = resolve(TMP, 'shots');
 rmSync(TMP, { recursive: true, force: true }); mkdirSync(SHOTS, { recursive: true });
 const only = process.argv.slice(2);
@@ -111,7 +124,7 @@ if (want('game')) {
 // ---------------- 4. site + dev backend ----------------
 if (want('site')) {
   const { startDevServer, serveStatic, ANON_KEY } = await import(resolve(ROOT, 'tools/db/dev-server.mjs'));
-  const API = 54420, WEB = 8420, BASE = `http://localhost:${WEB}/iceberg/`;
+  const API = PORT(54420), WEB = PORT(8420), BASE = `http://localhost:${WEB}/iceberg/`;
   const siteOut = resolve(TMP, 'site');
   run('build: site (portal + play/ + PWA)', 'node', ['scripts/build-site.mjs', '--out', siteOut],
     { env: { VITE_SUPABASE_URL: `http://localhost:${API}`, VITE_SUPABASE_ANON_KEY: ANON_KEY, VITE_USERNAME_EMAIL_DOMAIN: 'users.iceberg.test' } });
@@ -315,7 +328,7 @@ if (want('site')) {
     check('auth: wrong password rejected, signed out cleanly', true);
     // service worker must not cache API/auth
     const cached = await p1.evaluate(async () => { const out = []; for (const k of await caches.keys()) for (const r of await (await caches.open(k)).keys()) out.push(r.url); return out; });
-    check('pwa: SW cached the shell only (no auth/API URLs)', cached.length > 0 && !cached.some(u => /\/(auth|rest)\/v1|:54420/.test(u)), JSON.stringify(cached));
+    check('pwa: SW cached the shell only (no auth/API URLs)', cached.length > 0 && !cached.some(u => /\/(auth|rest)\/v1/.test(u) || u.includes(`:${API}`)), JSON.stringify(cached));
   } catch (e) { check('site: unexpected error', false, e.stack); }
   finally { await b.close(); web.close(); await dev.close(); }
 
@@ -348,7 +361,7 @@ if (want('site')) {
 if (want('mp')) {
   const { startDevServer, serveStatic, ANON_KEY } = await import(resolve(ROOT, 'tools/db/dev-server.mjs'));
   const { PHRASES } = await import(pathToFileURL(resolve(ROOT, 'src/data/safeChat.js')).href);
-  const API = 54430, WEB = 8430, BASE = `http://localhost:${WEB}/iceberg/`;
+  const API = PORT(54430), WEB = PORT(8430), BASE = `http://localhost:${WEB}/iceberg/`;
   const out = resolve(TMP, 'site-mp');
   run('build: site for multiplayer (local backend + realtime stub)', 'node', ['scripts/build-site.mjs', '--out', out],
     { env: { VITE_SUPABASE_URL: `http://localhost:${API}`, VITE_SUPABASE_ANON_KEY: ANON_KEY, VITE_USERNAME_EMAIL_DOMAIN: 'users.iceberg.test' } });
@@ -475,7 +488,7 @@ if (want('quests')) {
   const { startDevServer, serveStatic, ANON_KEY } = await import(resolve(ROOT, 'tools/db/dev-server.mjs'));
   const { loadSources, toSQL } = await import(pathToFileURL(resolve(ROOT, 'scripts/sync-catalog.mjs')).href);
   const { withEvent, ND_GAME_ID } = await import(pathToFileURL(resolve(ROOT, 'tools/db/fixtures/event-fixture.mjs')).href);
-  const API = 54431, WEB = 8431, BASE = `http://localhost:${WEB}/iceberg/`;
+  const API = PORT(54431), WEB = PORT(8431), BASE = `http://localhost:${WEB}/iceberg/`;
   const out = resolve(TMP, 'site-quests');
   run('build: site for quests (local backend)', 'node', ['scripts/build-site.mjs', '--out', out],
     { env: { VITE_SUPABASE_URL: `http://localhost:${API}`, VITE_SUPABASE_ANON_KEY: ANON_KEY, VITE_USERNAME_EMAIL_DOMAIN: 'users.iceberg.test' } });
