@@ -1,0 +1,12 @@
+import { chromium } from 'playwright';
+import { createServer } from 'vite';
+const server = await createServer({ server: { port: 5197 }, logLevel: 'error' }); await server.listen();
+const b = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
+const p = await b.newPage({ viewport: { width: 900, height: 400 } });
+const errs = []; p.on('pageerror', e => errs.push(e.message));
+await p.goto('http://localhost:5197/scripts/talk-multi.html'); await p.waitForFunction(() => window.__ready);
+const res = await p.evaluate(() => check());
+await p.locator('canvas').screenshot({ path: 'screenshots/talk/multi-avatar.png' });
+res.disposedOk = await p.evaluate(() => disposeOne());
+console.log(JSON.stringify(res), 'errors:', errs);
+await b.close(); await server.close();

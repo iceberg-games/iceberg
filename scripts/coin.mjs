@@ -1,0 +1,11 @@
+import { chromium } from 'playwright';
+const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const p = await b.newPage();
+await p.goto('file://' + process.cwd() + '/dist/index.html');
+await p.click('#start-btn');
+await p.evaluate(() => window.iceberg.play('frost-fields')); await p.waitForTimeout(1000);
+const info = await p.evaluate(() => { const g = window.iceberg.engine.game; const c = g.coins.coins.find(c=>c.userData.active);
+  window.__c = c; window.iceberg.engine.player.teleport(c.position.clone().setY(0)); return [c.position.toArray(), window.iceberg.economy.coins]; });
+await p.waitForTimeout(800);
+console.log(info, await p.evaluate(() => [window.__c.userData.active, window.iceberg.engine.player.pos.toArray(), window.iceberg.economy.coins, window.iceberg.engine.running]));
+await b.close();

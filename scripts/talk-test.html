@@ -1,0 +1,13 @@
+<!doctype html><html><body style="margin:0"><script type="module">
+import * as THREE from 'three';
+import { Avatar } from '/src/game/avatar.js';
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(400, 400); r.outputColorSpace = THREE.SRGBColorSpace; document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#cfe6f5');
+scene.add(new THREE.HemisphereLight('#fff', '#8aa', 1.5)); const d = new THREE.DirectionalLight('#fff', 2); d.position.set(2, 4, 5); scene.add(d);
+const av = new Avatar(); scene.add(av.root);
+const cam = new THREE.PerspectiveCamera(35, 1, 0.1, 50); cam.position.set(0, 2.45, 2.2); cam.lookAt(0, 2.3, 0);
+window.av = av;
+window.setup = (face, cover) => { av.applyLoadout({ equipped: face ? { face } : {} }); if (cover) Object.values(av.attached).forEach(o => o.userData.coversMouth = true); };
+window.step = (ms) => { av.animate(ms / 1000, {}); r.render(scene, cam); return { frame: av._mouthFrame, talking: av.isTalking(), overlay: !!av._mouthOverlay?.visible }; };
+window.__ready = true;
+</script></body></html>

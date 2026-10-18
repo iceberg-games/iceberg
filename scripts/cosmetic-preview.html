@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Cosmetic preview</title>
+<style>html,body{margin:0;background:#cfe6f5;overflow:hidden}</style></head><body>
+<script type="module">
+import * as THREE from 'three';
+import { Avatar } from '/src/game/avatar.js';
+import { COSMETIC_BY_ID } from '/src/data/cosmetics.js';
+const q = new URLSearchParams(location.search);
+const id = q.get('id') || 'earmuffs', color = q.get('color'), angle = q.get('angle') || 'front';
+const W = +q.get('w') || 640, H = +q.get('h') || 640;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H); renderer.shadowMap.enabled = true; renderer.outputColorSpace = THREE.SRGBColorSpace;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#cfe6f5');
+scene.add(new THREE.HemisphereLight('#ffffff', '#8aa', 1.4));
+const sun = new THREE.DirectionalLight('#ffffff', 2.2); sun.position.set(3, 6, 5); scene.add(sun);
+const av = new Avatar(); scene.add(av.root);
+const item = COSMETIC_BY_ID[id];
+av.applyLoadout({ equipped: { [item.slot]: id }, cosmeticColors: color ? { [id]: color } : {} });
+for (let i = 0; i < 90; i++) av.animate(1 / 30, {});
+av.bones.armR.rotation.x = 0; av.bones.armL.rotation.x = 0;
+av.bones.legL.rotation.x = av.bones.legR.rotation.x = 0;
+const focus = id === 'penguin_pal' ? [-0.75, 2.15, 0, 1.6] : id === 'frost_lantern' ? [0.75, 0.85, 0, 1.7] : { head: [0, 2.4, 0, 2.6], torso: [0, 1.35, -0.4, 3.6], armR: [0.75, 1.1, 0.35, 2.4] }[{ hat: 'head', back: 'torso', hand: 'armR' }[item.slot]];
+const yaw = { front: 0, side: id === 'penguin_pal' ? -Math.PI / 2 : Math.PI / 2, threequarter: Math.PI / 4, back: Math.PI, backthreequarter: Math.PI * 0.75 }[angle];
+const cam = new THREE.PerspectiveCamera(35, W / H, 0.1, 50);
+cam.position.set(focus[0] + Math.sin(yaw) * focus[3], focus[1] + (item.slot === 'hand' ? (id === 'frost_lantern' ? 0.3 : 0.9) : 0.25), focus[2] + Math.cos(yaw) * focus[3]);
+cam.lookAt(focus[0], focus[1], focus[2]);
+renderer.render(scene, cam);
+window.__ready = true;
+</script></body></html>

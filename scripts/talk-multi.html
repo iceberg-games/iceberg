@@ -1,0 +1,20 @@
+<!doctype html><html><body style="margin:0"><script type="module">
+import * as THREE from 'three';
+import { Avatar } from '/src/game/avatar.js';
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(900, 400); r.outputColorSpace = THREE.SRGBColorSpace; document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#cfe6f5');
+scene.add(new THREE.HemisphereLight('#fff', '#8aa', 1.5)); const d = new THREE.DirectionalLight('#fff', 2); d.position.set(2, 4, 5); scene.add(d);
+const avs = [-1.6, 0, 1.6].map(x => { const a = new Avatar(); a.root.position.x = x; scene.add(a.root); return a; });
+const cam = new THREE.PerspectiveCamera(30, 900 / 400, 0.1, 50); cam.position.set(0, 2.3, 6); cam.lookAt(0, 2.2, 0);
+window.check = () => {
+  avs[1].talk(1000); for (let i = 0; i < 3; i++) avs.forEach(a => a.animate(0.016));
+  r.render(scene, cam);
+  const shared = avs[0].faceMat === avs[1].faceMat || avs[0].faceMat.map === avs[1].faceMat.map || avs[0].faceMat.map.image === avs[1].faceMat.map.image;
+  // sample mouth-open region of each face canvas (dark pixels below smile line)
+  const dark = avs.map(a => { const g = a.faceMat.map.image.getContext('2d'); const px = g.getImageData(50, 82, 28, 14).data; let n = 0; for (let i = 0; i < px.length; i += 4) if (px[i] < 100) n++; return n; });
+  const state = avs.map(a => ({ talking: a.isTalking(), frame: a._mouthFrame }));
+  return { shared, dark, state };
+};
+window.disposeOne = () => { avs[2].dispose(); avs.forEach(a => a.animate(0.016)); r.render(scene, cam); return !avs[2].root.parent; };
+window.__ready = true;
+</script></body></html>
