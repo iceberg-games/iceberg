@@ -2,6 +2,9 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { COSMETIC_BY_ID } from '../data/cosmetics.js';
+import WIND_MAIN_OGG from '../assets/audio/tornado_hat_wind_loop.ogg?url';
+import WIND_MAIN_MP3 from '../assets/audio/tornado_hat_wind_loop.mp3?url';
+import WIND_HIGH_OGG from '../assets/audio/tornado_hat_wind_loop_high.ogg?url';
 
 const DEFAULT = { skin: '#f5cd30', torso: '#3d7bd9', legs: '#4a9e4a' };
 
@@ -677,53 +680,126 @@ function buildOwlHood(color) {
 }
 
 // ---------- Natural Disasters event cosmetics ----------
+// Wind loop for a worn Frost Tornado Hat (in-house audio by Iceberg Sound Designer).
+// Imported with ?url so the single-file build inlines them. Main loop .ogg with .mp3 fallback
+// (Safari), plus an optional in-sync "high" layer that fades in when another player is very close.
+export const TORNADO_WIND_URL = WIND_MAIN_OGG;
+export const WIND_START_DIST = 20, WIND_STOP_DIST = 30;
+const _windBufs = new WeakMap(); // AudioContext -> Promise<{ main, high }>
+async function decodeFirst(ctx, urls) {
+  for (const u of urls) {
+    try { const ab = await (await fetch(u)).arrayBuffer(); return await ctx.decodeAudioData(ab); } catch {}
+  }
+  return null;
+}
+function loadWindBuffers(ctx) {
+  if (!_windBufs.has(ctx)) _windBufs.set(ctx, (async () => ({ main: await decodeFirst(ctx, [WIND_MAIN_OGG, WIND_MAIN_MP3]), high: await decodeFirst(ctx, [WIND_HIGH_OGG]) }))());
+  return _windBufs.get(ctx);
+}
+
+const FUNNEL_VS = `
+  uniform float uTime, uTwist;
+  varying vec2 vUv; varying float vFres;
+  void main() {
+    vUv = uv;
+    vec3 p = position;
+    float a = uTwist * uv.y + sin(uTime * 2.0 + uv.y * 6.0) * 0.15;
+    float c = cos(a), s = sin(a);
+    p.xz = mat2(c, -s, s, c) * p.xz;
+    p.x += sin(uTime * 3.0 + uv.y * 5.0) * 0.02 * uv.y;
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    vec3 n = normalize(normalMatrix * normal);
+    vFres = 1.0 - abs(dot(n, normalize(-mv.xyz)));
+    gl_Position = projectionMatrix * mv;
+  }`;
+const FUNNEL_FS = `
+  uniform float uTime, uSpeed, uOpacity, uFlash, uShimmer;
+  uniform vec3 uColor;
+  varying vec2 vUv; varying float vFres;
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  float noise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y); }
+  void main() {
+    vec2 uv = vec2(vUv.x * 3.0 - uTime * uSpeed + vUv.y * 1.6, vUv.y * 2.0 - uTime * 0.4);
+    float n = noise(uv * vec2(4.0, 3.0)) * 0.6 + noise(uv * vec2(9.0, 7.0)) * 0.4;
+    float bands = smoothstep(0.35, 0.75, sin((vUv.x * 6.2832 * 3.0) + vUv.y * 9.0 - uTime * uSpeed * 6.0) * 0.5 + 0.5);
+    float a = (n * 0.45 + bands * 0.55) * (0.25 + vFres * 0.85);
+    a *= smoothstep(0.0, 0.08, vUv.y) * (1.0 - smoothstep(0.88, 1.0, vUv.y) * 0.6);
+    vec3 aur = 0.5 + 0.5 * cos(6.2832 * (vec3(0.0, 0.33, 0.67) + vUv.y * 0.6 + uTime * 0.15));
+    vec3 col = mix(uColor, mix(uColor, aur, 0.55), uShimmer * (0.4 + 0.6 * bands));
+    col = mix(col, vec3(1.0), n * 0.12 + uFlash * 0.5);
+    col *= 0.85 + bands * 0.3;
+    gl_FragColor = vec4(col, clamp(a * uOpacity + uFlash * 0.25 * a, 0.0, 1.0));
+  }`;
+
 function buildTornadoHat(color) {
   const g = new THREE.Group();
-  const spin = new THREE.Group(); spin.position.y = 0.63; spin.scale.setScalar(1.2); g.add(spin);
-  // swirl texture for the funnel
-  const c = document.createElement('canvas'); c.width = 128; c.height = 128;
-  const x = c.getContext('2d'); x.clearRect(0, 0, 128, 128);
-  for (let i = 0; i < 7; i++) { x.strokeStyle = `rgba(255,255,255,${0.35 + (i % 3) * 0.2})`; x.lineWidth = 6 + (i % 2) * 5; x.beginPath(); x.moveTo(-20 + i * 22, 128); x.bezierCurveTo(i * 22 + 10, 80, i * 22 - 10, 40, i * 22 + 25, 0); x.stroke(); }
-  const tex = new THREE.CanvasTexture(c); tex.wrapS = THREE.RepeatWrapping; tex.repeat.set(2, 1);
-  const funnelM = new THREE.MeshStandardMaterial({ color, map: tex, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, emissive: color, emissiveIntensity: 0.25, roughness: 0.3 });
-  const prof = []; for (let i = 0; i <= 12; i++) { const t = i / 12; prof.push(new THREE.Vector2(0.05 + Math.pow(t, 1.6) * 0.3, t * 0.55)); }
-  const funnel = mesh(new THREE.LatheGeometry(prof, 32), funnelM); funnel.renderOrder = 2; funnel.castShadow = false; spin.add(funnel);
-  // solid icy rings that wobble (gives the blocky R6 silhouette weight)
-  const ringM = std(color, { roughness: 0.25, metalness: 0.1, emissive: color, emissiveIntensity: 0.15, flatShading: true });
-  const rings = [];
-  for (let i = 0; i < 5; i++) {
-    const t = (i + 0.5) / 5, r = 0.06 + Math.pow(t, 1.6) * 0.3;
-    const ring = rotated(mesh(new THREE.TorusGeometry(r, 0.022 + t * 0.012, 6, 18), ringM, 0, t * 0.55, 0), 'x', Math.PI / 2);
-    spin.add(ring); rings.push(ring);
+  const spin = new THREE.Group(); spin.position.y = 0.63; g.add(spin);
+  const H = 0.78;
+  const radius = (t) => 0.06 + Math.pow(t, 1.5) * 0.36;
+  const mats = [];
+  // three twisted translucent shells (outer -> inner), each scrolling at its own speed
+  [[1.0, 0.8, 1.0, 3.5], [0.78, 0.75, -1.4, 4.5], [0.55, 0.45, 1.9, 6.0]].forEach(([sc, op, sp, tw], i) => {
+    const prof = []; for (let k = 0; k <= 24; k++) { const t = k / 24; prof.push(new THREE.Vector2(radius(t) * sc + 0.006 * i, t * H)); }
+    const m = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: i * 3.1 }, uSpeed: { value: sp * 0.35 }, uTwist: { value: tw }, uOpacity: { value: op }, uFlash: { value: 0 }, uShimmer: { value: 0.8 }, uColor: { value: new THREE.Color(color) } },
+      vertexShader: FUNNEL_VS, fragmentShader: FUNNEL_FS, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: i === 2 ? THREE.AdditiveBlending : THREE.NormalBlending,
+    });
+    const shell = new THREE.Mesh(new THREE.LatheGeometry(prof, 48, 0, Math.PI * 2), m); shell.renderOrder = 3 + i; shell.userData.sp = sp;
+    spin.add(shell); mats.push(m);
+  });
+  // frosty crown: icy ring with crystal spikes hugging the top of the head
+  const iceM = std(color, { roughness: 0.08, metalness: 0.2, emissive: color, emissiveIntensity: 0.35, flatShading: true, transparent: true, opacity: 0.95 });
+  const frostM = std('#f4fbff', { roughness: 0.6 });
+  g.add(rotated(mesh(new THREE.TorusGeometry(0.29, 0.035, 8, 32), frostM, 0, 0.635, 0), 'x', Math.PI / 2));
+  g.add(rotated(mesh(new THREE.TorusGeometry(0.29, 0.016, 6, 32), iceM, 0, 0.67, 0), 'x', Math.PI / 2));
+  for (let i = 0; i < 10; i++) {
+    const a = i / 10 * Math.PI * 2, tall = i % 2 ? 0.09 : 0.15;
+    const sp = mesh(new THREE.ConeGeometry(0.035, tall, 5), iceM, Math.cos(a) * 0.29, 0.66 + tall / 2, Math.sin(a) * 0.29);
+    sp.rotation.set(Math.sin(a) * 0.25, 0, -Math.cos(a) * 0.25); g.add(sp);
   }
-  // base swirl puff touching the head
-  spin.add(mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.04, 16), ringM, 0, 0.0, 0));
-  // orbiting debris: ice cubes + tiny planks + a mini block
-  const orbit = new THREE.Group(); spin.add(orbit);
-  const debris = [
-    [new THREE.BoxGeometry(0.06, 0.06, 0.06), std('#d9f4ff', { roughness: 0.1, transparent: true, opacity: 0.9 })],
-    [new THREE.BoxGeometry(0.1, 0.02, 0.035), std('#9a6a3a')],
-    [new THREE.BoxGeometry(0.05, 0.05, 0.05), std('#e8f6ff', { roughness: 0.1 })],
-    [new THREE.BoxGeometry(0.07, 0.07, 0.07), std('#7ab35a')],
-    [new THREE.BoxGeometry(0.09, 0.018, 0.03), std('#8a5a33')],
-    [new THREE.OctahedronGeometry(0.035), std('#bfeaff', { emissive: '#5fc8ff', emissiveIntensity: 0.4 })],
-  ].map(([geo, m], i) => { const d = mesh(geo, m); d.userData = { a: i / 6 * Math.PI * 2, r: 0.22 + (i % 3) * 0.08, y: 0.12 + (i * 0.083) % 0.42, s: 1.5 + (i % 2) }; orbit.add(d); return d; });
-  // swirling snow
-  const N = 60, pos = new Float32Array(N * 3), seeds = [];
-  for (let i = 0; i < N; i++) seeds.push({ a: Math.random() * 6.28, y: Math.random() * 0.6, sp: 2 + Math.random() * 2 });
+  for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2 + Math.PI / 4; const gem = mesh(new THREE.OctahedronGeometry(0.03), std('#ffffff', { emissive: color, emissiveIntensity: 1, roughness: 0.1 }), Math.cos(a) * 0.31, 0.64, Math.sin(a) * 0.31); g.add(gem); }
+  // base swirl puff + glow
+  spin.add(mesh(new THREE.CylinderGeometry(0.1, 0.16, 0.035, 20), iceM, 0, 0.0, 0));
+  const glowM = new THREE.SpriteMaterial({ map: softDotTexture(), color, transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending });
+  const glow = new THREE.Sprite(glowM); glow.scale.set(0.8, 0.9, 1); glow.position.y = H * 0.45; spin.add(glow);
+  // lightning flickers inside the funnel
+  const boltM = new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0 });
+  const boltGeo = new THREE.BufferGeometry(); boltGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(8 * 3), 3));
+  const bolt = new THREE.Line(boltGeo, boltM); spin.add(bolt);
+  const reBolt = () => { const p = boltGeo.attributes.position; let a = Math.random() * 6.28; for (let k = 0; k < 8; k++) { const t = 0.15 + k / 7 * 0.75, r = radius(t) * 0.55; a += (Math.random() - 0.5) * 1.2; p.setXYZ(k, Math.cos(a) * r, t * H, Math.sin(a) * r); } p.needsUpdate = true; };
+  // dense orbiting snow (Points) — positions computed analytically each frame
+  const N = 260, pos = new Float32Array(N * 3), seeds = new Float32Array(N * 4);
+  for (let i = 0; i < N; i++) seeds.set([Math.random() * 6.28, Math.random(), 1.5 + Math.random() * 2.5, 0.9 + Math.random() * 0.5], i * 4);
   const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const snow = new THREE.Points(pg, new THREE.PointsMaterial({ size: 0.03, map: softDotTexture(), transparent: true, depthWrite: false })); spin.add(snow);
-  let t = 0;
-  const place = () => {
-    funnel.rotation.y = -t * 6; tex.offset.x = t * 0.6;
-    rings.forEach((r, i) => { r.position.x = Math.sin(t * 3 + i) * 0.015 * i; r.position.z = Math.cos(t * 3 + i) * 0.015 * i; });
-    debris.forEach(d => { const u = d.userData, a = u.a + t * u.s; d.position.set(Math.cos(a) * u.r, u.y + Math.sin(t * 2 + u.a) * 0.03, Math.sin(a) * u.r); d.rotation.set(t * 3 + u.a, t * 2, 0); });
-    seeds.forEach((sd, i) => { const yy = (sd.y + t * 0.15) % 0.6, rr = 0.06 + Math.pow(yy / 0.55, 1.6) * 0.32 + 0.03, a = sd.a + t * sd.sp; pos[i * 3] = Math.cos(a) * rr; pos[i * 3 + 1] = yy; pos[i * 3 + 2] = Math.sin(a) * rr; });
-    pg.attributes.position.needsUpdate = true;
+  const snowM = new THREE.PointsMaterial({ size: 0.028, map: softDotTexture(), transparent: true, depthWrite: false, color: '#ffffff' });
+  spin.add(new THREE.Points(pg, snowM));
+  // instanced ice shards + debris
+  const DN = 18, dummy = new THREE.Object3D();
+  const shards = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.03), std('#dff6ff', { roughness: 0.05, emissive: color, emissiveIntensity: 0.3, flatShading: true }), DN);
+  const planks = new THREE.InstancedMesh(new THREE.BoxGeometry(0.08, 0.016, 0.03), std('#8a5a33'), 6);
+  const blocks = new THREE.InstancedMesh(new THREE.BoxGeometry(0.045, 0.045, 0.045), std('#e8f6ff', { roughness: 0.15 }), 6);
+  [shards, planks, blocks].forEach(m => { m.castShadow = false; spin.add(m); });
+  const orbit = (m, n, base, t, k) => { for (let i = 0; i < n; i++) { const ph = i / n * 6.28 + base, y = ((i * 0.37 + base) % 1) * H * 0.9 + 0.06, r = radius(y / H) + 0.07 + (i % 3) * 0.03, a = ph + t * (2 + (i % 3) * 0.6) * k; dummy.position.set(Math.cos(a) * r, y + Math.sin(t * 2 + i) * 0.02, Math.sin(a) * r); dummy.rotation.set(t * 3 + i, t * 2 + i, 0); dummy.updateMatrix(); m.setMatrixAt(i, dummy.matrix); } m.instanceMatrix.needsUpdate = true; };
+  let t = 0, phase = 0, flash = 0;
+  const step = (dt) => {
+    const prox = g.userData.proximity ?? 0, speed = 1 + prox * 1.8;
+    phase += dt * speed; t += dt;
+    flash = Math.max(0, flash - dt * 5);
+    if (Math.random() < dt * (0.5 + prox * 2.5)) { flash = 1; reBolt(); }
+    boltM.opacity = flash > 0.3 ? flash : 0;
+    for (const m of mats) { m.uniforms.uTime.value += dt * speed; m.uniforms.uFlash.value = flash; }
+    spin.children.forEach(c => { if (c.userData.sp) c.rotation.y = -phase * c.userData.sp * 2; });
+    glowM.opacity = 0.16 + 0.06 * Math.sin(t * 3) + flash * 0.35 + prox * 0.15;
+    const p = pg.attributes.position;
+    for (let i = 0; i < N; i++) { const a0 = seeds[i * 4], y0 = seeds[i * 4 + 1], sp = seeds[i * 4 + 2], rs = seeds[i * 4 + 3]; const y = (y0 + phase * 0.12) % 1, r = radius(y) * rs + 0.02, a = a0 + phase * sp; p.setXYZ(i, Math.cos(a) * r, y * H, Math.sin(a) * r); }
+    p.needsUpdate = true;
+    orbit(shards, DN, 0.1, phase, 1); orbit(planks, 6, 0.55, phase, 0.8); orbit(blocks, 6, 0.3, phase, 0.9);
   };
-  place();
-  g.userData.tick = (dt) => { t += dt; place(); };
-  g.userData.setColor = (col) => { funnelM.color.set(col); funnelM.emissive.set(col); ringM.color.set(col); ringM.emissive.set(col); };
+  step(0.016);
+  g.userData.tick = step;
+  g.userData.isTornado = true;
+  g.userData.setColor = (c) => { mats.forEach(m => m.uniforms.uColor.value.set(c)); iceM.color.set(c); iceM.emissive.set(c); glowM.color.set(c); shards.material.emissive.set(c); };
   return { bone: 'head', object: g };
 }
 
@@ -748,6 +824,20 @@ function buildLightningBack(color) {
   const coreGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.02, bevelEnabled: false }); coreGeo.scale(0.55, 0.8, 1);
   const coreM = mesh(coreGeo, core, 0.01, 0.0, -0.075); B.add(coreM);
   const glow = new THREE.Sprite(halo); glow.scale.set(0.5, 0.8, 1); glow.position.z = -0.12; B.add(glow);
+  // frosted mount plate with a color trim ring behind the bolt
+  const trimM = std(color === 'rainbow' ? '#ffffff' : color, { emissive: color === 'rainbow' ? '#ffffff' : color, emissiveIntensity: 0.6, roughness: 0.2, metalness: 0.4 });
+  const plate = mesh(new THREE.CylinderGeometry(0.27, 0.27, 0.03, 6), std('#dcecf7', { roughness: 0.35, metalness: 0.3 }), 0, 0.03, 0.07); plate.rotation.x = Math.PI / 2; plate.rotation.y = Math.PI / 6; B.add(plate);
+  { const tr = mesh(new THREE.TorusGeometry(0.27, 0.02, 6, 6), trimM, 0, 0.03, 0.05); tr.rotation.z = Math.PI / 6; B.add(tr); }
+  // two small branch bolts
+  for (const [x, y, r, sc] of [[-0.16, 0.18, 0.9, 0.32], [0.17, -0.12, -2.3, 0.26]]) {
+    const br = mesh(geo, bolt, x, y, 0.0); br.scale.setScalar(sc); br.rotation.z = r; br.userData.branch = true; B.add(br);
+  }
+  // crackle sparks drifting around the bolt (Points)
+  const SN = 40, spos = new Float32Array(SN * 3), sseed = [];
+  for (let i = 0; i < SN; i++) sseed.push([Math.random() * 6.28, (Math.random() - 0.5) * 1.0, 0.12 + Math.random() * 0.15, 1 + Math.random() * 3]);
+  const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(spos, 3));
+  const sparkPtsM = new THREE.PointsMaterial({ size: 0.03, map: softDotTexture(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  B.add(new THREE.Points(sg, sparkPtsM));
   // icy frost crystals clamping it to the straps
   const ice = std('#dff6ff', { roughness: 0.05, transparent: true, opacity: 0.85, flatShading: true });
   for (const [x, y] of [[0.0, 0.3], [-0.05, -0.2]]) B.add(mesh(new THREE.OctahedronGeometry(0.06), ice, x, y, 0.05));
@@ -769,7 +859,9 @@ function buildLightningBack(color) {
     boltMesh.material = rainbow ? rainbowM : bolt;
     const hex = rainbow ? '#ffffff' : col;
     bolt.color.set(hex); bolt.emissive.set(rainbow ? '#333333' : col); bolt.emissiveIntensity = 0.9;
-    halo.color.set(rainbow ? '#ffe9ff' : col); sparkM.color.set(rainbow ? '#ffffff' : col);
+    halo.color.set(rainbow ? '#ffe9ff' : col); sparkM.color.set(rainbow ? '#ffffff' : col); sparkPtsM.color.set(rainbow ? '#fff4c0' : col);
+    trimM.color.set(rainbow ? '#ffffff' : col); trimM.emissive.set(rainbow ? '#ff7fd8' : col);
+    B.children.forEach(c => { if (c.userData.branch) c.material = rainbow ? rainbowM : bolt; });
   };
   apply(color);
   let t = 0, flash = 0;
@@ -778,6 +870,8 @@ function buildLightningBack(color) {
     const f = 0.75 + Math.sin(t * 23) * 0.1 + flash * 0.6;
     bolt.emissiveIntensity = (rainbow ? 0.4 : 0.9) * f; halo.opacity = 0.18 + 0.3 * flash + Math.sin(t * 17) * 0.05;
     sparks.forEach((s, i) => { s.visible = (Math.sin(t * (9 + i * 3) + i) > 0.3) || flash > 0.5; });
+    for (let i = 0; i < SN; i++) { const [a0, y0, r, sp] = sseed[i]; const a = a0 + t * sp; spos[i * 3] = Math.cos(a) * r; spos[i * 3 + 1] = y0 + Math.sin(t * sp + i) * 0.04; spos[i * 3 + 2] = Math.sin(a) * r * 0.4 - 0.02; }
+    sg.attributes.position.needsUpdate = true; sparkPtsM.opacity = 0.6 + flash * 0.4;
   };
   g.userData.setColor = apply;
   return { bone: 'torso', object: g };
@@ -821,14 +915,27 @@ function buildMeteorPet(color) {
     const s = new THREE.Sprite(m); s.userData.life = i / 12; P.add(s); trail.push(s); trailM.push(m);
   }
   const glow = new THREE.PointLight(color, 0.4, 1.5); P.add(glow);
+  // tilted glowing orbit ring with three instanced ice moonlets + twinkling sparkles
+  const ringM = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending });
+  const orbitG = new THREE.Group(); orbitG.rotation.set(1.15, 0, 0.35); P.add(orbitG);
+  orbitG.add(mesh(new THREE.TorusGeometry(0.24, 0.006, 6, 48), ringM));
+  const moons = new THREE.InstancedMesh(new THREE.OctahedronGeometry(0.028), iceM, 3); moons.castShadow = false; orbitG.add(moons);
+  const KN = 30, kpos = new Float32Array(KN * 3), kseed = [];
+  for (let i = 0; i < KN; i++) { const v = new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(0.2 + Math.random() * 0.12); kpos.set([v.x, v.y, v.z], i * 3); kseed.push(Math.random() * 6.28); }
+  const kg = new THREE.BufferGeometry(); kg.setAttribute('position', new THREE.BufferAttribute(kpos, 3));
+  const kM = new THREE.PointsMaterial({ size: 0.025, map: softDotTexture(), color: '#ffffff', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  const kPts = new THREE.Points(kg, kM); P.add(kPts);
+  const dm = new THREE.Object3D();
   let t = 0;
   const step = () => {
     body.position.y = Math.sin(t * 2.2) * 0.04; body.rotation.y = Math.sin(t * 0.9) * 0.4; body.rotation.z = Math.sin(t * 1.3) * 0.1;
+    for (let i = 0; i < 3; i++) { const a = t * 1.6 + i * 2.094; dm.position.set(Math.cos(a) * 0.24, Math.sin(a) * 0.24, 0); dm.rotation.set(t * 2 + i, t, 0); dm.updateMatrix(); moons.setMatrixAt(i, dm.matrix); }
+    moons.instanceMatrix.needsUpdate = true; orbitG.position.y = body.position.y; kPts.position.y = body.position.y; kPts.rotation.y = t * 0.3; kM.opacity = 0.55 + Math.sin(t * 5) * 0.3;
     trail.forEach(s => { const L = s.userData.life; s.position.set(-0.02 - L * 0.05, body.position.y + 0.06 + L * 0.28, -0.08 - L * 0.32); s.scale.setScalar(0.16 * (1 - L) + 0.03); s.material.opacity = 0.7 * (1 - L); });
   };
   step();
   g.userData.tick = (dt) => { t += dt; trail.forEach(s => { s.userData.life = (s.userData.life + dt * 0.9) % 1; }); step(); };
-  g.userData.setColor = (c) => { iceM.color.set(c); iceM.emissive.set(c); shellM.color.set(c); shellM.emissive.set(c); trailM.forEach(m => m.color.set(c)); glow.color.set(c); };
+  g.userData.setColor = (c) => { iceM.color.set(c); iceM.emissive.set(c); shellM.color.set(c); shellM.emissive.set(c); trailM.forEach(m => m.color.set(c)); glow.color.set(c); ringM.color.set(c); };
   return { bone: 'torso', object: g };
 }
 
@@ -850,6 +957,14 @@ function buildBlizzardHat(color) {
   for (let i = 0; i < N; i++) reset(i, -0.1 - rnd() * 0.42);
   const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   cloud.add(new THREE.Points(pg, new THREE.PointsMaterial({ size: 0.05, color: '#f4fbff', map: softDotTexture(), transparent: true, depthWrite: false })));
+  // silver lining under the cloud + inner lightning flicker + wind swirl ribbons
+  const liningM = new THREE.MeshBasicMaterial({ color: _tint(color, '#ffffff', 0.6), transparent: true, opacity: 0.7, depthWrite: false });
+  const lining = mesh(new THREE.TorusGeometry(0.29, 0.012, 6, 40), liningM, 0, -0.1, 0); lining.rotation.x = Math.PI / 2; lining.scale.y = 0.75; cloud.add(lining);
+  const flashM = new THREE.SpriteMaterial({ map: softDotTexture(), color: '#fff6c8', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+  const flashS = new THREE.Sprite(flashM); flashS.scale.set(0.7, 0.45, 1); flashS.position.set(0, 0.0, 0.05); cloud.add(flashS);
+  const windM = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide });
+  const winds = [0, 1].map(i => { const w = mesh(new THREE.TorusGeometry(0.36 + i * 0.05, 0.008, 4, 40, Math.PI * 0.9), windM, 0, 0.12 + i * 0.08, 0); w.rotation.x = Math.PI / 2 + (i ? 0.1 : -0.08); w.castShadow = false; cloud.add(w); return w; });
+  let zap = 0;
   // chunky blocky flakes (R6 style) falling between the soft ones
   const flakeM = std('#ffffff', { roughness: 0.4, emissive: '#cfeaff', emissiveIntensity: 0.4 });
   const flakes = [];
@@ -858,10 +973,12 @@ function buildBlizzardHat(color) {
   g.userData.tick = (dt) => {
     t += dt; cloud.position.y = 1.02 + Math.sin(t * 1.5) * 0.02; cloud.rotation.y = Math.sin(t * 0.4) * 0.15;
     for (let i = 0; i < N; i++) { pos[i * 3 + 1] -= vel[i] * dt; pos[i * 3] += Math.sin(t * 2 + i) * 0.02 * dt; if (pos[i * 3 + 1] < -0.52) reset(i, -0.1); }
+    winds.forEach((w, i) => { w.rotation.z = t * (i ? -1.6 : 1.2); });
+    zap = Math.max(0, zap - dt * 5); if (Math.random() < dt * 0.35) zap = 1; flashM.opacity = zap > 0.2 ? zap * 0.8 : 0;
     flakes.forEach((f, i) => { f.position.y -= f.userData.v * dt; f.rotation.set(t * 2 + i, t * 1.5, 0); if (f.position.y < -0.52) f.position.y = -0.1; });
     pg.attributes.position.needsUpdate = true;
   };
-  g.userData.setColor = (c) => { top.color.set(c); under.color.copy(_tint(c, '#000000', 0.3)); };
+  g.userData.setColor = (c) => { top.color.set(c); under.color.copy(_tint(c, '#000000', 0.3)); liningM.color.copy(_tint(c, '#ffffff', 0.6)); };
   return { bone: 'head', object: g };
 }
 
@@ -910,6 +1027,7 @@ export class Avatar {
   /** Apply equipped cosmetics from a profile. */
   /** Free this avatar's GPU resources (face canvas texture, materials, geometries). */
   dispose() {
+    this._stopWind?.();
     this.root.parent?.remove(this.root);
     const seen = new Set();
     this.root.traverse(o => {
@@ -920,6 +1038,89 @@ export class Avatar {
       }
     });
     this.attached = {}; this._mouthOverlay = null;
+  }
+
+  // ---------- Frost Tornado Hat: proximity + wind audio ----------
+  /** Engine/multiplayer hook: distance (world units) to the nearest other player. Infinity/null = nobody near. */
+  setNearbyDistance(d) {
+    this._nearDist = Number.isFinite(d) ? Math.max(0, d) : Infinity;
+    this._proxKnown = true;
+    return this;
+  }
+  /** Same, from a list of other players' world positions ({x,y,z} or THREE.Vector3). */
+  updateProximity(positions = []) {
+    const me = this.root.getWorldPosition(new THREE.Vector3());
+    let best = Infinity;
+    for (const q of positions || []) { if (!q) continue; const dx = q.x - me.x, dy = (q.y || 0) - me.y, dz = q.z - me.z; best = Math.min(best, Math.hypot(dx, dy, dz)); }
+    return this.setNearbyDistance(best);
+  }
+  /** 0 (≥12 units away) … 1 (≤2 units). */
+  proximityFactor() {
+    const d = this._nearDist ?? Infinity;
+    return Math.min(1, Math.max(0, (12 - d) / 10));
+  }
+  /**
+   * Give the avatar the scene's THREE.AudioListener (the engine adds it to the camera).
+   * While a Frost Tornado Hat is worn and another player is within WIND_START_DIST (20u), the wind
+   * loop plays from a PannerNode on the wearer (HRTF, inverse, ref 3.5, rolloff 1.3, max 28);
+   * it stops beyond WIND_STOP_DIST (30u). Safe no-op without a listener, WebAudio, or decodable audio.
+   */
+  attachWindAudio(listener) {
+    this._audioListener = listener && listener.context && typeof listener.getInput === 'function' ? listener : null;
+    const ctx = this._audioListener?.context;
+    if (ctx && !this._resumeHooked && typeof addEventListener === 'function') {
+      // browsers keep the AudioContext suspended until a user gesture
+      this._resumeHooked = true;
+      const resume = () => { if (ctx.state === 'suspended') ctx.resume().catch(() => {}); };
+      addEventListener('pointerdown', resume, { passive: true }); addEventListener('keydown', resume);
+    }
+    if (!this._audioListener) this._stopWind();
+    return this;
+  }
+  _tornadoObj() { return Object.values(this.attached).find(o => o.userData.isTornado) || null; }
+  _syncWind() { if (!this._tornadoObj()) this._stopWind(); }
+  _startWind() {
+    const listener = this._audioListener, ctx = listener?.context;
+    if (!ctx || this._wind) return;
+    const w = this._wind = { ctx, starting: true };
+    loadWindBuffers(ctx).then(({ main, high }) => {
+      if (this._wind !== w || !main) { if (this._wind === w) this._wind = null; return; }
+      try {
+        const panner = ctx.createPanner();
+        Object.assign(panner, { panningModel: 'HRTF', distanceModel: 'inverse', refDistance: 3.5, rolloffFactor: 1.3, maxDistance: 28 });
+        panner.connect(listener.getInput());
+        const layer = (buf, gain) => { const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true; const g = ctx.createGain(); g.gain.value = gain; src.connect(g).connect(panner); return { src, g }; };
+        w.main = layer(main, 1.0);
+        if (high) w.high = layer(high, 0);
+        const when = ctx.currentTime + 0.05;          // same start time keeps the layers in sync
+        w.main.src.start(when); w.high?.src.start(when);
+        w.panner = panner; w.starting = false;
+      } catch { this._stopWind(); }
+    });
+  }
+  _stopWind() {
+    const w = this._wind; this._wind = null;
+    if (!w) return;
+    try { w.main?.src.stop(); w.high?.src.stop(); } catch {}
+    try { w.panner?.disconnect(); } catch {}
+  }
+  _updateWind(dt) {
+    const hat = this._tornadoObj();
+    const p = this._proxKnown ? this.proximityFactor() : 0;
+    if (hat) hat.userData.proximity = p;
+    const d = this._nearDist ?? Infinity;
+    if (!hat || !this._audioListener) { this._stopWind(); return; }
+    if (!this._wind && d < WIND_START_DIST) this._startWind();
+    else if (this._wind && d > WIND_STOP_DIST) { this._stopWind(); return; }
+    const w = this._wind;
+    if (!w || !w.panner) return;
+    const pos = hat.getWorldPosition(new THREE.Vector3());
+    const t = w.ctx.currentTime;
+    try {
+      if (w.panner.positionX) { w.panner.positionX.setTargetAtTime(pos.x, t, 0.05); w.panner.positionY.setTargetAtTime(pos.y + 1, t, 0.05); w.panner.positionZ.setTargetAtTime(pos.z, t, 0.05); }
+      else w.panner.setPosition(pos.x, pos.y + 1, pos.z);
+      if (w.high) w.high.g.gain.setTargetAtTime(Math.min(1, Math.max(0, (6 - d) / 4)), t, 0.15);
+    } catch {}
   }
 
   // ---------- talking ----------
@@ -1000,6 +1201,7 @@ export class Avatar {
       }
     }
     this.setColors({ skin, shirt, pants });
+    this._syncWind?.();
   }
 
   setRocketColors(colors) {
@@ -1104,6 +1306,7 @@ export class Avatar {
     if (flying) this._emitTrail(8);
     else if (this.hasRocket() && Math.random() < 0.15) this._emitTrail(1);
     this._updateTrail(dt);
+    this._updateWind(dt);
     for (const o of Object.values(this.attached)) o.userData.tick?.(dt);
     this._updateTalk(dt);
   }

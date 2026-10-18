@@ -112,16 +112,16 @@ COSMETIC_BY_ID.owl_hood = COSMETICS[COSMETICS.length - 1];
 // `earnIn` = game whose quest awards it. A preset value of 'rainbow' renders a rainbow gradient.
 const ND = { price: 0, earnOnly: true, event: 'natural_disasters', unlock: null, kind: 'model', winter: true, customizable: true };
 for (const c of [
-  { id: 'tornado_hat', unlock: 'nd_quest_disaster_survival', name: 'Frost Tornado Hat', slot: 'hat', earnIn: 'Natural Disaster Survival', icon: '🌪️', defaultColor: '#9fdcff',
+  { id: 'tornado_hat', rarity: 'legendary', unlock: 'nd_quest_disaster_survival', name: 'Frost Tornado Hat', slot: 'hat', earnIn: 'Natural Disaster Survival', icon: '🌪️', defaultColor: '#9fdcff',
     colorPresets: [['Glacier', '#9fdcff'], ['Storm Grey', '#8c96a3'], ['Aurora', '#7dffc4'], ['Twilight', '#a98cff']],
     desc: 'A tiny icy twister spinning on your head, whirling snow and debris around it. Earned in Natural Disasters.' },
-  { id: 'lightning_back', unlock: 'nd_quest_giant_obby', name: 'Ice Lightning Bolt', slot: 'back', earnIn: 'Giant Rainbow Obby', icon: '⚡', defaultColor: '#6fd8ff',
+  { id: 'lightning_back', rarity: 'epic', unlock: 'nd_quest_giant_obby', name: 'Ice Lightning Bolt', slot: 'back', earnIn: 'Giant Rainbow Obby', icon: '⚡', defaultColor: '#6fd8ff',
     colorPresets: [['Ice Blue', '#6fd8ff'], ['Volt Yellow', '#ffe14d'], ['Plasma Pink', '#ff6fd8'], ['Rainbow', 'rainbow']],
     desc: 'A crackling bolt of frozen lightning strapped to your back. It flickers and sparks. Earned in Natural Disasters.' },
-  { id: 'meteor_pet', unlock: 'nd_quest_birg_hq', name: 'Frozen Meteor Pet', slot: 'neck', earnIn: 'BIRG HQ', icon: '☄️', defaultColor: '#7fe3ff',
+  { id: 'meteor_pet', rarity: 'epic', unlock: 'nd_quest_birg_hq', name: 'Frozen Meteor Pet', slot: 'neck', earnIn: 'BIRG HQ', icon: '☄️', defaultColor: '#7fe3ff',
     colorPresets: [['Comet Ice', '#7fe3ff'], ['Ember Core', '#ff8a3d'], ['Nebula', '#c18cff'], ['Starlight', '#fff1a8']],
     desc: 'A little frozen meteor that floats by your shoulder, trailing sparkles. It survived the impact! Earned in Natural Disasters.' },
-  { id: 'blizzard_hat', unlock: 'nd_quest_frost_fields', name: 'Blizzard Cloud', slot: 'hat', earnIn: 'Frost Fields', icon: '🌨️', defaultColor: '#e9f2fa',
+  { id: 'blizzard_hat', rarity: 'rare', unlock: 'nd_quest_frost_fields', name: 'Blizzard Cloud', slot: 'hat', earnIn: 'Frost Fields', icon: '🌨️', defaultColor: '#e9f2fa',
     colorPresets: [['Snow Cloud', '#e9f2fa'], ['Storm', '#7d8796'], ['Pink Dusk', '#f3c6da'], ['Night Sky', '#3b4566']],
     desc: 'Your own personal storm cloud, snowing softly on you wherever you go. Earned in Natural Disasters.' },
 ]) { const item = { ...ND, ...c }; COSMETICS.push(item); COSMETIC_BY_ID[item.id] = item; }
