@@ -19,11 +19,18 @@ Birg Bucks (BB) are pretend money. You get them by:
   - the daily bonus (+100)
 Spend them in the Shop on hats, skins, wings, the Ice Rocket and more!
 
-Make your own game
-  On the Games screen, press CREATE. Place blocks, coins and a spawn
-  point, choose the sky and music, then press SAVE & PUBLISH. Your game shows up
-  under "Your Games". Use EXPORT to save it as a file you can share,
-  and IMPORT to load one.
+Make your own game (Studio)
+  On the Games screen, press CREATE (computer only).
+  - Right-click + drag to look around, WASD to fly.
+  - Insert blocks, balls, cylinders, wedges, a spawn point,
+    checkpoints, lava, coins and gears from the top bar or the Toolbox.
+  - Click a part to select it. Use Move / Scale / Rotate (keys 2 3 4)
+    and change its color and material on the right.
+  - "+ Add script" lets you type what a part should do in plain words,
+    like "spin slowly" or "when touched give 10 points".
+  - Ctrl+Z undoes a mistake. Press TEST to try your game.
+  - SAVE keeps your work. PUBLISH puts it under "Your Games".
+  - EXPORT saves it as a file you can share, and IMPORT loads one.
 
 Your stuff is saved in this browser on this computer. If you use a
 different browser, you start fresh.
