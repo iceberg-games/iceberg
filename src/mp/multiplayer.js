@@ -394,6 +394,22 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     s.immediate.push(t); sendMove(localState(), e);
   }
 
+  /** Remote players within `radius` world units of the local player, nearest first:
+   *  [{ id, name, position: { x, y, z } }]. Excludes the local player and avatars without a position yet.
+   *  Position = the newest received roster sample (not frame-dependent; ~100 ms ahead of the drawn avatar). Empty when solo / not joined. */
+  function nearby(radius = Infinity) {
+    if (!s) return [];
+    const r = Number(radius); if (!(r >= 0)) return [];
+    const me = engine.player?.pos || engine.avatar?.root?.position; if (!me) return [];
+    const out = [];
+    for (const [id, o] of s.others) {
+      if (!o.avatar?.root?.visible) continue;
+      const q = o.samples?.[o.samples.length - 1], p = q ? { x: q.x, y: q.y, z: q.z } : o.avatar.root.position, d = Math.hypot(p.x - me.x, p.y - me.y, p.z - me.z);
+      if (d <= r) out.push({ id, name: s.roster.get(id)?.displayName || id, position: { x: p.x, y: p.y, z: p.z }, d });
+    }
+    return out.sort((a, b) => a.d - b.d).map(({ d, ...rest }) => rest);
+  }
+
   // Proximity for cosmetics (e.g. Frost Tornado Hat spin + wind): each avatar gets the positions of
   // everyone else (interpolated remote positions + the local player). ~5 Hz.
   function proximityTick() {
@@ -460,6 +476,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     // ---- game API (docs/MULTIPLAYER_API.md) ----
     isHost, onHostChanged: (cb) => addSub(subs.host, cb), setState, onState, sendEvent, onEvent,
     players: playersList, localId, now: mpNow,
+    nearby,
     onPlayersChanged: (cb) => addSub(subs.players, cb), connected: () => !!s && s.channel?.state === 'joined', ready,
     hostId,
     /** A remote player said something (server-validated chat): bubble + mouth over their avatar. */

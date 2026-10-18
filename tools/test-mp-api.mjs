@@ -33,7 +33,7 @@ function makeRemote(username) {
     async mpHeartbeat() { return { ok: true, sendHz: 10, roster: members.slice(), serverNow: new Date(Date.now() + 5000).toISOString() }; },
     async mpLeave() { const i = members.findIndex(m => m.username === username); if (i >= 0) members.splice(i, 1); } };
 }
-class FakeAvatar { constructor() { this.root = { visible: false, position: { set() {}, toArray: () => [0, 0, 0] }, rotation: { y: 0 }, userData: {}, parent: null }; this.attached = {}; } applyLoadout() {} animate() {} dispose() {} }
+class FakeAvatar { constructor() { this.root = { visible: false, position: { x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; }, toArray() { return [this.x, this.y, this.z]; } }, rotation: { y: 0 }, userData: {}, parent: null }; this.attached = {}; } applyLoadout() {} animate() {} dispose() {} }
 const busHandlers = {}; const bus = { on: (e, f) => (busHandlers[e] ||= []).push(f), emit: (e, x) => (busHandlers[e] || []).forEach(f => f(x)) };
 function client(username) {
   const scene = { add(o) { o.parent = scene; }, remove() {} };
@@ -91,6 +91,15 @@ await C.mp.join('g'); await sleep(3000);
 let lateVal = null; C.mp.onState('round', (val) => { lateVal = val; });
 assert.equal(lateVal?.n, 2, 'late joiner snapshot');
 assert.equal(C.mp.players().length, 3);
+// nearby(radius): remote players only, nearest first, {id, name, position}
+assert.deepEqual(solo.nearby(50), []);
+A.engine.player.pos = { x: 3, y: 0, z: 4 }; B.engine.player.pos = { x: 30, y: 0, z: 0 }; C.engine.player.pos = { x: 0, y: 0, z: 0 };
+await sleep(1500);
+const nb = C.mp.nearby(10);
+assert.deepEqual(nb.map(p => [p.id, p.name]), [['ana', 'ANA']], 'nearby(10) ' + JSON.stringify(nb));
+assert.deepEqual(nb[0].position, { x: 3, y: 0, z: 4 });
+assert.deepEqual(C.mp.nearby(100).map(p => p.id), ['ana', 'ben']);
+assert.deepEqual(C.mp.nearby(-1), []);
 // a non-host can't forge state
 const forged = []; A.mp.onState('round', (val) => forged.push(val));
 C.engine; for (const ch of hub.get('game:g:1')) if (ch.key === 'cat') ch.send('st', { u: 'cat', kv: { round: { v: { n: 99 }, ver: Date.now() * 2, at: 0 } } });
