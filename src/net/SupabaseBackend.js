@@ -35,6 +35,13 @@ export class SupabaseBackend {
   chatHeartbeat(room)              { return this.client.rpc('chat_heartbeat', { p_room: room }); }
   chatLeave(room)                  { return this.client.rpc('chat_leave', { p_room: room }); }
 
+  // ---- game stats (portal tabs) ----
+  listFeatured()                   { return this.client.rpc('list_featured', {}, { anon: !this.client.signedIn }); }
+  listGameStats()                  { return this.client.rpc('list_game_stats', {}, { anon: !this.client.signedIn }); }
+  recordVisit(gameId)              { return this.client.rpc('record_visit', { p_game_id: gameId }); }
+  gameHeartbeat(gameId)            { return this.client.rpc('game_heartbeat', { p_game_id: gameId }); }
+  gameLeave()                      { return this.client.rpc('game_leave'); }
+
   // ---- friends ----
   listFriends()                    { return this.client.rpc('list_friends'); }
   sendFriendRequest(username)      { return this.client.rpc('send_friend_request', { p_username: username }); }

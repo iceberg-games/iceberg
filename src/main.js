@@ -20,6 +20,7 @@ import { connectStoredSession } from './net/session.js';
 import { CONFIG } from './net/config.js';
 import { registerServiceWorker } from './net/pwa.js';
 import { mountGameChat } from './chat/gameChat.js';
+import { startPlaySession } from './net/gameStats.js';
 
 // Multi-page site: the game lives in play/ and the portal opens it with ?game=<id>.
 const params = new URLSearchParams(location.search);
@@ -45,11 +46,13 @@ async function boot() {
   let testingDoc = null;
   const backToEditor = h('button.btn.floating.hidden#back-to-editor', { onclick: () => edit(testingDoc) }, '✏️ Back to editor');
 
-  const goHome = () => { gameChat.leave(); engine.unloadGame(); testingDoc = null; backToEditor.classList.add('hidden'); menu.showGames(); music.play('winter'); };
+  let session = null;
+  const goHome = () => { session?.stop(); session = null; gameChat.leave(); engine.unloadGame(); testingDoc = null; backToEditor.classList.add('hidden'); menu.showGames(); music.play('winter'); };
   const play = async (def) => {
     menu.hide(); testingDoc = null; backToEditor.classList.add('hidden');
     await engine.loadGame(def);
     gameChat.show(true); gameChat.join(def.id).catch(() => {});
+    session?.stop(); session = startPlaySession(remote, def.id);   // visit + 30 s heartbeats (portal tabs)
   };
   const edit = async (doc) => { menu.hide(); testingDoc = null; backToEditor.classList.add('hidden'); await engine.loadGame(CREATOR, { doc }); };
 

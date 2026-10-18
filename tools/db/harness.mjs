@@ -7,12 +7,12 @@ import { randomUUID } from 'node:crypto';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 
-export async function createDb({ dataDir, seed = true } = {}) {
+export async function createDb({ dataDir, seed = true, runMigrations = true } = {}) {
   const db = new PGlite(dataDir);
   await db.waitReady;
   const fresh = !(await db.query(`select 1 from pg_namespace where nspname = 'auth'`)).rows.length;
   if (fresh) await db.exec(readFileSync(resolve(ROOT, 'tools/db/auth_stub.sql'), 'utf8'));
-  await migrate(db);
+  if (runMigrations) await migrate(db);
   if (seed) await syncCatalog(db);
   return db;
 }

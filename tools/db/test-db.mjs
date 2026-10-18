@@ -259,6 +259,78 @@ await t('price sync: re-run is idempotent; removed items deactivated; new prices
   assert.equal((await su(db, `select active from public.catalog_items where id = 'sword'`))[0].active, true);
 });
 
+await t('game stats: publish dates synced, deduped visits, live players via heartbeat (one row per user)', async () => {
+  const { GAME_META } = await import(resolve(ROOT, 'src/data/gameMeta.js'));
+  let stats = await rpc(db, null, 'list_game_stats');                       // anon can read aggregates
+  const ids = stats.map(g => g.gameId);
+  for (const [id, m] of Object.entries(GAME_META)) {
+    if (m.retired) assert.ok(!ids.includes(id), id + ' should be retired');
+    else assert.equal(Date.parse(stats.find(g => g.gameId === id).publishedAt), Date.parse(m.publishedAt), id);
+  }
+  assert.equal(stats[0].gameId, 'giant-rainbow-obby');                       // newest first
+  assert.equal((await rpc(db, A, 'record_visit', { p_game_id: 'nope' })).reason, 'unknown_game');
+  assert.equal((await rpc(db, A, 'record_visit', { p_game_id: 'birg-hq' })).counted, true);
+  assert.equal((await rpc(db, A, 'record_visit', { p_game_id: 'birg-hq' })).counted, false);   // deduped
+  assert.equal((await rpc(db, B, 'record_visit', { p_game_id: 'birg-hq' })).counted, true);
+  await su(db, `update public.game_visit_last set last_at = now() - interval '31 minutes' where user_id = $1`, [A]);
+  assert.equal((await rpc(db, A, 'record_visit', { p_game_id: 'birg-hq' })).visits, 3);       // new window counts again
+  await denied(as(db, A, tx => tx.query(`update public.games set visits = 999999`)));
+  await denied(as(db, A, tx => tx.query(`select * from public.game_presence`)));
+  await denied(rpc(db, null, 'game_heartbeat', { p_game_id: 'birg-hq' }));                     // guests don't count
+  assert.equal((await rpc(db, A, 'game_heartbeat', { p_game_id: 'frost-fields' })).playing, 1);
+  assert.equal((await rpc(db, B, 'game_heartbeat', { p_game_id: 'frost-fields' })).playing, 2);
+  await rpc(db, A, 'game_heartbeat', { p_game_id: 'birg-hq' });                                // A switches games
+  const rows = await su(db, `select count(*)::int n from public.game_presence where user_id = $1`, [A]);
+  assert.equal(rows[0].n, 1);                                                                   // one row per user
+  await su(db, `update public.game_presence set last_seen = now() - interval '91 seconds' where user_id = $1`, [B]);
+  stats = Object.fromEntries((await rpc(db, null, 'list_game_stats')).map(g => [g.gameId, g]));
+  assert.equal(stats['frost-fields'].playing, 0); assert.equal(stats['birg-hq'].playing, 1);
+  assert.equal(stats['birg-hq'].visits7d, 3); assert.equal(stats['birg-hq'].visitsAll, 3);
+  await rpc(db, A, 'game_leave');
+  assert.equal(Object.fromEntries((await rpc(db, null, 'list_game_stats')).map(g => [g.gameId, g]))['birg-hq'].playing, 0);
+});
+
+await t('most popular: rolling 7-day buckets; an 8-day-old visit does not count, all-time keeps it, buckets kept', async () => {
+  const G = 'frost-fields';
+  await su(db, `insert into public.game_visit_days (game_id, day, count) values ($1, public._today() - 8, 50), ($1, public._today() - 6, 2)
+                on conflict (game_id, day) do update set count = excluded.count`, [G]);
+  await su(db, `update public.games set visits = visits + 52 where game_id = $1`, [G]);
+  const s = Object.fromEntries((await rpc(db, null, 'list_game_stats')).map(g => [g.gameId, g]));
+  assert.equal(s[G].visits7d, 2, '8-day-old bucket must not count; 6-day-old must');
+  assert.equal(s[G].visitsAll, 52);
+  const D = await createUser(db, { username: 'visit_now' });
+  assert.equal((await rpc(db, D, 'record_visit', { p_game_id: G })).counted, true);
+  const s2 = Object.fromEntries((await rpc(db, null, 'list_game_stats')).map(g => [g.gameId, g]));
+  assert.equal(s2[G].visits7d, 3); assert.equal(s2[G].visitsAll, 53);
+  const today = await su(db, `select count::int c from public.game_visit_days where game_id = $1 and day = public._today()`, [G]);
+  assert.equal(today[0].c, 1);
+  assert.equal((await su(db, `select count(*)::int n from public.game_visit_days where game_id = $1 and day = public._today() - 8`, [G]))[0].n, 1);
+  await denied(as(db, D, tx => tx.query(`select * from public.game_visit_days`)));
+});
+
+await t('featured games: public read, seeded, admin-only writes (no client can write the table)', async () => {
+  const f = await rpc(db, null, 'list_featured');
+  assert.deepEqual(f.map(x => x.gameId), ['giant-rainbow-obby', 'birg-hq']);
+  await denied(as(db, A, tx => tx.query(`update public.featured_games set blurb = 'hacked'`)));
+  await denied(as(db, A, tx => tx.query(`insert into public.featured_games (game_id) values ('frost-fields')`)));
+  await denied(as(db, A, tx => tx.query(`update public.profiles set is_admin = true where id = $1`, [A])));
+  await denied(rpc(db, A, 'set_featured_games', { p_items: [{ gameId: 'frost-fields' }] }));       // not admin
+  await denied(rpc(db, null, 'set_featured_games', { p_items: [] }));                              // anon
+  await su(db, `update public.profiles set is_admin = true where id = $1`, [C]);                    // done by Colin in the SQL editor
+  const r = await rpc(db, C, 'set_featured_games', { p_items: [{ gameId: 'birg-hq', blurb: 'Cozy!' }, { gameId: 'frost-fields' }] });
+  assert.equal(r.ok, true);
+  assert.deepEqual((await rpc(db, null, 'list_featured')).map(x => [x.gameId, x.blurb]), [['birg-hq', 'Cozy!'], ['frost-fields', null]]);
+  await denied(rpc(db, C, 'set_featured_games', { p_items: [{ gameId: 'not-a-game' }] }));
+  assert.equal((await rpc(db, null, 'list_featured')).length, 2);                                    // failed call rolled back
+  await rpc(db, C, 'set_featured_games', { p_items: [{ gameId: 'giant-rainbow-obby', image: 'featured/giant-rainbow-obby.png' }, { gameId: 'birg-hq', image: 'featured/birg-hq.png' }] });
+  await su(db, `update public.profiles set is_admin = false where id = $1`, [C]);
+  const { loadSources, toSQL } = await import(resolve(ROOT, 'scripts/sync-catalog.mjs'));
+  await rpc(db, null, 'list_featured');
+  await su(db, `update public.featured_games set blurb = 'admin edit' where game_id = 'birg-hq'`);
+  await db.exec(toSQL(await loadSources(ROOT)));                                                     // deploy re-sync
+  assert.equal((await rpc(db, null, 'list_featured')).find(x => x.gameId === 'birg-hq').blurb, 'admin edit');
+});
+
 await t('every safe-chat phrase in src/data/safeChat.js exists on the server', async () => {
   const { PHRASES } = await import(resolve(ROOT, 'src/data/safeChat.js'));
   const ids = new Set((await su(db, `select id from public.chat_phrases where active`)).map(r => r.id));
