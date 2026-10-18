@@ -144,4 +144,8 @@ for (const c of [
     kind: 'model', winter: true, customizable: true, defaultColor: '#f4f1ea',
     colorPresets: [['Classic White', '#f4f1ea'], ['Midnight Black', '#23262d'], ['Berry', '#b3245c'], ['Lake Blue', '#3f8fd0']],
     desc: 'A pair of figure skates tied together and slung over your shoulder, ready for the frozen lake.' },
+  { id: 'storm_slicker', name: 'Storm Survivor Slicker', slot: 'shirt', price: 260, icon: '🧥', rarity: 'epic', event: 'natural_disasters',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#ff6a1a',
+    colorPresets: [['Rescue Orange', '#ff6a1a'], ['Storm Yellow', '#f5c816'], ['Glacier Blue', '#3a8fd6'], ['Slate', '#4a5563']],
+    desc: 'A glossy hooded rain slicker with reflective stripes, toggle buttons and a Survivor patch. Rain and frost slide right off.' },
 ]) { COSMETICS.push(c); COSMETIC_BY_ID[c.id] = c; }

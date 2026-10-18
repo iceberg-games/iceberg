@@ -47,6 +47,7 @@ const BUILDERS = {
   storm_goggles(_rc, color) { return buildStormGoggles(color); },
   hail_umbrella(_rc, color) { return buildHailUmbrella(color); },
   ice_skates(_rc, color) { return buildIceSkates(color); },
+  storm_slicker(_rc, color) { return buildStormSlicker(color); },
   tornado_hat(_rc, color) { return buildTornadoHat(color); },
   lightning_back(_rc, color) { return buildLightningBack(color); },
   meteor_pet(_rc, color) { return buildMeteorPet(color); },
@@ -1042,6 +1043,104 @@ function buildStormGoggles(color) {
   g.userData.setColor = (c) => { hud = c; drawHud(a); lampM.emissive.set(c); glowM.color.set(c); };
   return { bone: 'head', object: g };
 }
+
+function survivorBadgeTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+  x.fillStyle = '#1d2733'; x.beginPath(); x.arc(64, 64, 62, 0, Math.PI * 2); x.fill();
+  x.fillStyle = '#f3ead2'; x.beginPath(); x.arc(64, 64, 54, 0, Math.PI * 2); x.fill();
+  x.strokeStyle = '#d9a21e'; x.lineWidth = 4; x.beginPath(); x.arc(64, 64, 50, 0, Math.PI * 2); x.stroke();
+  // tiny tornado emblem: stacked swirls narrowing downward
+  x.strokeStyle = '#3c4a5c'; x.lineCap = 'round';
+  for (let i = 0; i < 6; i++) {
+    const y = 26 + i * 9, w = 30 - i * 4.6, cx = 64 + Math.sin(i * 0.9) * 4;
+    x.lineWidth = 5 - i * 0.5; x.beginPath(); x.ellipse(cx, y, w, 3.5, 0, 0, Math.PI * 2); x.stroke();
+  }
+  x.fillStyle = '#c0392b'; x.font = 'bold 17px sans-serif'; x.textAlign = 'center'; x.fillText('SURVIVOR', 64, 101);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
+function buildStormSlicker(color) {
+  const g = new THREE.Group();
+  const vinyl = new THREE.MeshPhysicalMaterial({ color, roughness: 0.32, clearcoat: 1, clearcoatRoughness: 0.08 });
+  const lining = std(_tint(color, '#000000', 0.35), { roughness: 0.6 });
+  const placketM = new THREE.MeshPhysicalMaterial({ color: _tint(color, '#000000', 0.15), roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.1 });
+  const reflect = std('#dfe3e8', { metalness: 0.7, roughness: 0.22, emissive: '#5a6068', emissiveIntensity: 0.6 });
+  const neon = std('#c8f53a', { roughness: 0.5, emissive: '#6a8a10', emissiveIntensity: 0.35 });
+  const wood = std('#7a4f2a', { roughness: 0.7 }), cord = std('#2a2a2a', { roughness: 0.9 });
+  // body
+  g.add(mesh(new RoundedBoxGeometry(1.06, 0.96, 0.56, 3, 0.04), vinyl, 0, 0.03, 0));
+  // reflective stripes: silver band edged in neon, wrapped around the torso
+  for (const y of [-0.08, -0.3]) {
+    g.add(mesh(new THREE.BoxGeometry(1.075, 0.06, 0.575), reflect, 0, y, 0));
+    for (const d of [-0.04, 0.04]) g.add(mesh(new THREE.BoxGeometry(1.072, 0.018, 0.572), neon, 0, y + d, 0));
+  }
+  // front placket + toggle buttons on cord loops
+  g.add(mesh(new THREE.BoxGeometry(0.1, 0.92, 0.02), placketM, 0, 0.04, 0.285));
+  for (const y of [0.38, 0.18, -0.19, -0.4]) {
+    g.add(rotated(mesh(new THREE.CapsuleGeometry(0.018, 0.08, 4, 8), wood, 0, y, 0.305), 'z', Math.PI / 2));
+    for (const x of [-0.05, 0.05]) g.add(mesh(new THREE.BoxGeometry(0.035, 0.012, 0.012), cord, x, y, 0.3));
+  }
+  // hem
+  g.add(mesh(new THREE.BoxGeometry(1.08, 0.06, 0.58), placketM, 0, -0.43, 0));
+  // high collar
+  const collar = mesh(new THREE.TorusGeometry(0.34, 0.06, 10, 32), placketM, 0, 0.53, 0); collar.rotation.x = Math.PI / 2; collar.scale.set(1.05, 0.72, 1); g.add(collar);
+  // survivor badge (left chest)
+  const badge = mesh(new THREE.CircleGeometry(0.11, 32), new THREE.MeshStandardMaterial({ map: survivorBadgeTexture(), roughness: 0.8 }), 0.27, 0.27, 0.283);
+  g.add(badge);
+  g.add(mesh(new THREE.TorusGeometry(0.112, 0.008, 6, 32), std('#d9a21e', { metalness: 0.6, roughness: 0.4 }), 0.27, 0.27, 0.284));
+  // folded hood at back of neck: shell + lining, hinged so it flaps in the wind
+  const hood = new THREE.Group(); hood.position.set(0, 0.44, -0.27); g.add(hood);
+  const shell = mesh(new THREE.SphereGeometry(0.32, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), vinyl, 0, 0, -0.06);
+  shell.scale.set(1.15, 0.45, 0.55); shell.rotation.x = -Math.PI / 2 - 0.35; hood.add(shell);
+  const inner = mesh(new THREE.SphereGeometry(0.3, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), lining, 0, 0.005, -0.055);
+  inner.scale.set(1.1, 0.4, 0.5); inner.rotation.x = -Math.PI / 2 - 0.35; inner.material.side = THREE.BackSide; hood.add(inner);
+  const hoodTrim = mesh(new THREE.TorusGeometry(0.33, 0.02, 6, 32, Math.PI), reflect, 0, 0.02, -0.02);
+  hoodTrim.scale.set(1.12, 0.6, 1); hoodTrim.rotation.x = -0.35; hood.add(hoodTrim);
+  // sleeves
+  const extras = ['armL', 'armR'].map(bone => {
+    const s = new THREE.Group();
+    s.add(mesh(new RoundedBoxGeometry(0.56, 0.68, 0.56, 3, 0.04), vinyl, 0, -0.33, 0));
+    s.add(mesh(new THREE.BoxGeometry(0.575, 0.06, 0.575), reflect, 0, -0.48, 0));
+    for (const d of [-0.04, 0.04]) s.add(mesh(new THREE.BoxGeometry(0.572, 0.018, 0.572), neon, 0, -0.48 + d, 0));
+    s.add(mesh(new THREE.BoxGeometry(0.58, 0.08, 0.58), placketM, 0, -0.68, 0));
+    return { bone, object: s };
+  });
+  // raindrops / frost beads sliding down the slicker surfaces
+  const N = 26, dropM = new THREE.MeshPhysicalMaterial({ color: '#eaf6ff', roughness: 0.05, transparent: true, opacity: 0.7, clearcoat: 1 });
+  const drops = new THREE.InstancedMesh(new THREE.SphereGeometry(0.018, 8, 6), dropM, N);
+  const st = [], d = new THREE.Object3D();
+  const spawn = (i, anyY) => {
+    const face = i % 4; const u = Math.random() - 0.5;
+    const p = face === 0 ? [u * 0.95, 0, 0.292] : face === 1 ? [u * 0.95, 0, -0.292] : face === 2 ? [0.542, 0, u * 0.5] : [-0.542, 0, u * 0.5];
+    p[1] = anyY ? -0.4 + Math.random() * 0.9 : 0.5;
+    if (face === 0 && Math.abs(p[0]) < 0.08) p[0] += 0.12;            // keep off the placket
+    st[i] = { p, v: 0.05 + Math.random() * 0.12, frost: Math.random() < 0.3, pause: Math.random() * 2 };
+  };
+  for (let i = 0; i < N; i++) spawn(i, true);
+  g.add(drops);
+  g.userData.tick = (dt) => {
+    const t = performance.now() / 1000;
+    hood.rotation.x = Math.sin(t * 2.3) * 0.08 + Math.sin(t * 5.1) * 0.03;
+    hood.rotation.z = Math.sin(t * 1.7) * 0.04;
+    for (let i = 0; i < N; i++) {
+      const s = st[i];
+      if (s.pause > 0) s.pause -= dt; else s.p[1] -= s.v * dt * (s.frost ? 0.4 : 1);   // drops stick, then slide
+      if (Math.random() < dt * 0.6) s.pause = Math.random() * 0.4;
+      if (s.p[1] < -0.44) spawn(i, false);
+      d.position.set(...s.p);
+      if (s.frost) d.scale.set(0.8, 0.8, 0.5); else d.scale.set(0.9, 1.5 + s.v * 4, 0.55);
+      d.updateMatrix(); drops.setMatrixAt(i, d.matrix);
+      drops.setColorAt(i, s.frost ? _fc.set('#ffffff') : _fc.set('#d8eeff'));
+    }
+    drops.instanceMatrix.needsUpdate = true; if (drops.instanceColor) drops.instanceColor.needsUpdate = true;
+  };
+  g.userData.tick(0);
+  g.userData.setColor = (c) => {
+    vinyl.color.set(c); placketM.color.copy(_tint(c, '#000000', 0.15)); lining.color.copy(_tint(c, '#000000', 0.35));
+  };
+  return { bone: 'torso', object: g, extras };
+}
+const _fc = new THREE.Color();
 
 function buildIceSkates(color) {
   const g = new THREE.Group();
