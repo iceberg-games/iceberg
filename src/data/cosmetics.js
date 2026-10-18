@@ -79,3 +79,12 @@ for (const c of [
     desc: 'A tiny penguin buddy who rides on your shoulder, flaps happily and wears a scarf you pick.',
   },
 ]) { COSMETICS.push(c); COSMETIC_BY_ID[c.id] = c; }
+
+// Wearable 3D outfit (kind 'model' in the shirt slot: knit body + sleeves over the torso/arms).
+COSMETICS.push({
+  id: 'cable_sweater', name: 'Cozy Cable-Knit Sweater', slot: 'shirt', price: 260, icon: '🧶',
+  kind: 'model', winter: true, customizable: true, defaultColor: '#b3243c',
+  colorPresets: [['Cranberry', '#b3243c'], ['Oatmeal', '#d9c7a3'], ['Fjord Blue', '#2f5d8a'], ['Forest', '#2f6b45']],
+  desc: 'Chunky cable-knit with a snowflake band, ribbed cuffs and a fold-over collar. Instant fireside vibes.',
+});
+COSMETIC_BY_ID.cable_sweater = COSMETICS[COSMETICS.length - 1];

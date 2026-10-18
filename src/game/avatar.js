@@ -40,6 +40,7 @@ const BUILDERS = {
   earmuffs(_rc, color) { return buildEarmuffs(color); },
   snowglobe_pack(_rc, color) { return buildSnowGlobe(color); },
   cocoa_mug(_rc, color) { return buildCocoaMug(color); },
+  cable_sweater(_rc, color) { return buildSweater(color); },
   frost_lantern(_rc, color) { return buildFrostLantern(color); },
   penguin_pal(_rc, color) { return buildPenguinPal(color); },
   cap() {
@@ -473,6 +474,89 @@ function buildPenguinPal(color) {
   return { bone: 'torso', object: g };
 }
 
+// Draws a cable-knit panel in `color` (w x h px). band = snowflake/fair-isle band row.
+function drawSweater(c, color, { band = true, cables = 4 } = {}) {
+  const g = c.getContext('2d'), W = c.width, H = c.height;
+  const base = new THREE.Color(color), dark = base.clone().lerp(new THREE.Color('#000'), 0.28), light = base.clone().lerp(new THREE.Color('#fff'), 0.18);
+  const css = (col) => '#' + col.getHexString();
+  const cream = base.getHSL({}).l > 0.6 ? '#7a5b3a' : '#f6f1e6';
+  g.fillStyle = css(base); g.fillRect(0, 0, W, H);
+  // purl texture
+  for (let y = 0; y < H; y += 6) for (let x = (y / 6) % 2 * 3; x < W; x += 6) { g.fillStyle = css(dark); g.globalAlpha = 0.25; g.fillRect(x, y, 3, 3); }
+  g.globalAlpha = 1;
+  // cables: interlocking twisted ropes
+  const cw = W / cables;
+  for (let i = 0; i < cables; i++) {
+    const cx = cw * (i + 0.5);
+    g.fillStyle = css(dark); g.fillRect(cx - cw * 0.32, 0, 3, H); g.fillRect(cx + cw * 0.32 - 3, 0, 3, H);
+    for (let y = -16; y < H + 16; y += 22) {
+      for (const s of [-1, 1]) {
+        g.save(); g.translate(cx, y); g.rotate(s * 0.6);
+        g.fillStyle = css(light); g.beginPath(); g.ellipse(0, 0, cw * 0.13, 13, 0, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = css(dark); g.lineWidth = 2; g.stroke(); g.restore();
+      }
+    }
+  }
+  if (band) {
+    const by = H * 0.18, bh = H * 0.2;
+    g.fillStyle = css(dark); g.fillRect(0, by, W, bh);
+    g.fillStyle = cream; g.fillRect(0, by + 3, W, 3); g.fillRect(0, by + bh - 6, W, 3);
+    // snowflakes
+    const n = Math.round(W / (bh * 1.1)), sx = W / n;
+    g.strokeStyle = cream; g.lineWidth = 3; g.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const x = sx * (i + 0.5), y = by + bh / 2, r = bh * 0.3;
+      for (let k = 0; k < 3; k++) {
+        const a = k * Math.PI / 3, dx = Math.cos(a) * r, dy = Math.sin(a) * r;
+        g.beginPath(); g.moveTo(x - dx, y - dy); g.lineTo(x + dx, y + dy); g.stroke();
+      }
+      g.fillStyle = cream; for (const ox of [-sx / 2, sx / 2]) { g.beginPath(); g.arc(x + ox, y, 2.5, 0, Math.PI * 2); g.fill(); }
+    }
+  }
+}
+function ribTexture(color) {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 16;
+  const g = c.getContext('2d'), base = new THREE.Color(color), dark = base.clone().lerp(new THREE.Color('#000'), 0.3);
+  g.fillStyle = '#' + base.getHexString(); g.fillRect(0, 0, 64, 16);
+  g.fillStyle = '#' + dark.getHexString(); for (let x = 0; x < 64; x += 8) g.fillRect(x, 0, 3, 16);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; return t;
+}
+
+function buildSweater(color) {
+  const g = new THREE.Group();
+  const panels = [];
+  const panel = (w, h, opts, rep = 1) => {
+    const c = document.createElement('canvas'); c.width = 256; c.height = Math.round(256 * h / w);
+    drawSweater(c, color, opts);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+    const m = new THREE.MeshStandardMaterial({ map: t, bumpMap: t, bumpScale: 0.6, roughness: 1 });
+    panels.push({ c, t, opts }); return m;
+  };
+  const ribs = [];
+  const rib = (rx = 1) => { const t = ribTexture(color); t.repeat.set(rx, 1); const m = new THREE.MeshStandardMaterial({ map: t, roughness: 1 }); ribs.push(m); return m; };
+  // body: slightly larger than the 1 x 1 x 0.5 torso
+  const front = panel(1.04, 0.92, { band: true, cables: 4 });
+  const side = panel(0.54, 0.92, { band: true, cables: 2 });
+  const top = panel(1.04, 0.54, { band: false, cables: 4 });
+  g.add(mesh(new THREE.BoxGeometry(1.04, 0.92, 0.54), [side, side, top, top, front, front], 0, 0.06, 0));
+  g.add(mesh(new THREE.BoxGeometry(1.06, 0.12, 0.56), rib(6), 0, -0.44, 0));                 // ribbed hem
+  // fold-over collar around the neck
+  const collar = mesh(new THREE.TorusGeometry(0.36, 0.055, 10, 32), rib(10), 0, 0.55, 0); collar.rotation.x = Math.PI / 2; collar.scale.set(1.05, 0.7, 1); g.add(collar);
+  // sleeves (extras on arm bones)
+  const sleeve = panel(0.54, 0.66, { band: true, cables: 2 });
+  const extras = ['armL', 'armR'].map(bone => {
+    const s = new THREE.Group();
+    s.add(mesh(new THREE.BoxGeometry(0.54, 0.66, 0.54), sleeve, 0, -0.33, 0));
+    s.add(mesh(new THREE.BoxGeometry(0.56, 0.12, 0.56), rib(3), 0, -0.7, 0));                // cuff
+    return { bone, object: s };
+  });
+  g.userData.setColor = (col) => {
+    for (const p of panels) { drawSweater(p.c, col, p.opts); p.t.needsUpdate = true; }
+    for (const m of ribs) { const nt = ribTexture(col); nt.repeat.copy(m.map.repeat); m.map.dispose(); m.map = nt; m.needsUpdate = true; }
+  };
+  return { bone: 'torso', object: g, extras };
+}
+
 export class Avatar {
   constructor() {
     this.root = new THREE.Group();
@@ -598,9 +682,11 @@ export class Avatar {
       if (item.kind === 'skin') skin = item.color;
       else if (item.kind === 'shirt') { shirt = item.color; pants = item.pants; }
       else if (BUILDERS[id]) {
-        const { bone, object } = BUILDERS[id](this.rocketColors, this.cosmeticColors[id] || item.defaultColor);
+        const { bone, object, extras } = BUILDERS[id](this.rocketColors, this.cosmeticColors[id] || item.defaultColor);
         object.traverse(o => { if (o.isMesh) o.castShadow = true; });
         this.bones[bone].add(object);
+        // optional extra pieces on other bones (e.g. sweater sleeves); removed with the main object
+        object.userData.extras = (extras || []).map(e => { e.object.traverse(o => { if (o.isMesh) o.castShadow = true; }); this.bones[e.bone].add(e.object); return e.object; });
         object.userData.cosmeticId = id;
         this.attached[slot] = object;
       }
@@ -628,7 +714,7 @@ export class Avatar {
 
   _detach(slot) {
     const o = this.attached[slot];
-    if (o) o.parent?.remove(o);
+    if (o) { o.parent?.remove(o); (o.userData.extras || []).forEach(x => x.parent?.remove(x)); }
     delete this.attached[slot];
   }
 

@@ -19,7 +19,7 @@ av.applyLoadout({ equipped: { [item.slot]: id }, cosmeticColors: color ? { [id]:
 for (let i = 0; i < 90; i++) av.animate(1 / 30, {});
 av.bones.armR.rotation.x = 0; av.bones.armL.rotation.x = 0;
 av.bones.legL.rotation.x = av.bones.legR.rotation.x = 0;
-const focus = id === 'penguin_pal' ? [-0.75, 2.15, 0, 1.6] : id === 'frost_lantern' ? [0.75, 0.85, 0, 1.7] : { head: [0, 2.4, 0, 2.6], torso: [0, 1.35, -0.4, 3.6], armR: [0.75, 1.1, 0.35, 2.4] }[{ hat: 'head', back: 'torso', hand: 'armR' }[item.slot]];
+const focus = id === 'penguin_pal' ? [-0.75, 2.15, 0, 1.6] : id === 'frost_lantern' ? [0.75, 0.85, 0, 1.7] : item.slot === 'shirt' ? [0, 1.55, 0, 4.2] : { head: [0, 2.4, 0, 2.6], torso: [0, 1.35, -0.4, 3.6], armR: [0.75, 1.1, 0.35, 2.4] }[{ hat: 'head', back: 'torso', hand: 'armR' }[item.slot]];
 const yaw = { front: 0, side: id === 'penguin_pal' ? -Math.PI / 2 : Math.PI / 2, threequarter: Math.PI / 4, back: Math.PI, backthreequarter: Math.PI * 0.75 }[angle];
 const cam = new THREE.PerspectiveCamera(35, W / H, 0.1, 50);
 cam.position.set(focus[0] + Math.sin(yaw) * focus[3], focus[1] + (item.slot === 'hand' ? (id === 'frost_lantern' ? 0.3 : 0.9) : 0.25), focus[2] + Math.cos(yaw) * focus[3]);
