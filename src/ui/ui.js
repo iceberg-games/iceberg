@@ -1,5 +1,6 @@
 // In-game HUD + drawers (Shop, Locker, Get Birg Bucks, Models, Help).
 import { h, clear } from './dom.js';
+import { playUi } from '../audio/uiSounds.js';
 import { bus } from '../core/events.js';
 import { CURRENCY, fmt } from '../core/currency.js';
 import { COSMETICS, COSMETIC_BY_ID } from '../data/cosmetics.js';
@@ -177,10 +178,12 @@ export class UI {
   // ---------- drawers ----------
   openDrawer(name) {
     if (this.drawerName === name && !this.drawer.classList.contains('hidden')) { this.closeDrawer(); return; }
+    const wasOpen = !this.drawer.classList.contains('hidden');
     this.drawerName = name; this.drawer.classList.remove('hidden'); this.drawer.dataset.panel = name;
+    if (!wasOpen) playUi('popup_open');
     this.refreshDrawer();
   }
-  closeDrawer() { this.drawer.classList.add('hidden'); this.drawerName = null; }
+  closeDrawer() { if (!this.drawer.classList.contains('hidden')) playUi('popup_close'); this.drawer.classList.add('hidden'); this.drawerName = null; }
   refreshDrawer() {
     this.updateRocketHint();
     if (!this.drawerName || this.drawer.classList.contains('hidden')) return;

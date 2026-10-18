@@ -24,6 +24,8 @@ import { registerServiceWorker } from './net/pwa.js';
 import { mountGameChat } from './chat/gameChat.js';
 import { startPlaySession } from './net/gameStats.js';
 import { createMultiplayer } from './mp/multiplayer.js';
+import { initUiSounds } from './audio/uiSounds.js';
+import { uiSoundOptions } from './audio/siteSounds.js';
 
 // Multi-page site: the game lives in play/ and the portal opens it with ?game=<id>.
 const params = new URLSearchParams(location.search);
@@ -98,6 +100,7 @@ async function boot() {
   app.append(backToEditor);
 
   // Browsers only allow audio after a user gesture.
+  initUiSounds(uiSoundOptions());   // UI click/Play/popup sounds (one delegated listener); mute = music.muted
   const unlock = () => music.unlock();
   addEventListener('pointerdown', unlock); addEventListener('keydown', unlock);
   bus.on('inventory:changed', () => ui.updateRocketHint());

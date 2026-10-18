@@ -20,6 +20,7 @@ const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? proces
 const OUT = resolve(ROOT, arg('--out', 'dist-site'));
 const DEMO = process.argv.includes('--demo');
 process.env.VITE_ICEBERG_SITE = DEMO ? '0' : '1';
+process.env.VITE_ICEBERG_PAGES = '1';   // multi-page site: UI sounds are fetched from audio/ui/, not inlined
 
 const pages = [
   { html: 'site/portal/index.html', dest: 'index.html' },

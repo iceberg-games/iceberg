@@ -18,6 +18,9 @@ import { registerServiceWorker } from '../net/pwa.js';
 import { mountChatRoom } from '../chat/chatRoom.js';
 import { loadGameStats, SORTS } from '../net/gameStats.js';
 import { loadFeatured, createFeaturedBanner } from './featured.js';
+import { initUiSounds, isMuted as soundsMuted } from '../audio/uiSounds.js';
+import { uiSoundOptions } from '../audio/siteSounds.js';
+import { modelPrefs } from '../backend/LocalBackend.js';
 
 const root = document.getElementById('portal');
 if (CONFIG.isSite) document.body.classList.add('iceberg-site');
@@ -27,6 +30,8 @@ let remote = null;
 let view = new URLSearchParams(location.search).get('view') || 'games';
 let chatRoom = null, friendsTimer = null, banner = null;
 let gameSort = new URLSearchParams(location.search).get('sort') || 'newest';
+
+const uiSounds = initUiSounds(uiSoundOptions());   // one delegated click-sound listener for the whole page
 
 const toastBox = h('div.p-toasts');
 function toast(text, icon = 'ℹ️') {
@@ -38,13 +43,23 @@ bus.on('coins:changed', () => { const b = document.querySelector('#p-bucks'); if
 export function playUrl(id) { return `play/?game=${encodeURIComponent(id)}`; }
 function openGame(id) { window.open(playUrl(id), '_blank', 'noopener'); }
 
+function soundToggle() {
+  const set = (b, m) => { b.textContent = m ? '🔇' : '🔊'; b.setAttribute('aria-pressed', String(!m)); b.title = m ? 'Sounds off (click to turn on)' : 'Sounds on (click to mute)'; b.setAttribute('aria-label', m ? 'Turn sounds on' : 'Mute sounds'); };
+  // Same saved setting as the in-game 🔊 button (iceberg:v1:settings.muted): one mute for music + UI sounds.
+  const b = h('button.icon-btn.p-sound#p-sound', { type: 'button', 'data-sfx': 'none', onclick: () => {
+    const m = !soundsMuted(); modelPrefs.saveSettings({ ...modelPrefs.loadSettings(), muted: m }); set(b, m);
+    if (!m) uiSounds.playUi('click');
+  } });
+  set(b, soundsMuted());
+  return b;
+}
 function header() {
   const user = remote ? h('span.p-user#p-user', '👤 ', h('b', economy.profile.displayName || economy.profile.username), h('span.muted', ` @${economy.profile.username}`)) : null;
   return h('header.p-header',
     h('div.brand.big', h('span', '🧊'), h('b', 'ICEBERG')),
     h('div.p-right',
       h('span.bucks', h('span.bb-ico', CURRENCY.icon), h('span.bucks-amount#p-bucks', fmt(economy.coins))),
-      user,
+      user, soundToggle(),
       remote ? h('button.btn.small.secondary#p-signout', { onclick: signOutNow }, 'Sign out')
              : (accountsEnabled() ? h('button.btn.small#p-signin-open', { onclick: () => go('account') }, 'Sign in') : null)));
 }
@@ -214,4 +229,4 @@ render();
   render();
   registerServiceWorker('./');
 })();
-window.icebergPortal = { economy, get remote() { return remote; }, get chatRoom() { return chatRoom; }, get banner() { return banner; }, go, render, playUrl };
+window.icebergPortal = { economy, get remote() { return remote; }, get chatRoom() { return chatRoom; }, get banner() { return banner; }, go, render, playUrl, sounds: uiSounds };

@@ -1,0 +1,18 @@
+{
+  "_about": "Iceberg UI sound set 'Frost Glass' (E major glass taps). Files are pre-attenuated (peaks about -6.5 to -8 dBFS; hover -18) so they sit under game audio. 'gain' is the suggested extra playback gain (0..1) relative to a UI master of 1.0. Every name has .ogg (primary) and .mp3 (fallback) in this folder.",
+  "masterGain": 1.0,
+  "sounds": {
+    "click":         { "files": ["ui_click_1", "ui_click_2", "ui_click_3"], "gain": 0.9, "ms": 120, "minIntervalMs": 35 },
+    "hover":         { "files": ["ui_hover"],        "gain": 0.6, "ms": 70,  "minIntervalMs": 90 },
+    "play":          { "files": ["ui_play_button"],  "gain": 1.0, "ms": 550, "minIntervalMs": 250 },
+    "popup_open":    { "files": ["ui_popup_open"],   "gain": 0.85, "ms": 240, "minIntervalMs": 80 },
+    "popup_close":   { "files": ["ui_popup_close"],  "gain": 0.8, "ms": 220, "minIntervalMs": 80 },
+    "notification":  { "files": ["ui_notification"], "gain": 0.9, "ms": 550, "minIntervalMs": 300 },
+    "toast":         { "files": ["ui_toast"],        "gain": 0.85, "ms": 200, "minIntervalMs": 120 },
+    "error":         { "files": ["ui_error"],        "gain": 0.9, "ms": 400, "minIntervalMs": 250 }
+  },
+  "publisherAliases": {
+    "click.ogg": "ui_click_1", "play.ogg": "ui_play_button", "popup-open.ogg": "ui_popup_open",
+    "popup-close.ogg": "ui_popup_close", "toast.ogg": "ui_toast"
+  }
+}

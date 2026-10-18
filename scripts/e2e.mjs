@@ -577,6 +577,52 @@ if (want('quests')) {
   finally { await b.close(); web.close(); await dev.close(); }
 }
 
+// ---------------- 7. UI click sounds + shared mute (portal + play page; guest site build, no backend needed) ----------------
+if (want('sounds')) {
+  const { serveStatic } = await import(resolve(ROOT, 'tools/db/dev-server.mjs'));
+  const WEB = await PORT(8430), BASE = `http://localhost:${WEB}/iceberg/`;
+  const out = resolve(TMP, 'site-sounds');
+  run('build: site for UI sound checks', 'node', ['scripts/build-site.mjs', '--out', out], { env: { VITE_SUPABASE_URL: '', VITE_SUPABASE_ANON_KEY: '' } });
+  const web = await serveStatic(out, WEB, { prefix: '/iceberg/' });
+  const b = await launch(); const errs = [];
+  const spy = () => { window.__starts = 0; const o = AudioBufferSourceNode.prototype.start; AudioBufferSourceNode.prototype.start = function (...a) { window.__starts++; return o.apply(this, a); }; };
+  try {
+    const c = await b.newContext({ viewport: { width: 1280, height: 820 } }); await c.addInitScript(spy);
+    const p = await c.newPage(); watch(p, errs);
+    await p.goto(BASE); await p.waitForSelector('#view-games .game-card'); await p.evaluate(() => window.icebergUi.ready);
+    const starts = () => p.evaluate(() => window.__starts);
+    const files = await p.evaluate(async () => (await fetch('audio/ui/ui_click_1.ogg')).ok && (await fetch('audio/ui/ui_play_button.mp3')).ok);
+    check('sounds: Sound Designer files served from audio/ui/ (not inlined in the Pages build)', files);
+    const s0 = await starts(); await p.click('#games-sort button[data-sort="popular"]'); await p.waitForTimeout(150);
+    const s1 = await starts(); const last1 = await p.evaluate(() => window.icebergUi.stats.last);
+    check('sounds: a button click plays the UI click sound (Web Audio buffer)', s1 > s0 && last1 === 'click', `${s0}->${s1} ${last1}`);
+    const [g2] = await Promise.all([c.waitForEvent('page'), p.click('#view-games .game-card .btn.play')]); await g2.close();
+    check('sounds: Play buttons play the bigger Play sound', (await p.evaluate(() => window.icebergUi.stats.last)) === 'play' && (await starts()) > s1);
+    check('sounds: one shared AudioContext (= window.__icebergSfx, the THREE listener context)', await p.evaluate(() => window.icebergUi.context === window.__icebergSfx));
+    await p.click('#p-sound'); await p.waitForTimeout(100);
+    const muted = await p.evaluate(() => JSON.parse(localStorage.getItem('iceberg:v1:settings')).muted);
+    const s2 = await starts(); await p.click('#games-sort button[data-sort="newest"]'); await p.click('.p-tab[data-view="settings"]'); await p.waitForTimeout(200);
+    check('sounds: header mute toggle saves the shared setting and stops click sounds', muted === true && (await starts()) === s2 && (await p.getAttribute('#p-sound', 'aria-pressed')) === 'false', `${s2}->${await starts()}`);
+    await p.reload(); await p.waitForSelector('#p-sound');
+    check('sounds: mute persists across reload', (await p.textContent('#p-sound')) === '🔇');
+    // play page: same setting -> music muted + no UI sounds
+    const g = await c.newPage(); watch(g, errs); await g.goto(BASE + 'play/?game=frost-fields'); await g.waitForSelector('#start-btn');
+    await g.evaluate(() => window.icebergUi.ready); const gs0 = await g.evaluate(() => window.__starts);
+    await g.click('#start-btn'); await g.waitForFunction(() => window.iceberg?.engine?.running, null, { timeout: 20000 });
+    check('sounds: play page honors the same mute (music muted, no UI sounds)', (await g.evaluate(() => window.iceberg.music.muted)) === true && (await g.evaluate(() => window.__starts)) === gs0);
+    await g.close();
+    await p.click('#p-sound'); await p.waitForTimeout(150); const s3 = await starts();
+    await p.click('.p-tab[data-view="games"]'); await p.waitForTimeout(150);
+    check('sounds: unmute -> clicks play again', (await starts()) > s3, `${s3}->${await starts()}`);
+    const g3 = await c.newPage(); await g3.goto(BASE + 'play/?game=frost-fields'); await g3.waitForSelector('#start-btn'); await g3.evaluate(() => window.icebergUi.ready);
+    const p0 = await g3.evaluate(() => window.__starts); await g3.click('#start-btn'); await g3.waitForTimeout(200);
+    check('sounds: play page Start button plays the Play sound when unmuted', (await g3.evaluate(() => window.__starts)) > p0 && (await g3.evaluate(() => window.icebergUi.stats.last)) === 'play');
+    await g3.close(); await c.close();
+    check('sounds: no page errors', errs.length === 0, errs.join(' | ').slice(0, 600));
+  } catch (e) { check('sounds: unexpected error', false, e.stack); }
+  finally { await b.close(); web.close(); }
+}
+
 console.log('\n' + results.map(r => `${r[0]}  ${r[1]}${r[0] === 'FAIL' && r[2] ? '\n      ' + String(r[2]).replace(/\n/g, '\n      ') : ''}`).join('\n'));
 const failed = results.filter(r => r[0] === 'FAIL').length;
 console.log(`\n${results.length - failed}/${results.length} checks passed. Screenshots: ${SHOTS}`);
