@@ -96,6 +96,16 @@ await t('game_earn: per-call max, per-source daily cap, idempotent ref, unknown 
   assert.equal(r.granted, 0);
 });
 
+await t("game_earn: Corner Bakery day clears (15/25/40 BB, source custom_game) are paid in full", async () => {
+  const U = await createUser(db, { username: 'zz_bakery' });
+  for (const amt of [15, 25, 40]) {
+    const r = await rpc(db, U, 'game_earn', { p_source: 'custom_game', p_amount: amt, p_reason: 'Corner Bakery Rush: Day cleared' });
+    assert.equal(r.granted, amt); assert.equal(r.capped, false);
+  }
+  const caps = await su(db, `select per_call_max, daily_cap from public.earn_caps where source = 'custom_game'`);
+  assert.ok(caps[0].per_call_max >= 40 && caps[0].daily_cap >= 80, JSON.stringify(caps[0]));
+});
+
 await t('game_earn: total daily cap across all sources', async () => {
   await su(db, `update public.earn_daily set amount = 1490 where user_id = $1 and source = '*'`, [B]);
   const r = await rpc(db, B, 'game_earn', { p_source: 'obby_stage', p_amount: 50 });

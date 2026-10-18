@@ -53,7 +53,8 @@ export async function loadSources(root = ROOT) {
   return { items: COSMETICS, phrases: PHRASES, gears, games, featured, consumables, quests };
 }
 
-/** Built-in game ids + publish dates: gameMeta.js first, else first git commit of the game's file. */
+/** Built-in game ids + publish dates: gameMeta.js publishedAt first, else first git commit of the game's file
+ *  (a gameMeta entry may carry only flags such as { mobile: true }), else now. */
 async function loadGames(root, bust, gears) {
   const { GAME_META } = await import(pathToFileURL(resolve(root, 'src/data/gameMeta.js')).href + bust);
   const out = new Map(Object.entries(GAME_META).map(([id, m]) => [id, { id, publishedAt: m.publishedAt, active: !m.retired, from: 'gameMeta.js' }]));
@@ -69,11 +70,12 @@ async function loadGames(root, bust, gears) {
       file = resolve(gamesDir, d.name, 'index.js');
       if (existsSync(cfg)) id = (readFileSync(cfg, 'utf8').match(/GAME_ID\s*=\s*'([a-z0-9-]+)'/) || [])[1];
     }
-    if (!id || out.has(id) || !file || !existsSync(file)) continue;
-    const date = firstCommit(file) || new Date().toISOString();
-    out.set(id, { id, publishedAt: date, active: true, from: 'git ' + file.slice(root.length + 1) });
+    if (!id || !file || !existsSync(file) || out.get(id)?.publishedAt) continue;
+    const date = firstCommit(file) || new Date().toISOString(), meta = out.get(id);
+    out.set(id, { id, publishedAt: date, active: meta ? meta.active : true, from: (meta ? 'gameMeta.js flags + ' : '') + 'git ' + file.slice(root.length + 1) });
   }
   for (const g of gears) if (!out.has(g.gameId)) out.set(g.gameId, { id: g.gameId, publishedAt: new Date().toISOString(), active: true, from: 'gear config' });
+  for (const g of out.values()) if (g.publishedAt == null) { g.publishedAt = new Date().toISOString(); g.from += ' (no date: now)'; }
   return [...out.values()];
 }
 
