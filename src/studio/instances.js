@@ -2,7 +2,7 @@
 // spawn, checkpoints, coins, gear givers). Each instance is plain JSON so a
 // game can be saved, undone/redone, exported and later synced to a server.
 import * as THREE from 'three';
-import { makeConvex } from '../engine/collision.js';
+import { makeConvex, makeAffineShape } from '../engine/collision.js';
 import { GEARS } from './gears.js';
 import { createR6Rig, rigFromModel } from './animation.js';
 
@@ -21,6 +21,7 @@ export const TYPE_INFO = {
   part: { icon: '🧱', label: 'Part' }, model: { icon: '📦', label: 'Model' }, rig: { icon: '🧍', label: 'Rig' },
   spawn: { icon: '📍', label: 'SpawnLocation' }, checkpoint: { icon: '🚩', label: 'Checkpoint' },
   coin: { icon: '🪙', label: 'Coin' }, gear: { icon: '⚙️', label: 'GearGiver' },
+  group: { icon: '🗃️', label: 'Model (group)' },
 };
 
 let counter = 0;
@@ -37,6 +38,7 @@ export function makeInstance(type, over = {}) {
     checkpoint: { size: [4, 0.4, 4], color: '#2f9e6a', pos: [0, 0.2, 0], order: 1, name: 'Checkpoint' },
     coin: { size: [1, 1, 1], color: '#ffd34d', collide: false, pos: [0, 1.2, 0], value: 5 },
     gear: { size: [2, 1, 2], color: '#5b6b7a', pos: [0, 0.5, 0], gearId: 'speedCoil', name: 'GearGiver' },
+    group: { size: [1, 1, 1], name: 'Model', collide: false },
   }[type] || {};
   return JSON.parse(JSON.stringify({ ...base, ...per, ...over, id: over.id || base.id }));
 }
@@ -116,6 +118,7 @@ export function buildObject(inst, { models, editing }) {
       body = new THREE.Mesh(GEO[inst.shape] || GEO.box, partMaterial(inst));
       body.scale.set(...inst.size);
       hull = HULLS[inst.shape] || HULLS.box;
+      if (inst.shape === 'sphere' || inst.shape === 'cylinder') extra.curved = inst.shape;
       break;
     }
     case 'spawn': case 'checkpoint': {
@@ -129,7 +132,7 @@ export function buildObject(inst, { models, editing }) {
       body = new THREE.Group(); body.add(coinMesh()); body.scale.set(...inst.size); hull = HULLS.sphere; break;
     }
     case 'gear': {
-      body = new THREE.Mesh(GEO.cylinder, partMaterial(inst)); body.scale.set(...inst.size); hull = HULLS.cylinder;
+      body = new THREE.Mesh(GEO.cylinder, partMaterial(inst)); body.scale.set(...inst.size); hull = HULLS.cylinder; extra.curved = 'cylinder';
       const g = GEARS[inst.gearId];
       if (g) { const icon = g.handModel(); icon.position.y = inst.size[1] / 2 + 1.2; icon.scale.setScalar(1.6); icon.userData.spin = true; root.add(icon); extra.icon = icon; }
       const ring = new THREE.Mesh(new THREE.TorusGeometry(Math.max(inst.size[0], inst.size[2]) * 0.45, 0.06, 8, 32), new THREE.MeshBasicMaterial({ color: g?.color || '#fff' }));
@@ -152,6 +155,7 @@ export function buildObject(inst, { models, editing }) {
       hullOffset = new THREE.Box3(new THREE.Vector3(-1, 0, -0.25), new THREE.Vector3(1, 2.62, 0.25));
       break;
     }
+    case 'group': { body = new THREE.Group(); extra.isGroup = true; break; } // logical container: children keep world transforms
     default: body = new THREE.Mesh(GEO.box, partMaterial(inst));
   }
   root.add(body);
@@ -164,6 +168,8 @@ export function buildObject(inst, { models, editing }) {
 export function computeCollider(entry) {
   entry.root.updateMatrixWorld(true);
   const m = entry.body.matrixWorld.clone();
+  // spheres/cylinders: exact curved collision (any rotation, any size)
+  if (entry.curved && !entry.hullOffset) return makeAffineShape(entry.curved, m.elements);
   if (entry.hullOffset) {
     const b = entry.hullOffset, c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3());
     m.multiply(new THREE.Matrix4().compose(c, new THREE.Quaternion(), s.max(new THREE.Vector3(0.05, 0.05, 0.05))));

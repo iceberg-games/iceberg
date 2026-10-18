@@ -70,6 +70,7 @@ export function makeConvex(verts, normals, edges) {
 export function aabbVsConvex(minX, minY, minZ, maxX, maxY, maxZ, c, e = 1e-4) {
   const b = c.aabb;
   if (maxX <= b.minX + e || minX >= b.maxX - e || maxY <= b.minY + e || minY >= b.maxY - e || maxZ <= b.minZ + e || minZ >= b.maxZ - e) return false;
+  if (c.support) return gjkAabb(minX + e, minY + e, minZ + e, maxX - e, maxY - e, maxZ - e, c);
   const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2, cz = (minZ + maxZ) / 2;
   const hx = (maxX - minX) / 2, hy = (maxY - minY) / 2, hz = (maxZ - minZ) / 2;
   for (const a of c.axes) {
@@ -80,4 +81,83 @@ export function aabbVsConvex(minX, minY, minZ, maxX, maxY, maxZ, c, e = 1e-4) {
     if (pc + r <= lo + e || pc - r >= hi - e) return false;
   }
   return true;
+}
+
+// ---------- curved shapes (GJK on support functions) ----------
+// Exact intersection for any convex shape given by a support function, used
+// for rotated / stretched spheres and cylinders. A shape is
+// { support(d:[x,y,z]) -> [x,y,z], aabb } and plugs into the same
+// convexes list as polyhedra (aabbVsConvex dispatches on `support`).
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const neg = (a) => [-a[0], -a[1], -a[2]];
+const triple = (a, b, c) => cross(cross(a, b), c);
+
+/** Build a support-function shape and its world AABB. */
+export function makeSupportShape(support) {
+  const ax = (i, s) => { const d = [0, 0, 0]; d[i] = s; return support(d)[i]; };
+  const aabb = { minX: ax(0, -1), maxX: ax(0, 1), minY: ax(1, -1), maxY: ax(1, 1), minZ: ax(2, -1), maxZ: ax(2, 1) };
+  return { support, aabb, curved: true };
+}
+
+/** Boolean GJK: does the box [min,max] overlap the support shape? */
+export function gjkAabb(minX, minY, minZ, maxX, maxY, maxZ, shape) {
+  const boxSup = (d) => [d[0] >= 0 ? maxX : minX, d[1] >= 0 ? maxY : minY, d[2] >= 0 ? maxZ : minZ];
+  const S = (d) => sub(shape.support(d), boxSup(neg(d)));
+  let d = sub([(shape.aabb.minX + shape.aabb.maxX) / 2, (shape.aabb.minY + shape.aabb.maxY) / 2, (shape.aabb.minZ + shape.aabb.maxZ) / 2], [(minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2]);
+  if (Math.abs(d[0]) + Math.abs(d[1]) + Math.abs(d[2]) < 1e-9) d = [1, 0, 0];
+  let simplex = [S(d)]; d = neg(simplex[0]);
+  for (let it = 0; it < 48; it++) {
+    if (dot(d, d) < 1e-14) return true; // origin on the simplex
+    const a = S(d);
+    if (dot(a, d) < 1e-6) return false; // can't pass the origin → separated
+    simplex.push(a);
+    const r = doSimplex(simplex); simplex = r.s; d = r.d;
+    if (r.hit) return true;
+  }
+  return false;
+}
+function doSimplex(s) {
+  const a = s[s.length - 1], ao = neg(a);
+  if (s.length === 2) {
+    const b = s[0], ab = sub(b, a);
+    if (dot(ab, ao) > 0) { let d = triple(ab, ao, ab); if (dot(d, d) < 1e-14) d = anyPerp(ab); return { s: [b, a], d }; }
+    return { s: [a], d: ao };
+  }
+  if (s.length === 3) {
+    const [c, b] = s, ab = sub(b, a), ac = sub(c, a), abc = cross(ab, ac);
+    if (dot(cross(abc, ac), ao) > 0) {
+      if (dot(ac, ao) > 0) return { s: [c, a], d: triple(ac, ao, ac) };
+      return doSimplex([b, a]);
+    }
+    if (dot(cross(ab, abc), ao) > 0) return doSimplex([b, a]);
+    if (dot(abc, ao) > 0) return { s: [c, b, a], d: abc };
+    return { s: [b, c, a], d: neg(abc) };
+  }
+  // tetrahedron
+  const [d0, c, b] = s, ab = sub(b, a), ac = sub(c, a), ad = sub(d0, a);
+  const abc = cross(ab, ac), acd = cross(ac, ad), adb = cross(ad, ab);
+  if (dot(abc, ao) > 0) return doSimplex([c, b, a]);
+  if (dot(acd, ao) > 0) return doSimplex([d0, c, a]);
+  if (dot(adb, ao) > 0) return doSimplex([b, d0, a]);
+  return { s, d: [0, 0, 0], hit: true };
+}
+const anyPerp = (v) => { const c = cross(v, Math.abs(v[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0]); return c; };
+
+/**
+ * Affine image of a unit shape: m = 3x4 world matrix as a THREE.Matrix4
+ * `elements` array (column-major). kind: 'sphere' (radius 0.5) or
+ * 'cylinder' (radius 0.5, height 1 along local Y). Exact for any rotation and
+ * non-uniform size.
+ */
+export function makeAffineShape(kind, e) {
+  const M = (v) => [e[0] * v[0] + e[4] * v[1] + e[8] * v[2], e[1] * v[0] + e[5] * v[1] + e[9] * v[2], e[2] * v[0] + e[6] * v[1] + e[10] * v[2]];
+  const MT = (d) => [e[0] * d[0] + e[1] * d[1] + e[2] * d[2], e[4] * d[0] + e[5] * d[1] + e[6] * d[2], e[8] * d[0] + e[9] * d[1] + e[10] * d[2]];
+  const c = [e[12], e[13], e[14]];
+  const unit = kind === 'cylinder'
+    ? (l) => { const r = Math.hypot(l[0], l[2]); return [r > 1e-9 ? 0.5 * l[0] / r : 0, l[1] >= 0 ? 0.5 : -0.5, r > 1e-9 ? 0.5 * l[2] / r : 0]; }
+    : (l) => { const n = Math.hypot(l[0], l[1], l[2]) || 1; return [0.5 * l[0] / n, 0.5 * l[1] / n, 0.5 * l[2] / n]; };
+  const shape = makeSupportShape((d) => { const p = M(unit(MT(d))); return [c[0] + p[0], c[1] + p[1], c[2] + p[2]]; });
+  shape.kind = kind;
+  return shape;
 }
