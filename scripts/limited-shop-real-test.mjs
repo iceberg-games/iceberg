@@ -29,15 +29,20 @@ await page.evaluate(() => { window.iceberg.economy.profile.coins = 5000; });
 await page.evaluate(() => window.iceberg.play('frost-fields').catch(() => {}));
 await page.waitForTimeout(2500);
 await page.evaluate(() => window.iceberg.ui.openDrawer?.('shop')); await page.waitForTimeout(500);
-const res = {};
+const res = {}; const T0 = Date.now(); const step = (n) => console.error('step', n, Date.now() - T0);
 // 1) as shipped
 const ids0 = await shopIds();
 res.unscheduled = { listed: ids0.length, eventShown: hiddenIds.filter(i => ids0.includes(i)), storm: ['storm_goggles', 'hail_umbrella', 'storm_slicker'].filter(i => ids0.includes(i)),
   aurora: await card('aurora_skin'), skates: await card('ice_skates'),
   buy: await page.evaluate(() => window.iceberg.economy.buy('storm_slicker')), av: await page.evaluate(() => window.iceberg.economy.itemAvailability('storm_goggles')) };
+step('unscheduled done');
+// NOTE: ui.js _questFor() re-renders on every getQuests() promise, which loops forever once earnOnly event items are
+// visible (reported to Cosmetics; not reachable in release A because they are hidden). Use a sync, cached answer here.
+await page.evaluate(() => { const e = window.iceberg.economy; const q = []; e.getQuests = () => q; });
 // 2) live
 await setWindow('live'); await refresh();
 res.live = { slicker: await card('storm_slicker'), skates: await card('ice_skates'), umbrellaBuy: await page.evaluate(() => window.iceberg.economy.buy('hail_umbrella').ok) };
+step('live done');
 // ended while the shop is open: the real buy() refuses
 await setWindow('ended');
 const coins0 = await page.evaluate(() => window.iceberg.economy.coins);
