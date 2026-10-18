@@ -358,7 +358,7 @@ await t('multiplayer: instance pick/create with cap, reload keeps instance, stal
   assert.deepEqual(j.map(r => r.instance), [1, 1, 1, 2]);                       // 4th player overflows into a new instance
   assert.equal(j[0].topic, 'game:frost-fields:1'); assert.equal(j[3].cap, 3);
   assert.deepEqual(j[2].roster.map(p => p.username), ['mp_user_0', 'mp_user_1', 'mp_user_2']);
-  assert.equal(Object.keys(j[2].roster[0]).sort().join(), 'cosmeticColors,displayName,equipped,rocketColors,username');   // public info only
+  assert.equal(Object.keys(j[2].roster[0]).sort().join(), 'cosmeticColors,displayName,equipped,joinedAt,rocketColors,username');   // public info only (+ joinedAt, 0011: host = earliest)
   assert.equal((await rpc(db, us[1], 'mp_join', { p_game_id: 'frost-fields' })).instance, 1);      // reload: same instance
   await su(db, `update public.mp_members set last_seen = now() - interval '2 minutes' where user_id = $1`, [us[0]]);
   const x = await createUser(db, { username: 'mp_user_x' });
