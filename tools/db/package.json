@@ -1,0 +1,9 @@
+{
+  "name": "iceberg-db-tools",
+  "private": true,
+  "type": "module",
+  "description": "Local Postgres (PGlite) harness for Iceberg: migration tests, price sync, dev backend. Not part of the game bundle.",
+  "dependencies": {
+    "@electric-sql/pglite": "^0.2.17"
+  }
+}
