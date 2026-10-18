@@ -10,12 +10,17 @@ try {
 } catch { /* not bundled by Vite (node tests): no bundled quests */ }
 
 const extra = [];
-function normalize(q, fileGameId) {
+function normalize(q0, fileGameId) {
+  const q = { ...q0 };                       // Game Maker names: reward / event / maxPerMinute
+  if (q.rewardItemId == null && q.reward != null) q.rewardItemId = q.reward;
+  if (q.eventId == null && q.event != null) q.eventId = q.event;
+  if (q.maxPerMinute != null) { q.minIntervalMs ??= 0; q.maxPerHour ??= q.maxPerMinute * 60; }
   return {
     id: q.id, gameId: q.gameId || fileGameId || null, title: q.title || q.id, goal: Math.max(1, q.goal | 0 || 1),
     itemId: q.rewardItemId || q.itemId || null, eventId: q.eventId || null,
     startsAt: q.startsAt || null, endsAt: q.endsAt || null,
     maxPerCall: q.maxPerCall ?? 1, minIntervalMs: q.minIntervalMs ?? 2000, maxPerHour: q.maxPerHour ?? 60,
+    maxPerMinute: q.maxPerMinute ?? null, description: q.description || '',
   };
 }
 export function questDefs() {

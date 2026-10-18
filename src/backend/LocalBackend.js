@@ -70,7 +70,7 @@ export class LocalBackend {
   _questRow(id) { const all = read('quests', {}); return [all, all[id] || { count: 0 }]; }
   _questView(q, r = {}) {
     const progress = Math.min(r.count || 0, q.goal);
-    return { id: q.id, gameId: q.gameId, title: q.title, goal: q.goal, progress, completed: progress >= q.goal,
+    return { id: q.id, gameId: q.gameId, title: q.title, description: q.description, goal: q.goal, progress, completed: progress >= q.goal,
       claimed: !!r.claimedAt, itemId: q.itemId, eventId: q.eventId, startsAt: q.startsAt, endsAt: q.endsAt, live: questLive(q), local: true };
   }
   questProgress(questId, delta = 1, now = Date.now()) {
@@ -83,9 +83,11 @@ export class LocalBackend {
     if (r.count >= q.goal) return { ok: true, added: 0, quest: this._questView(q, r) };
     if (r.lastAt && now - r.lastAt < q.minIntervalMs) return { ok: false, reason: 'too_fast', retryAfterMs: q.minIntervalMs - (now - r.lastAt) };
     if (!r.hourStart || now - r.hourStart >= 3600e3) { r.hourStart = now; r.hourCount = 0; }
-    const added = Math.min(delta, q.goal - r.count, q.maxPerHour - (r.hourCount || 0));
+    if (!r.minStart || now - r.minStart >= 60e3) { r.minStart = now; r.minCount = 0; }
+    if (q.maxPerMinute && r.minCount >= q.maxPerMinute) return { ok: false, reason: 'too_fast', retryAfterMs: 60e3 - (now - r.minStart) };
+    const added = Math.min(delta, q.goal - r.count, q.maxPerHour - (r.hourCount || 0), q.maxPerMinute ? q.maxPerMinute - r.minCount : delta);
     if (added <= 0) return { ok: false, reason: 'hourly_cap' };
-    r.count += added; r.hourCount = (r.hourCount || 0) + added; r.lastAt = now;
+    r.count += added; r.hourCount = (r.hourCount || 0) + added; r.minCount = (r.minCount || 0) + added; r.lastAt = now;
     if (r.count >= q.goal) r.completedAt = now;
     all[questId] = r; write('quests', all);
     return { ok: true, added, quest: this._questView(q, r) };

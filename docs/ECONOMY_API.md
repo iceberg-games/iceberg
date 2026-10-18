@@ -151,6 +151,7 @@ export const QUESTS = [
 ];
 ```
 
+- Game Maker's names are accepted too: `reward` (= `rewardItemId`), `event` (= `eventId`), `description` (≤ 200 chars, returned by `get_quests`), and `maxPerMinute`. `maxPerMinute` is a per-minute cap: going over it returns `too_fast` with `retryAfterMs`. With it, `minIntervalMs` defaults to 0 and `maxPerHour` to 60 × maxPerMinute.
 - `npm run catalog:check` validates the files.
 - `scripts/sync-catalog.mjs` upserts them into `public.quest_defs`. A quest removed from the code is deactivated, not deleted, so existing progress is kept.
 - Pick limits that a real player can't exceed. For example, one disaster takes at least about 30 s, so `minIntervalMs: 20000` is safe.

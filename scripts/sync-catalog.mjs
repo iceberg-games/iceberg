@@ -45,7 +45,7 @@ export async function loadSources(root = ROOT) {
   }
   for (const [rel, dflt] of questFiles) {
     const m = await import(pathToFileURL(resolve(root, rel)).href + bust);
-    for (const qd of m.QUESTS || []) quests.push({ ...qd, gameId: qd.gameId || m.GAME_ID || dflt, from: rel });
+    for (const qd of m.QUESTS || []) quests.push({ ...normalizeQuest(qd), gameId: qd.gameId || m.GAME_ID || dflt, from: rel });
   }
   const games = await loadGames(root, bust, gears);
   const featuredFile = resolve(root, 'site/public/featured.json');
@@ -77,6 +77,15 @@ async function loadGames(root, bust, gears) {
   return [...out.values()];
 }
 
+/** Accept Game Maker's field names too: reward -> rewardItemId, event -> eventId (snake -> kebab ok),
+ *  maxPerMinute -> per-minute cap (then minIntervalMs defaults to 0 and maxPerHour to 60 x maxPerMinute). */
+export function normalizeQuest(qd) {
+  const o = { ...qd };
+  if (o.rewardItemId == null && o.reward != null) o.rewardItemId = o.reward;
+  if (o.eventId == null && o.event != null) o.eventId = String(o.event);
+  if (o.maxPerMinute != null) { o.minIntervalMs ??= 0; o.maxPerHour ??= Math.min(100000, o.maxPerMinute * 60); }
+  return o;
+}
 export const isGrantOnly = (c) => !!(c && (c.earnOnly || c.eventOnly || c.grantOnly || c.unlock === 'quest'));
 const priceOf = (c) => (isGrantOnly(c) && c.price == null ? 0 : c.price);
 
@@ -103,7 +112,8 @@ export function validate({ items, phrases, gears = [], games = [], featured = []
     else if (item.unlock && item.unlock !== 'quest' && /^[a-z0-9_]{3,64}$/.test(item.unlock) && item.unlock !== qd.id && quests.some(o => o.id === item.unlock)) errs.push(`${w}: reward ${item.id} says unlock: '${item.unlock}' in cosmetics.js but quest ${qd.id} grants it`);
     for (const k of ['startsAt', 'endsAt']) if (qd[k] != null && Number.isNaN(Date.parse(qd[k]))) errs.push(`${w}: bad ${k}`);
     if (qd.startsAt && qd.endsAt && Date.parse(qd.endsAt) <= Date.parse(qd.startsAt)) errs.push(`${w}: endsAt must be after startsAt`);
-    for (const [k, lo, hi] of [['maxPerCall', 1, 1000], ['minIntervalMs', 0, 3600000], ['maxPerHour', 1, 100000]]) if (qd[k] != null && (!Number.isInteger(qd[k]) || qd[k] < lo || qd[k] > hi)) errs.push(`${w}: ${k} must be an integer ${lo}..${hi}`);
+    for (const [k, lo, hi] of [['maxPerCall', 1, 1000], ['minIntervalMs', 0, 3600000], ['maxPerHour', 1, 100000], ['maxPerMinute', 1, 10000]]) if (qd[k] != null && (!Number.isInteger(qd[k]) || qd[k] < lo || qd[k] > hi)) errs.push(`${w}: ${k} must be an integer ${lo}..${hi}`);
+    if (qd.description != null && (typeof qd.description !== 'string' || qd.description.length > 200)) errs.push(`${w}: description must be <= 200 chars`);
     if (qd.eventId != null && !/^[a-z0-9_-]{1,40}$/.test(qd.eventId)) errs.push(`${w}: bad eventId`);
   }
   for (const f of featured) {
@@ -186,15 +196,15 @@ on conflict (game_id, item_id) do update set price = excluded.price, active = tr
 update public.game_consumable_prices set active = false, updated_at = now()
   where active and (game_id || '/' || item_id) not in (${consumables.length ? consumables.map(c => q(c.gameId + '/' + c.itemId)).join(', ') : "''"});
 ${quests.length ? `
-insert into public.quest_defs (quest_id, game_id, title, goal, reward_item_id, event_id, starts_at, ends_at, max_per_call, min_interval_ms, max_per_hour, active) values
-${quests.map(x => `  (${q(x.id)}, ${q(x.gameId)}, ${q(x.title)}, ${x.goal}, ${q(x.rewardItemId)}, ${x.eventId ? q(x.eventId) : 'null'}, ${ts(x.startsAt)}::timestamptz, ${ts(x.endsAt)}::timestamptz, ${x.maxPerCall ?? 1}, ${x.minIntervalMs ?? 2000}, ${x.maxPerHour ?? 60}, true)`).join(',\n')}
+insert into public.quest_defs (quest_id, game_id, title, goal, reward_item_id, event_id, starts_at, ends_at, max_per_call, min_interval_ms, max_per_hour, max_per_minute, description, active) values
+${quests.map(x => `  (${q(x.id)}, ${q(x.gameId)}, ${q(x.title)}, ${x.goal}, ${q(x.rewardItemId)}, ${x.eventId ? q(x.eventId) : 'null'}, ${ts(x.startsAt)}::timestamptz, ${ts(x.endsAt)}::timestamptz, ${x.maxPerCall ?? 1}, ${x.minIntervalMs ?? 2000}, ${x.maxPerHour ?? 60}, ${x.maxPerMinute ?? 'null'}, ${x.description ? q(x.description) : 'null'}, true)`).join(',\n')}
 on conflict (quest_id) do update set game_id = excluded.game_id, title = excluded.title, goal = excluded.goal, reward_item_id = excluded.reward_item_id,
   event_id = excluded.event_id, starts_at = excluded.starts_at, ends_at = excluded.ends_at, max_per_call = excluded.max_per_call,
-  min_interval_ms = excluded.min_interval_ms, max_per_hour = excluded.max_per_hour, active = true, updated_at = now()
+  min_interval_ms = excluded.min_interval_ms, max_per_hour = excluded.max_per_hour, max_per_minute = excluded.max_per_minute, description = excluded.description, active = true, updated_at = now()
   where (quest_defs.game_id, quest_defs.title, quest_defs.goal, quest_defs.reward_item_id, quest_defs.event_id, quest_defs.starts_at, quest_defs.ends_at,
-         quest_defs.max_per_call, quest_defs.min_interval_ms, quest_defs.max_per_hour, quest_defs.active)
+         quest_defs.max_per_call, quest_defs.min_interval_ms, quest_defs.max_per_hour, quest_defs.max_per_minute, quest_defs.description, quest_defs.active)
     is distinct from (excluded.game_id, excluded.title, excluded.goal, excluded.reward_item_id, excluded.event_id, excluded.starts_at, excluded.ends_at,
-         excluded.max_per_call, excluded.min_interval_ms, excluded.max_per_hour, true);` : ''}
+         excluded.max_per_call, excluded.min_interval_ms, excluded.max_per_hour, excluded.max_per_minute, excluded.description, true);` : ''}
 update public.quest_defs set active = false, updated_at = now()
   where active and quest_id not in (${quests.length ? quests.map(x => q(x.id)).join(', ') : "''"});
 ${featured.length ? `-- featured banner: seed ONLY when empty (first deploy); afterwards admins own it

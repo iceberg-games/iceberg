@@ -35,4 +35,8 @@ assert.equal(isGrantOnly({ eventOnly: true }), true); assert.equal(isGrantOnly({
 eco.profile.coins = 30;
 assert.deepEqual(await eco.buyConsumable(ND_GAME_ID, 'apple', 10), { ok: true, coins: 20, local: true });
 assert.equal((await eco.buyConsumable(ND_GAME_ID, 'biggerStorm', 25)).ok, false);
+// Game Maker format: per-minute cap
+{ let n = 0, r, t = Date.now(); for (let i = 0; i < 12; i++) { r = b.questProgress('nd_quest_birg_hq', 1, t + i); if (r.ok) n += r.added; }
+  assert.equal(n, 10); assert.equal(r.reason, 'too_fast');
+  assert.equal(b.questProgress('nd_quest_birg_hq', 1, t + 61000).added, 1); }
 console.log('quests (local/offline): all checks passed');
