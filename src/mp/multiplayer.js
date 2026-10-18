@@ -21,9 +21,11 @@ const BOUND = 5000;                       // |coordinate| sanity bound
 const FLAG = { move: 1, air: 2, fly: 4 };
 const r2 = (v) => Math.round(v * 100) / 100;
 
-export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, AvatarClass = Avatar, RealtimeImpl = RealtimeClient, now = () => performance.now() }) {
+const PROXIMITY_MS = 200;                 // avatar.updateProximity ~5x/s (not every frame)
+
+export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, AvatarClass = Avatar, RealtimeImpl = RealtimeClient, now = () => performance.now(), getListener = null }) {
   let rt = null, s = null, raf = 0;
-  const stats = { sent: 0, recv: 0, dropped: 0, rejected: 0 };
+  const stats = { sent: 0, recv: 0, dropped: 0, rejected: 0, disposed: 0, proximity: 0 };
   let chatHint = null;
 
   function realtimeFor(remote) {
@@ -58,7 +60,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     try { await ch.subscribe(); }
     catch (e) { stats.rejected++; if (s === sess) s = null; await remote.mpLeave().catch(() => {}); console.warn('multiplayer join refused', e.message); return null; }
     ch.track({ u: me.username });
-    sess.timers.push(setInterval(sendTick, 50), setInterval(heartbeat, 20000));
+    sess.timers.push(setInterval(sendTick, 50), setInterval(heartbeat, 20000), setInterval(proximityTick, PROXIMITY_MS));
     cancelAnimationFrame(raf); raf = requestAnimationFrame(frame);
     return { instance: sess.instance, topic: sess.topic, room: sess.room, note: sess.note, cap: sess.cap };
   }
@@ -102,6 +104,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     try { avatar.applyLoadout({ equipped: p.equipped || {}, rocketColors: p.rocketColors, cosmeticColors: p.cosmeticColors || {} }); } catch (e) { console.warn(e); }
     avatar.root.visible = false;                    // until the first position arrives
     scene.add(avatar.root);
+    try { const l = getListener?.(); if (l) avatar.attachWindAudio?.(l); } catch (e) { console.warn(e); }   // shared listener (core/audio.js)
     const o = { avatar, look: JSON.stringify([p.equipped, p.rocketColors, p.cosmeticColors]), samples: [], recv: [], gap: 100, lastT: 0, seq: -1, displayName: p.displayName || k };
     s.others.set(k, o);
     bubbles?.track(k, avatar.bones?.head || avatar.root, { name: p.displayName || k, offsetY: 1.1 });
@@ -110,7 +113,8 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     const o = s?.others.get(k); if (!o) return;
     s.others.delete(k); bubbles?.untrack(k);
     o.avatar.root.parent?.remove(o.avatar.root);
-    try { o.avatar.dispose?.(); } catch { /* */ }
+    try { o.avatar.attachWindAudio?.(null); o.avatar.dispose?.(); } catch { /* */ }   // dispose stops its audio
+    stats.disposed++;
   }
 
   function onState(p) {
@@ -151,6 +155,19 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     if (s.channel.send('s', { u: s.me.username, s: ++seq, ...st })) { stats.sent++; s.lastSent = t; s.lastState = st; s.wantSend = false; }
   }
 
+  // Proximity for cosmetics (e.g. Frost Tornado Hat spin + wind): each avatar gets the positions of
+  // everyone else (interpolated remote positions + the local player). ~5 Hz.
+  function proximityTick() {
+    if (!s || !engine.running) return;
+    const vis = [...s.others.values()].filter(o => o.avatar.root.visible);
+    const mine = engine.avatar?.root.getWorldPosition?.(new engine.avatar.root.position.constructor()) ?? engine.player?.pos;
+    try { engine.avatar?.updateProximity?.(vis.map(o => o.avatar.root.position)); } catch (e) { console.warn(e); }
+    for (const o of vis) {
+      try { o.avatar.updateProximity?.([mine, ...vis.filter(x => x !== o).map(x => x.avatar.root.position)].filter(Boolean)); } catch (e) { console.warn(e); }
+    }
+    stats.proximity++;
+  }
+
   let lastFrame = 0;
   function frame() {
     raf = requestAnimationFrame(frame);
@@ -178,7 +195,8 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     const sess = s; if (!sess) return;
     s = null; cancelAnimationFrame(raf); lastFrame = 0;
     sess.timers.forEach(clearInterval);
-    for (const k of [...sess.others.keys()]) { const o = sess.others.get(k); bubbles?.untrack(k); o.avatar.root.parent?.remove(o.avatar.root); try { o.avatar.dispose?.(); } catch { /* */ } }
+    for (const k of [...sess.others.keys()]) { const o = sess.others.get(k); bubbles?.untrack(k); o.avatar.root.parent?.remove(o.avatar.root); try { o.avatar.attachWindAudio?.(null); o.avatar.dispose?.(); } catch { /* */ } stats.disposed++; }
+    try { engine.avatar?.updateProximity?.([]); } catch { /* */ }   // alone again: local hat calms down
     sess.others.clear();
     await sess.channel?.unsubscribe().catch(() => {});
     await sess.remote.mpLeave().catch(() => {});
@@ -191,11 +209,13 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     /** Tell others "I posted a chat message" so they re-poll now (no text in the broadcast). */
     hintChat() { if (s) s.channel.send('c', { u: s.me.username }); },
     onChatHint(fn) { chatHint = fn; },
+    /** Debug/test: the live Avatar object drawn for a remote player (null when not present). */
+    _avatarOf(username) { return s?.others.get(username)?.avatar ?? null; },
     get info() {
       if (!s) return null;
       return { gameId: s.gameId, instance: s.instance, topic: s.topic, room: s.room, cap: s.cap, note: s.note, sendHz: s.sendHz, stats: { ...stats },
         present: [...s.present], roster: [...s.roster.keys()],
-        others: [...s.others].map(([k, o]) => ({ username: k, visible: o.avatar.root.visible, pos: o.avatar.root.position.toArray().map(r2), talking: !!o.avatar.isTalking?.(), equipped: o.avatar.attached ? Object.values(o.avatar.attached).map(x => x.userData.cosmeticId) : [] })) };
+        others: [...s.others].map(([k, o]) => ({ username: k, wind: !!o.avatar._wind, audio: !!o.avatar._audioListener, visible: o.avatar.root.visible, pos: o.avatar.root.position.toArray().map(r2), talking: !!o.avatar.isTalking?.(), equipped: o.avatar.attached ? Object.values(o.avatar.attached).map(x => x.userData.cosmeticId) : [] })) };
     },
   };
 }

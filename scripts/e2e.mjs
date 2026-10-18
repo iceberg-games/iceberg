@@ -387,6 +387,7 @@ if (want('mp')) {
   const friends = async (a, z) => { await api(users[a].token, 'send_friend_request', { p_username: z }); await api(users[z].token, 'respond_friend_request', { p_username: a, p_accept: true }); };
   await friends('mp_ana', 'mp_ben'); await friends('mp_ana', 'mp_dov'); await friends('mp_cat', 'mp_dov');
   await dev.db.query(`insert into public.inventory (user_id, item_id, source) select id, 'earmuffs', 'admin' from public.profiles where username = 'mp_ana'`);   // test fixture (local db only)
+  await dev.db.query(`insert into public.inventory (user_id, item_id, source) select p.id, c.id, 'admin' from public.profiles p, public.catalog_items c where p.username = 'mp_ana' and c.id = 'tornado_hat' on conflict do nothing`);
   const pages = {}; const errs = {};
   const open = async (n, url) => {
     const c = pages[n]?.context() || await b.newContext({ viewport: { width: 560, height: 380 } });
@@ -407,7 +408,9 @@ if (want('mp')) {
     const t0 = Date.now();
     await open('mp_ana', 'play/?game=frost-fields');
     // ANA equips her earmuffs through the normal client path (save_loadout) before the others arrive
-    await pages.mp_ana.evaluate(async () => { const e = window.iceberg.economy; await e.flush(); if (!e.isEquipped('earmuffs')) e.equip('earmuffs'); await e.syncLoadoutNow(); });
+    await pages.mp_ana.evaluate(async () => { const e = window.iceberg.economy; await e.flush(); if (!e.isEquipped('earmuffs')) e.equip('earmuffs');
+      if (e.owns('tornado_hat') && !e.isEquipped('tornado_hat')) e.equip('tornado_hat');      // release branch: proximity wind cosmetic
+      await e.syncLoadoutNow(); });
     await open('mp_ben', 'play/?game=frost-fields'); await open('mp_cat', 'play/?game=frost-fields');
     const ia = await info('mp_ana'), ib = await info('mp_ben'), ic = await info('mp_cat');
     check('mp: 3 players auto-placed in the same instance', ia.instance === 1 && ib.instance === 1 && ic.instance === 1 && ia.topic === 'game:frost-fields:1', JSON.stringify([ia.instance, ib.instance, ic.instance]));
@@ -455,10 +458,21 @@ if (want('mp')) {
     check('mp: Realtime Authorization: non-member socket refused, member allowed', raw.member === 'ok' && raw.outsider === 'error', JSON.stringify(raw));
     check('mp: junk / unknown-sender broadcasts dropped', (await info('mp_ana')).stats.dropped - dropped0 >= 3);
     check('mp: no free text ever rendered', !(await pages.mp_ana.evaluate(() => document.body.innerText.includes('free text should never show'))));
+    // shared audio + proximity: one AudioListener on the camera, every remote avatar gets it, ~5 Hz proximity
+    const aud = await pages.mp_ben.evaluate(() => { const ic = window.iceberg, l = ic.getAudioListener?.(); const others = ic.mp.info.others;
+      let listeners = 0; ic.engine.camera.traverse(o => { if (o.type === 'AudioListener') listeners++; }); ic.engine.game.scene.traverse(o => { if (o.type === 'AudioListener') listeners++; });
+      return { has: !!l, onCamera: l?.parent === ic.engine.camera, listeners, same: l === ic.getAudioListener(), remoteAudio: others.map(o => o.audio), proximity: ic.mp.info.stats.proximity,
+        hook: typeof ic.engine.avatar.attachWindAudio === 'function', anaHat: (others.find(o => o.username === 'mp_ana')?.equipped || []).includes('tornado_hat'), anaWind: others.find(o => o.username === 'mp_ana')?.wind }; });
+    check('audio: exactly one AudioListener, on the camera, reused', aud.has && aud.onCamera && aud.listeners === 1 && aud.same, JSON.stringify(aud));
+    check('audio: proximity updates run (~5 Hz) while players are near; remote avatars get the listener when the avatar supports it', aud.proximity >= 5 && (!aud.hook || aud.remoteAudio.every(Boolean)), JSON.stringify(aud));
+    if (aud.hook) console.log(`  audio: ANA wears tornado_hat: ${aud.anaHat}; wind playing on BEN's side: ${aud.anaWind}`);
+    await pages.mp_ana.evaluate(() => { window.__catAv = window.iceberg.mp._avatarOf('mp_cat'); });
     // leave: CAT goes home -> others drop + dispose her avatar
     await pages.mp_cat.evaluate(() => window.iceberg.goHome());
     let left = true; try { await waitOthers('mp_ana', ['mp_ben'], 8000); await waitOthers('mp_ben', ['mp_ana'], 8000); } catch { left = false; }
     check('mp: leaving removes the avatar for everyone', left, JSON.stringify((await info('mp_ana')).others));
+    const gone = await pages.mp_ana.evaluate(() => { const av = window.__catAv; return { had: !!av, parent: !!av?.root.parent, wind: !!av?._wind, listener: !!av?._audioListener, disposed: window.iceberg.mp.info.stats.disposed }; });
+    check('audio: despawned remote avatar is disposed with its audio stopped/detached', gone.had && !gone.parent && !gone.wind && !gone.listener && gone.disposed >= 1, JSON.stringify(gone));
     const catCtx = pages.mp_cat.context(); await pages.mp_cat.close();   // free the GPU (swiftshader) before the next tabs
     // cap: 2 per instance -> DOV (ANA's friend) asks to join ANA, server is full -> overflow instance 2
     await dev.db.query(`update public.app_config set value = '2' where key = 'mp_instance_cap'`);
