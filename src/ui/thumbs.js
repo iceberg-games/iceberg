@@ -1,4 +1,15 @@
 // Procedurally drawn game-card thumbnails (no image assets needed).
+// Plus image art for some games by id: GAME_THUMBS / gameThumb(def) (portal cards, featured banner, games menu).
+// Files: src/assets/thumbnails/<game-id>.webp. Pages build (VITE_ICEBERG_PAGES=1): scripts/build-site.mjs copies them to
+// <site>/thumbnails/ and they load lazily; single-file/dev builds inline them.
+import ndsInline from '../assets/thumbnails/natural-disaster-survival.webp';   // Social Media's game card, 960x540
+const PAGES = import.meta.env.VITE_ICEBERG_PAGES === '1';
+const siteRoot = () => (typeof document !== 'undefined' && document.querySelector('meta[name="iceberg-root"]')?.content) || './';
+export const GAME_THUMBS = {
+  'natural-disaster-survival': PAGES ? `${siteRoot()}thumbnails/natural-disaster-survival.webp` : ndsInline,
+};
+/** Thumbnail URL for a game definition: its image art if any, else the procedural thumbnail. Safe for unknown/missing games. */
+export function gameThumb(def) { return GAME_THUMBS[def?.id] || thumb(def?.thumbnail); }
 const cache = {};
 export function thumb(kind) {
   if (kind && kind.startsWith('data:')) return kind;

@@ -1,7 +1,8 @@
 // Title screen + Games menu (the platform home screen).
 import { h, clear } from './dom.js';
+import { confirmModal } from './overlay.js';
 import { isMobile, onDeviceChange } from '../core/device.js';
-import { thumb } from './thumbs.js';
+import { gameThumb } from './thumbs.js';
 import { fmt, CURRENCY } from '../core/currency.js';
 import { bus } from '../core/events.js';
 import { BUILTIN_GAMES, CREATOR, allGames } from '../games/registry.js';
@@ -39,7 +40,7 @@ export class Menu {
     this.el.classList.remove('hidden');
     const custom = backend.loadCustomGames();
     const card = (def, extra = null) => h('div.game-card', { 'data-game': def.id },
-      h('div.thumb', { style: { backgroundImage: `url(${thumb(def.thumbnail)})` } }),
+      h('div.thumb', { style: { backgroundImage: `url(${gameThumb(def)})` } }),
       h('div.gc-body', h('div.gc-name', def.name), h('div.gc-tag', def.tagline || ''), h('div.gc-desc', def.description || '')),
       h('div.gc-actions', extra || h('button.btn.play', { onclick: () => this.onPlay(def) }, '▶ Play')));
 
@@ -51,7 +52,7 @@ export class Menu {
         h('button.btn.play', { onclick: () => this.onPlay(def) }, '▶ Play'),
         h('button.btn.small.secondary.edit-btn', { title: 'Edit', onclick: () => this.onEdit(doc) }, '✏️'),
         h('button.btn.small.secondary', { title: 'Export as file', onclick: () => downloadText(`${doc.name.replace(/[^\w-]+/g, '_')}.iceberg.json`, exportGameJSON(doc, this.models)) }, '⤓'),
-        h('button.btn.small.secondary', { title: 'Delete', onclick: () => { if (confirm(`Delete "${doc.name}"?`)) { backend.deleteCustomGame(doc.id); this.showGames(); } } }, '🗑')));
+        h('button.btn.small.secondary', { title: 'Delete', onclick: async () => { if (await confirmModal(`Delete "${doc.name}"? This can't be undone.`, { title: 'Delete game?', okLabel: 'Delete', danger: true })) { backend.deleteCustomGame(doc.id); this.showGames(); } } }, '🗑')));
     });
     const importInput = h('input#import-file', { type: 'file', accept: '.json', style: { display: 'none' }, onchange: async (e) => {
       const f = e.target.files[0]; if (!f) return;

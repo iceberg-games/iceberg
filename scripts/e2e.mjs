@@ -624,6 +624,211 @@ if (want('sounds')) {
   finally { await b.close(); web.close(); }
 }
 
+// ---------------- 8. portal polish: New Event popup, UI click sounds + mute, toasts/modals, phone layout ----------------
+if (want('portal')) {
+  const { startDevServer, serveStatic, ANON_KEY } = await import(resolve(ROOT, 'tools/db/dev-server.mjs'));
+  const { eventWindowSQL } = await import(pathToFileURL(resolve(ROOT, 'scripts/event-window.mjs')).href);
+  const API = await PORT(54431), WEB = await PORT(8431), BASE = `http://localhost:${WEB}/iceberg/`;
+  const out = resolve(TMP, 'site-portal');
+  run('build: site for portal checks', 'node', ['scripts/build-site.mjs', '--out', out],
+    { env: { VITE_SUPABASE_URL: `http://localhost:${API}`, VITE_SUPABASE_ANON_KEY: ANON_KEY, VITE_USERNAME_EMAIL_DOMAIN: 'users.iceberg.test' } });
+  const dev = await startDevServer({ port: API, quiet: true });
+  const web = await serveStatic(out, WEB, { prefix: '/iceberg/' });
+  const b = await launch();
+  const api = async (token, fn, args = {}) => (await fetch(`http://localhost:${API}/rest/v1/rpc/${fn}`, { method: 'POST',
+    headers: { apikey: ANON_KEY, 'content-type': 'application/json', authorization: `Bearer ${token || ANON_KEY}` }, body: JSON.stringify(args) })).json();
+  const errs = [];
+  const popupShown = (p, ms = 6000) => p.waitForSelector('#event-popup .ib-modal', { timeout: ms }).then(() => true, () => false);
+  const gone = (p) => p.waitForSelector('#event-popup', { state: 'detached', timeout: 4000 }).then(() => true, () => false);
+  const noPopup = async (p) => { await p.waitForSelector('#view-games .game-card'); await p.waitForTimeout(1500); return !(await p.$('#event-popup')); };
+  const fresh = async (opts = {}, init = null, arg) => { const c = await b.newContext({ viewport: { width: 1280, height: 820 }, ...opts }); if (init) await c.addInitScript(init, arg); const p = await c.newPage(); watch(p, errs); return [c, p]; };
+  try {
+    // event not scheduled (fresh migration): never shown before it starts
+    let [c, p] = await fresh(); await p.goto(BASE);
+    check('event popup: not shown while the event is not active (unscheduled)', await noPopup(p));
+    await c.close();
+    [c, p] = await fresh({}, () => { window.__icebergForceEventPopup = true; }); await p.goto(BASE);
+    check('event popup: tests can force it', await popupShown(p));
+    await c.close();
+
+    await dev.db.exec(eventWindowSQL('natural_disasters', { start: 'now', days: 7 }));     // = the release step
+    // guest device: shows once, Esc closes, not again after reload
+    [c, p] = await fresh(); await p.goto(BASE);
+    check('event popup: shown on the home page once the event is active', await popupShown(p));
+    await p.waitForTimeout(200);
+    const a11y = await p.evaluate(() => { const d = document.querySelector('#event-popup .ib-modal'); const img = d.querySelector('img');
+      return { role: d.getAttribute('role'), modal: d.getAttribute('aria-modal'), lbl: document.getElementById(d.getAttribute('aria-labelledby'))?.textContent, alt: img.alt,
+        focusIn: d.contains(document.activeElement), left: d.querySelector('#event-time-left')?.textContent || '' }; });
+    check('event popup: dialog + aria-modal + labelled + poster alt + focus inside', a11y.role === 'dialog' && a11y.modal === 'true' && /New Event/.test(a11y.lbl)
+      && a11y.alt === 'Tornado Event! New event in Natural Disaster Survival' && a11y.focusIn, JSON.stringify(a11y));
+    check('event popup: countdown from the server window', /6 days|7 days/.test(a11y.left), a11y.left);
+    const poster = await p.evaluate(async () => { const img = document.querySelector('#event-popup img'); await img.decode().catch(() => {}); return { src: img.currentSrc, w: img.naturalWidth }; });
+    check('event popup: wide webp poster on desktop (lazy, from events/)', /events\/natural-disasters-poster\.webp$/.test(poster.src) && poster.w === 1280, JSON.stringify(poster));
+    const trap = [];
+    for (let i = 0; i < 5; i++) { await p.keyboard.press('Tab'); trap.push(await p.evaluate(() => !!document.activeElement.closest('#event-popup .ib-modal'))); }
+    await p.keyboard.press('Shift+Tab'); trap.push(await p.evaluate(() => !!document.activeElement.closest('#event-popup .ib-modal')));
+    check('event popup: focus trap (Tab / Shift+Tab stay inside)', trap.every(Boolean), trap.join());
+    await p.screenshot({ path: resolve(SHOTS, 'event-popup-desktop.png') });
+    await p.keyboard.press('Escape');
+    check('event popup: Esc closes', await gone(p));
+    await p.reload();
+    check('event popup: not shown again after reload (once per device)', await noPopup(p));
+    await c.close();
+
+    // backdrop click closes; close (X) closes
+    [c, p] = await fresh(); await p.goto(BASE); await popupShown(p);
+    await p.mouse.click(8, 8);
+    check('event popup: click on the backdrop closes', await gone(p));
+    await c.close();
+    [c, p] = await fresh(); await p.goto(BASE); await popupShown(p);
+    await p.click('#event-popup .ib-modal-x');
+    check('event popup: close button closes', await gone(p));
+    await c.close();
+
+    // Play opens Natural Disaster Survival like the portal's normal Play (new tab play/?game=)
+    [c, p] = await fresh(); await p.goto(BASE); await popupShown(p); await p.waitForTimeout(1600);   // after the Play glow starts: hit box must stay stable
+    const [g] = await Promise.all([c.waitForEvent('page'), p.click('#event-popup .ev-play', { timeout: 10000 })]);
+    await g.waitForLoadState('domcontentloaded');
+    check('event popup: Play opens play/?game=natural-disaster-survival in a new tab', g.url() === BASE + 'play/?game=natural-disaster-survival', g.url());
+    check('event popup: closes after Play', await gone(p));
+    await g.close(); await c.close();
+
+    // account: once per account, stored in the player's own save data (follows them to another device)
+    const r = await (await fetch(`http://localhost:${API}/auth/v1/signup`, { method: 'POST', headers: { apikey: ANON_KEY, 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'pp_ana@users.iceberg.test', password: 'icecream9', data: { username: 'pp_ana', display_name: 'Ana' } }) })).json();
+    const session = { access_token: r.access_token, refresh_token: r.refresh_token, expires_at: r.expires_at, user: { id: r.user.id, username: 'pp_ana' } };
+    const coinsBefore = (await api(r.access_token, 'get_my_profile')).coins;
+    [c, p] = await fresh({}, (s) => { localStorage.setItem('iceberg:v1:session', JSON.stringify(s)); localStorage.setItem('iceberg:v1:eventSeen:natural_disasters:device', 'x'); }, session);
+    await p.goto(BASE); await p.waitForSelector('#p-user', { timeout: 15000 });
+    check('event popup: shown once for a signed-in account (even if this device saw it as a guest)', await popupShown(p));
+    await p.keyboard.press('Escape'); await p.waitForTimeout(1500);
+    const gd = await api(r.access_token, 'load_game_data', { p_game_id: 'iceberg-portal' });
+    check('event popup: seen flag saved in the player\'s data (save_game_data)', !!gd?.seenEvents?.natural_disasters, JSON.stringify(gd));
+    await c.close();
+    [c, p] = await fresh({}, (s) => { localStorage.setItem('iceberg:v1:session', JSON.stringify(s)); localStorage.setItem('iceberg:v1:eventSeen:natural_disasters:device', 'x'); }, session);
+    await p.goto(BASE); await p.waitForSelector('#p-user', { timeout: 15000 });
+    check('event popup: not shown again for that account on another device', await noPopup(p));
+    const coinsAfter = (await api(r.access_token, 'get_my_profile')).coins;
+    check('event popup: player data otherwise untouched (coins)', coinsAfter >= coinsBefore, `${coinsBefore} -> ${coinsAfter}`);
+    await c.close();
+
+    // phone 375x667: square poster, fits the screen, no sideways scroll
+    [c, p] = await fresh({ viewport: { width: 375, height: 667 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }); await p.goto(BASE);
+    check('phone: event popup shown', await popupShown(p));
+    const ph = await p.evaluate(async () => { const d = document.querySelector('#event-popup .ib-modal').getBoundingClientRect(); const img = document.querySelector('#event-popup img'); await img.decode().catch(() => {});
+      const play = document.querySelector('#event-popup .ev-play').getBoundingClientRect();
+      return { l: d.left, r: d.right, t: d.top, b: d.bottom, src: img.currentSrc, playVisible: play.bottom <= innerHeight + 1 && play.top >= 0, sw: document.documentElement.scrollWidth }; });
+    check('phone: square poster, dialog inside 375x667, Play visible, no sideways scroll', /poster-square\.webp$/.test(ph.src) && ph.l >= 0 && ph.r <= 375 && ph.t >= 0 && ph.b <= 667 && ph.playVisible && ph.sw <= 375, JSON.stringify(ph));
+    await p.screenshot({ path: resolve(SHOTS, 'event-popup-phone.png') });
+    await p.keyboard.press('Escape'); await p.waitForTimeout(500);
+    const lay = await p.evaluate(() => ({ sw: document.documentElement.scrollWidth, cards: [...document.querySelectorAll('#view-games .game-card')].map(e => e.getBoundingClientRect()).every(r => r.left >= 0 && r.right <= 375),
+      sound: !!document.querySelector('#p-sound') && document.querySelector('#p-sound').getBoundingClientRect().right <= 375 }));
+    check('phone: portal layout fits (cards, header mute button)', lay.sw <= 375 && lay.cards && lay.sound, JSON.stringify(lay));
+    await p.screenshot({ path: resolve(SHOTS, 'portal-phone.png') });
+    await c.close();
+
+    // click sounds: spy on the actual Web Audio play call (AudioBufferSourceNode.start)
+    [c, p] = await fresh({}, () => { localStorage.setItem('iceberg:v1:eventSeen:natural_disasters:device', 'x'); window.__starts = 0;
+      const o = AudioBufferSourceNode.prototype.start; AudioBufferSourceNode.prototype.start = function (...a) { window.__starts++; return o.apply(this, a); }; });
+    await p.goto(BASE); await p.waitForSelector('#view-games .game-card'); await p.evaluate(() => window.icebergUi.ready);
+    const starts = () => p.evaluate(() => window.__starts);
+    const s0 = await starts(); await p.click('#games-sort button[data-sort="popular"]'); await p.waitForTimeout(150);
+    const s1 = await starts(); const last1 = await p.evaluate(() => window.icebergUi.stats.last);
+    check('sounds: a button click plays the UI click sound (Web Audio buffer)', s1 > s0 && last1 === 'click', `${s0}->${s1} ${last1}`);
+    const [g2] = await Promise.all([c.waitForEvent('page'), p.click('#view-games .game-card .btn.play')]); await g2.close();
+    check('sounds: Play buttons play the bigger Play sound', (await p.evaluate(() => window.icebergUi.stats.last)) === 'play' && (await starts()) > s1);
+    await p.click('#p-sound'); await p.waitForTimeout(100);
+    const muted = await p.evaluate(() => JSON.parse(localStorage.getItem('iceberg:v1:settings')).muted);
+    const s2 = await starts(); await p.click('#games-sort button[data-sort="newest"]'); await p.click('.p-tab[data-view="settings"]'); await p.waitForTimeout(200);
+    check('sounds: header mute toggle saves the shared setting and stops click sounds', muted === true && (await starts()) === s2 && (await p.getAttribute('#p-sound', 'aria-pressed')) === 'false', `${s2}->${await starts()}`);
+    await p.reload(); await p.waitForSelector('#p-sound');
+    check('sounds: mute persists across reload', (await p.textContent('#p-sound')) === '🔇');
+    await p.click('#p-sound'); await p.waitForTimeout(150); const s3 = await starts();
+    await p.click('.p-tab[data-view="games"]'); await p.waitForTimeout(150);
+    check('sounds: unmute -> clicks play again', (await starts()) > s3, `${s3}->${await starts()}`);
+    // toasts stack + auto-dismiss; modal helper; reduced motion
+    await p.evaluate(() => { const t = window.icebergPortal.toast; t('one'); t('two'); t('three'); });
+    const nT = await p.$$eval('.ib-toasts .ib-toast', e => e.length); await p.waitForTimeout(4600);
+    check('toast(): stacks, then auto-dismisses', nT === 3 && (await p.$$('.ib-toasts .ib-toast')).length === 0, String(nT));
+    await c.close();
+    [c, p] = await fresh({ reducedMotion: 'reduce' }); await p.goto(BASE); await popupShown(p);
+    const anim = await p.$eval('#event-popup .ib-modal', e => getComputedStyle(e).animationName);
+    check('reduced motion: popup has no animation', anim === 'none', anim);
+    await c.close();
+    // ---- Natural Disasters storm theme (only while the event is active on the server) ----
+    const css = readFileSync(resolve(ROOT, 'src/portal/stormTheme.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const sels = [...css.matchAll(/(^|})\s*([^{}@]+?)\s*\{/g)].map(m => m[2].trim()).filter(x => !/^(from|to|\d+%)/.test(x));
+    const leaks = sels.flatMap(x => x.split(',').map(y => y.trim())).filter(y => !/^body(\.portal-page)?\.theme-storm\b/.test(y) && !/^\.storm-/.test(y));
+    check('storm theme: CSS is a separate layer (every rule scoped to body.theme-storm or .storm-*)', sels.length > 10 && leaks.length === 0, leaks.join(' | '));
+    const stormState = (p) => p.evaluate(() => ({ cls: document.body.classList.contains('theme-storm'), layer: !!document.getElementById('storm-layer'),
+      pe: document.getElementById('storm-layer') && getComputedStyle(document.getElementById('storm-layer')).pointerEvents, frames: window.icebergPortal.storm.layer?.stats.frames ?? 0,
+      drops: window.icebergPortal.storm.layer?.stats.drops ?? 0, rain: document.querySelector('.storm-rain') && getComputedStyle(document.querySelector('.storm-rain')).display }));
+    const seen = () => { localStorage.setItem('iceberg:v1:eventSeen:natural_disasters:device', 'x'); };
+    [c, p] = await fresh({}, seen); await p.goto(BASE); await p.waitForSelector('#view-games .game-card'); await p.waitForTimeout(1200);
+    let st = await stormState(p);
+    check('storm theme: on while the event is active (layer behind content, pointer-events none, rain animating)', st.cls && st.layer && st.pe === 'none' && st.frames > 5 && st.drops > 40, JSON.stringify(st));
+    await p.click('#games-sort button[data-sort="popular"]');
+    check('storm theme: content stays clickable', (await p.getAttribute('#games-sort button[data-sort="popular"]', 'class')) === 'on');
+    const contrast = await p.evaluate(() => { const lum = (c) => { const [r, g, b] = c.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number).map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * r + .7152 * g + .0722 * b; };
+      const h2 = document.querySelector('#view-games > h2'); const L1 = lum(getComputedStyle(h2).color), L2 = lum('rgb(35,43,58)'); return (Math.max(L1, L2) + .05) / (Math.min(L1, L2) + .05); });
+    check('storm theme: headings readable on the storm background (contrast >= 7)', contrast >= 7, contrast.toFixed(1));
+    await p.screenshot({ path: resolve(SHOTS, 'storm-desktop.png') });
+    // tab hidden -> paused (no frames)
+    await p.evaluate(() => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); });
+    const f0 = (await stormState(p)).frames; await p.waitForTimeout(600); const f1 = (await stormState(p)).frames;
+    check('storm theme: paused while the tab is hidden', f1 === f0 && !(await p.evaluate(() => window.icebergPortal.storm.layer.running)), `${f0}->${f1}`);
+    // event ends on the server; tab visible again -> re-check -> normal theme
+    await dev.db.exec(eventWindowSQL('natural_disasters', { start: new Date(Date.now() - 86400e3).toISOString(), end: new Date(Date.now() - 1000).toISOString() }));
+    await p.evaluate(() => { delete document.hidden; document.dispatchEvent(new Event('visibilitychange')); });
+    await p.waitForFunction(() => !document.body.classList.contains('theme-storm'), null, { timeout: 8000 }).catch(() => {});
+    st = await stormState(p);
+    check('storm theme: tab visible again after the event ended -> back to normal (layer removed)', !st.cls && !st.layer, JSON.stringify(st));
+    await c.close();
+    // timer at endsAt (server clock): window ends in 6 s -> the theme switches off by itself
+    await dev.db.exec(eventWindowSQL('natural_disasters', { start: new Date(Date.now() - 86400e3).toISOString(), end: new Date(Date.now() + 6000).toISOString() }));
+    [c, p] = await fresh({}, seen); await p.goto(BASE); await p.waitForSelector('#view-games .game-card');
+    await p.waitForFunction(() => document.body.classList.contains('theme-storm'), null, { timeout: 5000 }).catch(() => {});
+    const onBefore = (await stormState(p)).cls;
+    await p.waitForFunction(() => !document.body.classList.contains('theme-storm'), null, { timeout: 15000 }).catch(() => {});
+    check('storm theme: switches off by itself at endsAt (timer from serverNow)', onBefore && !(await stormState(p)).cls, String(onBefore));
+    await p.reload(); await p.waitForSelector('#view-games .game-card'); await p.waitForTimeout(1200);
+    check('storm theme: off on load after the event ended', !(await stormState(p)).cls);
+    const noStormStyles = await p.evaluate(() => [document.body, document.querySelector('.p-header'), document.querySelector('.p-tab'), document.querySelector('#view-games > h2'), document.querySelector('.game-card')]
+      .map(e => { const cs = getComputedStyle(e); return [cs.backgroundImage, cs.backgroundColor, cs.color, cs.boxShadow].join(';'); }).join('|'));
+    await p.evaluate(() => { document.body.classList.add('theme-storm'); document.body.classList.remove('theme-storm'); });
+    const again = await p.evaluate(() => [document.body, document.querySelector('.p-header'), document.querySelector('.p-tab'), document.querySelector('#view-games > h2'), document.querySelector('.game-card')]
+      .map(e => { const cs = getComputedStyle(e); return [cs.backgroundImage, cs.backgroundColor, cs.color, cs.boxShadow].join(';'); }).join('|'));
+    check('storm theme: off = normal theme styles exactly (body/header/tabs/headings/cards)', noStormStyles === again && !/21, 27, 38|#151b26/.test(noStormStyles));
+    check('storm theme: saved settings untouched', (await p.evaluate(() => localStorage.getItem('iceberg:v1:settings'))) === null);
+    await c.close();
+    // phones: fewer drops; reduced motion: static palette, no rain, no flashes
+    await dev.db.exec(eventWindowSQL('natural_disasters', { start: 'now', days: 7 }));
+    [c, p] = await fresh({ viewport: { width: 375, height: 667 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 }, seen); await p.goto(BASE); await p.waitForSelector('#view-games .game-card'); await p.waitForTimeout(1000);
+    st = await stormState(p);
+    const cw = await p.evaluate(() => document.querySelector('.storm-rain')?.width);
+    check('storm theme: phone uses fewer raindrops + DPR capped at 1.5', st.cls && st.drops === 40 && cw === Math.round(375 * 1.5), JSON.stringify({ ...st, cw }));
+    await p.screenshot({ path: resolve(SHOTS, 'storm-phone.png') });
+    await c.close();
+    [c, p] = await fresh({ reducedMotion: 'reduce' }, seen); await p.goto(BASE); await p.waitForSelector('#view-games .game-card'); await p.waitForTimeout(1200);
+    st = await stormState(p);
+    const anims = await p.evaluate(() => [...document.querySelectorAll('.storm-clouds')].map(e => getComputedStyle(e).animationName).join());
+    check('storm theme: reduced motion -> stormy palette, no rain animation, no flashes', st.cls && st.frames === 0 && st.rain === 'none' && anims === 'none,none'
+      && (await p.evaluate(() => window.icebergPortal.storm.layer.running)) === false, JSON.stringify({ ...st, anims }));
+    await c.close();
+    // Natural Disaster Survival card art (Social Media's thumbnail)
+    [c, p] = await fresh({}, seen); await p.goto(BASE); await p.waitForSelector('#view-games .game-card');
+    const art = await p.evaluate(async () => { const u = window.icebergPortal.cardThumb({ id: 'natural-disaster-survival', name: 'Natural Disaster Survival', thumbnail: 'frost' });
+      const im = new Image(); im.src = u; await im.decode().catch(() => {}); const other = window.icebergPortal.cardThumb({ id: 'frost-fields', thumbnail: 'frost' });
+      return { u, w: im.naturalWidth, h: im.naturalHeight, other: other.slice(0, 22), missing: typeof window.icebergPortal.cardThumb(undefined) }; });
+    check('cards: Natural Disaster Survival card art = thumbnails/natural-disaster-survival.webp (960x540); other games unchanged; missing game safe',
+      /thumbnails\/natural-disaster-survival\.webp$/.test(art.u) && art.w === 960 && art.h === 540 && art.other.startsWith('data:image/png') && art.missing === 'string', JSON.stringify(art));
+    await c.close();
+
+    check('portal polish: no page errors', errs.filter(e => !/401|403|Unauthorized/.test(e)).length === 0, errs.join(' | ').slice(0, 600));
+  } catch (e) { check('portal polish: unexpected error', false, e.stack); }
+  finally { await b.close(); web.close(); await dev.close(); }
+}
+
 console.log('\n' + results.map(r => `${r[0]}  ${r[1]}${r[0] === 'FAIL' && r[2] ? '\n      ' + String(r[2]).replace(/\n/g, '\n      ') : ''}`).join('\n'));
 const failed = results.filter(r => r[0] === 'FAIL').length;
 console.log(`\n${results.length - failed}/${results.length} checks passed. Screenshots: ${SHOTS}`);
