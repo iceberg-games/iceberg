@@ -24,7 +24,19 @@ const FALLBACK = {
   meteor_pet: { name: 'Frozen Meteor Pet', icon: '☄️', earnIn: 'BIRG HQ', rarity: 'epic', defaultColor: '#7fe3ff', desc: 'A little frozen meteor that floats by your shoulder.' },
   blizzard_hat: { name: 'Blizzard Cloud', icon: '🌨️', earnIn: 'Frost Fields', rarity: 'rare', defaultColor: '#e9f2fa', desc: 'Your own personal snow cloud.' },
 };
-export const itemInfo = (id) => ({ ...FALLBACK[id], ...(COSMETIC_BY_ID?.[id] || {}), rarity: String(COSMETIC_BY_ID?.[id]?.rarity || FALLBACK[id]?.rarity || '').toLowerCase() });
+// Live catalog (economy.getCatalog / itemAvailability), when the economy has them; feature-detected.
+let catEco = null;
+export function setCatalogSource(eco) { catEco = eco || null; }
+function liveItem(id) {
+  try {
+    const g = catEco?.getCatalog; if (typeof g !== 'function') return null;
+    const c = g.call(catEco); const list = Array.isArray(c) ? c : (c?.items || c?.cosmetics || (c && typeof c === 'object' ? Object.values(c) : []));
+    return (Array.isArray(list) && list.find((x) => x && x.id === id)) || (c && !Array.isArray(c) && c[id]) || null;
+  } catch { return null; }
+}
+export function itemAvailabilityOf(id) { try { return typeof catEco?.itemAvailability === 'function' ? catEco.itemAvailability(id) : null; } catch { return null; } }
+const pick = (o) => { const r = {}; if (o) for (const k of ['name', 'icon', 'rarity', 'desc', 'earnIn', 'defaultColor', 'slot']) if (o[k] != null && o[k] !== '') r[k] = o[k]; return r; };
+export const itemInfo = (id) => { const live = liveItem(id), loc = COSMETIC_BY_ID?.[id]; const m = { ...FALLBACK[id], ...pick(loc), ...pick(live) }; return { ...m, rarity: String(m.rarity || '').toLowerCase(), availability: itemAvailabilityOf(id) }; };
 
 const CSS = `
 .hunt{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;background:rgba(4,14,30,.55);backdrop-filter:blur(3px);font-family:system-ui,sans-serif}

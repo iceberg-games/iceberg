@@ -17,6 +17,7 @@ import { UI_FILES, makePlayUi } from './uiSounds.js';
 import { DisasterUI } from './ui.js';
 import { HuntMenu } from './hunt.js';
 import { QUESTS } from './quests.js';
+import { setCatalogSource } from './hunt.js';
 import { createQuestTracker } from '../_event/questAdapter.js';
 import { QuestHud } from '../_event/questHud.js';
 
@@ -114,6 +115,7 @@ export default {
 
   async create(ctx) {
     const { economy, engine, avatar, music } = ctx;
+    setCatalogSource(economy);
     const player = engine.player;
     let save = loadSave(economy);
     const scene = new THREE.Scene();
@@ -520,7 +522,18 @@ export default {
       const fn = avatar?.updateProximity, nd = avatar?.setNearbyDistance; if (!fn && !nd) return;
       hatPos.length = 0;
       for (const b of bots) if (b.alive && b.onMap && b.hat === 'tornado_hat') hatPos.push(b.pos);
-      try { const peers = window.iceberg?.mp?.nearby?.() || []; for (const p of peers) if (p?.pos && (p.equipped?.hat === 'tornado_hat' || p.wearing?.includes?.('tornado_hat'))) hatPos.push(p.pos); } catch { /* optional API */ }
+      try { // mp.nearby(radius): feature-detected; tolerant of array / {players} / map shapes until docs/MULTIPLAYER_API.md fixes one
+        const mp = (typeof net !== 'undefined' && net?.nearby) ? net : window.iceberg?.mp;
+        if (typeof mp?.nearby === 'function') {
+          const r = mp.nearby(C.HAT_NEARBY_RADIUS || 24); const list = Array.isArray(r) ? r : Array.isArray(r?.players) ? r.players : (r && typeof r === 'object' && typeof r.then !== 'function') ? Object.values(r) : [];
+          for (const p of list) {
+            const q = p?.pos || p?.position || (p && Number.isFinite(p.x) ? p : null);
+            const hat = p?.equipped?.hat ?? p?.loadout?.hat ?? p?.cosmetics?.hat ?? p?.hat;
+            const wears = hat === 'tornado_hat' || (Array.isArray(p?.wearing) && p.wearing.includes('tornado_hat'));
+            if (q && Number.isFinite(q.x) && Number.isFinite(q.z) && wears) hatPos.push({ x: q.x, y: q.y || 0, z: q.z });
+          }
+        }
+      } catch { /* optional API */ }
       try {
         if (fn) avatar.updateProximity(hatPos);
         else { let d = Infinity; for (const p of hatPos) d = Math.min(d, Math.hypot(p.x - player.pos.x, p.y - player.pos.y, p.z - player.pos.z)); avatar.setNearbyDistance(d); }
@@ -701,7 +714,7 @@ export default {
           audio.stinger('win', 0.9, 'survive');
           const mob = ui.root.classList.contains('m'); // phones: one card at a time (survived, then reward), so nothing stacks over the HUD
           popup('survived', { icon: '🎉', title: 'YOU SURVIVED!', sub: `${botSurv} other${botSurv === 1 ? '' : 's'} made it · streak ${save.streak}`, ms: mob ? 2000 : 3500 }, false);
-          if (pay > 0) { paid += pay; economy.earn(pay, C.EARN_REASON); setTimeout(() => live && popup('reward', { title: `+${pay} Birg Bucks`, sub: `${C.SESSION_EARN_CAP_BB - paid} BB left to earn this session`, ms: mob ? 1900 : 2600 }), mob ? 2200 : 700); }
+          if (pay > 0) { paid += pay; economy.earn(pay, C.EARN_REASON, { source: C.EARN_SOURCE }); setTimeout(() => live && popup('reward', { title: `+${pay} Birg Bucks`, sub: `${C.SESSION_EARN_CAP_BB - paid} BB left to earn this session`, ms: mob ? 1900 : 2600 }), mob ? 2200 : 700); }
           else popup('reward', { icon: '🧊', title: 'Session reward limit reached', sub: 'Keep playing for the quest and bragging rights!', ms: 2600 }, false);
           tracker.add(1);
         } else { save.streak = 0; popup('info', { icon: dIcon, title: `${name} is over`, sub: `${botSurv} survivor${botSurv === 1 ? '' : 's'}`, ms: 3000 }); }
