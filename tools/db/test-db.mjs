@@ -703,6 +703,17 @@ await t('dev access (0009): is_dev false by default, dev_accounts RLS, admin-onl
   const { readFileSync } = await import('node:fs');
   await db.exec(readFileSync(resolve(ROOT, 'supabase/migrations/20261018000009_dev_access.sql'), 'utf8'));
 });
+await t("game_earn 'disaster_survival' (0010): 5 BB per round paid, max 9 per call, 100 per day", async () => {
+  const U = await createUser(db, { username: 'zz_nds_earn' });
+  let r = await rpc(db, U, 'game_earn', { p_source: 'disaster_survival', p_amount: 5, p_reason: 'Natural Disaster Survival round survived' });
+  assert.equal(r.granted, 5);
+  r = await rpc(db, U, 'game_earn', { p_source: 'disaster_survival', p_amount: 50 });
+  assert.equal(r.granted, 9); assert.equal(r.capped, true);
+  for (let i = 0; i < 30; i++) r = await rpc(db, U, 'game_earn', { p_source: 'disaster_survival', p_amount: 5 });
+  assert.equal(r.granted, 0);
+  assert.equal(Number((await su(db, `select coins from public.profiles where id = $1`, [U]))[0].coins), 100);
+});
+
 await db.close();
 for (const r of results) console.log(r[0], r[1], r[2] ? '\n     ' + r[2] : '');
 const failed = results.filter(r => r[0] === 'FAIL').length;
