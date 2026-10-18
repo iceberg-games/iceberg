@@ -8,6 +8,7 @@ import { Economy } from '../core/economy.js';
 import { bus } from '../core/events.js';
 import { fmt, CURRENCY } from '../core/currency.js';
 import { BUILTIN_GAMES } from '../games/registry.js';
+import { isMobilePlayable } from '../data/gameMeta.js';
 import { thumb } from '../ui/thumbs.js';
 import { accountsEnabled, CONFIG } from '../net/config.js';
 import { getRemote, connectStoredSession } from '../net/session.js';
@@ -60,7 +61,9 @@ function gamesView() {
   const note = h('p.muted.small#games-note');
   const tab = (id, label) => h('button' + (gameSort === id ? '.on' : ''), { type: 'button', 'data-sort': id, onclick: () => { gameSort = id; const u = new URL(location.href); u.searchParams.set('sort', id); history.replaceState(null, '', u); fill(); sortBar.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.sort === id)); } }, label);
   const sortBar = h('div.p-sort#games-sort', { role: 'tablist' }, tab('newest', '🆕 Newest'), tab('popular', '🔥 Most Popular'), tab('active', '👥 Most Active Players'));
-  const defsById = Object.fromEntries(BUILTIN_GAMES.map(d => [d.id, d]));
+  // Mobile mode: only mobile-playable games in every tab and in the featured banner.
+  const shownGames = () => getDeviceMode() === 'mobile' ? BUILTIN_GAMES.filter(isMobilePlayable) : BUILTIN_GAMES;
+  const defsById = Object.fromEntries(shownGames().map(d => [d.id, d]));
   loadFeatured(publicApi).then(({ items }) => {
     banner?.destroy(); banner = createFeaturedBanner(items, defsById, { onPlay: openGame, playUrl });
     if (banner) bannerHolder.append(banner.el);
@@ -68,12 +71,13 @@ function gamesView() {
   let stats = null;
   async function fill() {
     if (!stats) stats = await loadGameStats(BUILTIN_GAMES, publicApi);
-    const list = [...stats.games];
+    const allowed = new Set(shownGames().map(d => d.id));
+    const list = stats.games.filter(g => allowed.has(g.def.id));
     clear(note);
     if (gameSort === 'active' && !stats.online) note.textContent = 'Live player counts are not available offline.';
     if (gameSort === 'popular') note.textContent = stats.online ? 'Plays in the last 7 days.' : 'Your plays on this device in the last 7 days (offline).';
     list.sort(SORTS[gameSort] || SORTS.newest);
-    clear(grid).append(...list.map(g => card(g)));
+    clear(grid).append(...(list.length ? list.map(g => card(g)) : [h('p.muted', 'No mobile games yet. Switch to Computer in Settings to see everything.')]));
   }
   const card = ({ def, visits, playing, publishedAt }) => h('div.game-card', { 'data-game': def.id },
     h('div.thumb', { style: { backgroundImage: `url(${thumb(def.thumbnail)})` } }),
