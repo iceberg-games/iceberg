@@ -169,6 +169,18 @@ What happens after the end:
 - Completed quests can still be claimed for the claim grace.
 - Owned rewards are never removed.
 
+### Live multiplayer check (right after deploy, as part of the live smoke test)
+
+This needs migrations 7–8 applied (after the backup). Run it with two real browsers and two real test accounts against the live site:
+
+```bash
+. /workspace/iceberg-ops/load-env.sh && export SUPABASE_ACCESS_TOKEN="$SB_ACCESS_TOKEN" SUPABASE_PROJECT_REF="$SB_PROJECT_REF" SUPABASE_URL="$SB_PROJECT_URL" SUPABASE_ANON_KEY="$SB_ANON_KEY"
+node scripts/mp-two-browser.mjs --base https://iceberg-games.github.io/iceberg/ --api "$SB_PROJECT_URL" --anon "$SB_ANON_KEY" [--cap]
+node scripts/live-smoke.mjs --cleanup-only      # removes ONLY zz_test_publisher_1..13 and their rows
+```
+
+`--cap` signs up 11 more test users. Supabase Auth limits sign-ups per hour, so skip it if the limit is hit; the cap logic is covered by the local run.
+
 ## 9. Multiplayer and Supabase Realtime limits (free plan)
 
 Every game instance is one **private** Realtime channel, `game:<gameId>:<instance>`.

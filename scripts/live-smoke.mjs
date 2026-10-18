@@ -10,6 +10,8 @@ const URL_ = (process.env.SUPABASE_URL || '').replace(/\/+$/, ''), ANON = proces
 const DOMAIN = process.env.VITE_USERNAME_EMAIL_DOMAIN || 'users.iceberg.invalid';
 if (!URL_ || !ANON) { console.error('Set SUPABASE_URL and SUPABASE_ANON_KEY'); process.exit(1); }
 const TEST = ['zz_test_publisher_1', 'zz_test_publisher_2'];
+// cleanup also covers the extra cap-test accounts of scripts/mp-two-browser.mjs --cap (still ONLY zz_test_publisher_*)
+const CLEAN = Array.from({ length: 13 }, (_, i) => `zz_test_publisher_${i + 1}`);
 const PW = 'zz-Test-' + Math.random().toString(36).slice(2, 10) + '!';
 const hasMgmt = !!(process.env.SUPABASE_ACCESS_TOKEN && process.env.SUPABASE_PROJECT_REF);
 const mgmt = hasMgmt ? await import('./supabase-mgmt.mjs') : null;
@@ -25,10 +27,10 @@ const rpc = async (token, fn, args = {}) => { const r = await http(`/rest/v1/rpc
 const emailOf = (u) => `${u}@${DOMAIN}`;
 
 async function cleanup() {
-  if (!mgmt) { console.log('NOTE  cleanup skipped (no SUPABASE_ACCESS_TOKEN): delete users', TEST.map(emailOf).join(', '), 'in Auth → Users'); return; }
-  const list = TEST.map(u => `'${emailOf(u)}'`).join(',');
+  if (!mgmt) { console.log('NOTE  cleanup skipped (no SUPABASE_ACCESS_TOKEN): delete users', CLEAN.map(emailOf).join(', '), 'in Auth → Users'); return; }
+  const list = CLEAN.map(u => `'${emailOf(u)}'`).join(',');
   const [{ n }] = await mgmt.mgmtQuery(`with d as (delete from auth.users where email in (${list}) returning id) select count(*)::int n from d`);
-  const [{ left }] = await mgmt.mgmtQuery(`select (select count(*) from auth.users where email in (${list})) + (select count(*) from public.profiles where username in (${TEST.map(u => `'${u}'`).join(',')}))::int as left`);
+  const [{ left }] = await mgmt.mgmtQuery(`select (select count(*) from auth.users where email in (${list})) + (select count(*) from public.profiles where username in (${CLEAN.map(u => `'${u}'`).join(',')}))::int as left`);
   console.log(`cleanup: removed ${n} test users; leftover test rows: ${left}`);
   assert.equal(Number(left), 0);
 }
