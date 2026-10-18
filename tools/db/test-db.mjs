@@ -277,7 +277,7 @@ await t('game stats: publish dates synced, deduped visits, live players via hear
     if (m.retired) assert.ok(!ids.includes(id), id + ' should be retired');
     else assert.equal(Date.parse(stats.find(g => g.gameId === id).publishedAt), Date.parse(m.publishedAt), id);
   }
-  assert.equal(stats[0].gameId, 'giant-rainbow-obby');                       // newest first
+  assert.equal(stats[0].gameId, Object.entries(GAME_META).filter(([, m]) => !m.retired && m.publishedAt).sort((a, b) => Date.parse(b[1].publishedAt) - Date.parse(a[1].publishedAt))[0][0]);   // newest first
   assert.equal((await rpc(db, A, 'record_visit', { p_game_id: 'nope' })).reason, 'unknown_game');
   assert.equal((await rpc(db, A, 'record_visit', { p_game_id: 'birg-hq' })).counted, true);
   assert.equal((await rpc(db, A, 'record_visit', { p_game_id: 'birg-hq' })).counted, false);   // deduped
