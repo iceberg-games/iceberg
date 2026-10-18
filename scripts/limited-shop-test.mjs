@@ -6,7 +6,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 const errs = []; page.on('pageerror', e => errs.push(e.message));
 await page.goto(url); await page.waitForFunction(() => window.iceberg);
 const card = (id) => page.evaluate((id) => { const el = document.querySelector(`.card[data-id="${id}"]`); return el && { badge: el.querySelector('.limited-badge')?.textContent || null, btn: el.querySelector('button')?.textContent, disabled: !!el.querySelector('button')?.disabled }; }, id);
-const toasts = () => page.evaluate(() => [...document.querySelectorAll('.toast')].map(t => t.textContent));
+const toasts = () => page.evaluate(() => [...document.querySelectorAll('.toast, .ib-toast')].map(t => t.textContent));
 await page.evaluate(async () => {
   const { economy } = window.iceberg; economy.demoGrant(5000);
   window.__state = 'live';

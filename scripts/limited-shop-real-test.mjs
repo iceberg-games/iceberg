@@ -1,5 +1,5 @@
 // Limited-time shop UI against the REAL economy API (itemAvailability / shopVisible / buy(); guest rules).
-// 1) As shipped (natural_disasters unscheduled): every event item is HIDDEN; regular items are on sale.
+// 1) Unscheduled (natural_disasters with no window; forced, so it holds for event builds too): every event item is HIDDEN; regular items are on sale.
 // 2) Then only the event window is moved (LocalBackend.eventStatus), so the real gating code runs end to end:
 //    live (badge + countdown, buy works) -> ended while open (real buy() refuses, coins kept, owned item still equips)
 //    -> not started (hidden again).
@@ -12,12 +12,13 @@ const errs = []; page.on('pageerror', e => errs.push(e.message));
 await page.goto(url); await page.waitForFunction(() => window.iceberg?.economy, null, { timeout: 30000 });
 const card = (id) => page.evaluate((id) => { const el = document.querySelector(`.card[data-id="${id}"]`); return el && { badge: el.querySelector('.limited-badge')?.textContent || null, btn: el.querySelector('button')?.textContent, disabled: !!el.querySelector('button')?.disabled }; }, id);
 const shopIds = () => page.evaluate(() => [...document.querySelectorAll('.card[data-id]')].map(e => e.dataset.id));
-const toasts = () => page.evaluate(() => [...document.querySelectorAll('.toast')].map(t => t.textContent));
+const toasts = () => page.evaluate(() => [...document.querySelectorAll('.toast, .ib-toast')].map(t => t.textContent));
 const refresh = () => page.evaluate(() => window.iceberg.ui.refreshDrawer()).then(() => page.waitForTimeout(300));
 const setWindow = (mode) => page.evaluate((mode) => {
   const b = window.iceberg.economy.backend, real = (window.__realES ||= b.eventStatus.bind(b)), H = 3600e3;
   b.eventStatus = (id, now = Date.now()) => {
     const st = real(id, now);
+    if (mode === 'unscheduled') return { ...st, startsAt: null, endsAt: null, active: false };
     if (mode === 'live') return { ...st, startsAt: new Date(now - 24 * H).toISOString(), endsAt: new Date(now + (3 * 24 + 4) * H + 5e4).toISOString(), active: true };
     if (mode === 'ended') return { ...st, startsAt: new Date(now - 9 * 24 * H).toISOString(), endsAt: new Date(now - 2 * H).toISOString(), active: false };
     return { ...st, startsAt: new Date(now + 5 * H).toISOString(), endsAt: new Date(now + 7 * 24 * H).toISOString(), active: false };
@@ -28,6 +29,7 @@ const hiddenIds = COSMETICS.filter(c => c.event).map(c => c.id);       // buyabl
 await page.evaluate(() => { window.iceberg.economy.profile.coins = 5000; });
 await page.evaluate(() => window.iceberg.play('frost-fields').catch(() => {}));
 await page.waitForTimeout(2500);
+await setWindow('unscheduled');   // explicit: a build that ships the event's quests counts as live offline
 await page.evaluate(() => window.iceberg.ui.openDrawer?.('shop')); await page.waitForTimeout(500);
 const res = {}; const T0 = Date.now(); const step = (n) => console.error('step', n, Date.now() - T0);
 // 1) as shipped
