@@ -1,5 +1,6 @@
 // Title screen + Games menu (the platform home screen).
 import { h, clear } from './dom.js';
+import { isMobile, onDeviceChange } from '../core/device.js';
 import { thumb } from './thumbs.js';
 import { fmt, CURRENCY } from '../core/currency.js';
 import { bus } from '../core/events.js';
@@ -16,7 +17,7 @@ export class Menu {
     bus.on('coins:changed', () => { const b = this.el.querySelector('.bucks-amount'); if (b) b.textContent = fmt(this.economy.coins); });
     bus.on('games:changed', () => { if (this.mode === 'games') this.showGames(); });
     // Studio is desktop-only: body.device-mobile (set by core/device.js) hides it via CSS; re-render on change.
-    bus.on('device:changed', () => { if (this.mode === 'games') this.showGames(); });
+    onDeviceChange(() => { if (this.mode === 'games') this.showGames(); });
   }
   hide() { this.el.classList.add('hidden'); this.mode = null; }
 
@@ -43,7 +44,7 @@ export class Menu {
       h('div.gc-actions', extra || h('button.btn.play', { onclick: () => this.onPlay(def) }, '▶ Play')));
 
     const featured = [...BUILTIN_GAMES.map(d => card(d)),
-      card(CREATOR, h('button.btn.play.create.studio-entry#create-btn', { onclick: () => this.showCreateDialog() }, '✚ Create'))];
+      ...(isMobile() ? [] : [card(CREATOR, h('button.btn.play.create.studio-entry#create-btn', { onclick: () => this.showCreateDialog() }, '✚ Create'))])];
     const yours = custom.map(doc => {
       const def = customGameDef(doc);
       return card(def, h('div.row',
@@ -77,7 +78,7 @@ export class Menu {
     const dlg = h('div.dialog-backdrop#create-dialog',
       h('div.dialog',
         h('h2', '✚ Create a Game'), h('p.muted', 'Pick a starting map. You can change sky & music later.'),
-        h('div.templates', Object.entries(TEMPLATES).map(([id, t]) => h('button.template', { 'data-template': id, onclick: () => { dlg.remove(); this.onEdit(newGameDoc(id)); } }, h('b', t.name), h('small', id === 'blank' ? 'Empty 64×64 snow baseplate' : 'Island with a starter fort, ramp & coins')))),
+        h('div.templates', Object.entries(TEMPLATES).map(([id, t]) => h('button.template', { 'data-template': id, onclick: () => { dlg.remove(); this.onEdit(newGameDoc(id)); } }, h('b', t.name), h('small', t.desc || '')))),
         h('button.btn.secondary', { onclick: () => dlg.remove() }, 'Cancel')));
     this.root.append(dlg);
   }
