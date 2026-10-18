@@ -158,8 +158,8 @@ const BUILDERS = {
     const r = new THREE.Group(); r.position.set(0, -0.05, -0.5);
     r.add(mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.8, 18), body, 0, 0, 0));
     r.add(mesh(new THREE.ConeGeometry(0.2, 0.35, 18), trim, 0, 0.57, 0));
-    r.add(mesh(new THREE.TorusGeometry(0.2, 0.03, 6, 18), trim, 0, 0.25, 0)).rotation.x = Math.PI / 2;
-    r.add(mesh(new THREE.TorusGeometry(0.2, 0.03, 6, 18), trim, 0, -0.2, 0)).rotation.x = Math.PI / 2;
+    r.add(rotated(mesh(new THREE.TorusGeometry(0.2, 0.03, 6, 18), trim, 0, 0.25, 0), 'x', Math.PI / 2));
+    r.add(rotated(mesh(new THREE.TorusGeometry(0.2, 0.03, 6, 18), trim, 0, -0.2, 0), 'x', Math.PI / 2));
     r.add(mesh(new THREE.CylinderGeometry(0.12, 0.17, 0.16, 14), std('#5b6b7a', { metalness: 0.9, roughness: 0.3 }), 0, -0.48, 0));
     for (let i = 0; i < 4; i++) {
       const f = mesh(new THREE.BoxGeometry(0.03, 0.32, 0.22), fins, 0, -0.3, 0);
@@ -170,6 +170,10 @@ const BUILDERS = {
     // straps
     g.add(mesh(new THREE.BoxGeometry(1.02, 0.08, 0.54), std('#333'), 0, 0.25, 0));
     g.add(mesh(new THREE.BoxGeometry(1.02, 0.08, 0.54), std('#333'), 0, -0.25, 0));
+    for (const x of [-0.28, 0.28]) { // shoulder straps
+      g.add(mesh(new THREE.BoxGeometry(0.1, 0.03, 0.54), std('#333'), x, 0.505, 0));
+      g.add(mesh(new THREE.BoxGeometry(0.1, 0.3, 0.03), std('#333'), x, 0.36, 0.265));
+    }
     g.add(r);
     g.userData.nozzle = new THREE.Object3D(); g.userData.nozzle.position.set(0, -0.6, -0.5); g.add(g.userData.nozzle);
     g.userData.mats = { body, fins, trim };
