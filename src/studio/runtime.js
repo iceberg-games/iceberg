@@ -16,6 +16,7 @@ import { getDeviceMode, onDeviceChange } from '../core/device.js';
 const HW = 0.42, H = 2.6;
 const sfxCtx = () => (window.__icebergSfx ||= new (window.AudioContext || window.webkitAudioContext)());
 export function playSfx(kind = 'ding') {
+  if (window.icebergUi?.isMuted?.() ?? !!window.iceberg?.music?.muted) return;   // site mute (audio/uiSounds.js isMuted)
   try {
     const ctx = sfxCtx(); const t = ctx.currentTime; const g = ctx.createGain(); g.connect(ctx.destination);
     const o = ctx.createOscillator();

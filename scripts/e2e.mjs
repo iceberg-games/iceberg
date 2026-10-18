@@ -617,6 +617,7 @@ if (want('mp2')) {
   check('mp: two real browsers, own accounts: move, join friend, chat bubbles both ways, no free text, leave, cap 12, reconnect (scripts/mp-two-browser.mjs)', r.status === 0, (r.stdout + r.stderr).split('\n').filter(l => /FAIL|Error/.test(l)).join('\n').slice(-1500));
 }
 
+if (want('sfx')) run('studio sfx: playSfx respects the site mute', 'node', ['scripts/studio-sfx-mute-test.mjs']);
 // ---------------- 7. UI click sounds + shared mute (portal + play page; guest site build, no backend needed) ----------------
 if (want('sounds')) {
   const { serveStatic } = await import(resolve(ROOT, 'tools/db/dev-server.mjs'));
