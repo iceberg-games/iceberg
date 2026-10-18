@@ -670,9 +670,10 @@ export default {
     net.onHostChanged?.(() => { if (net.isHost() && api.phase === 'intermission' && api.timer > C.T_INTERMISSION) api.timer = C.T_INTERMISSION; }); // new host carries on from the current state
     function publishResults() {
       if (!net.isHost() || !roundState) return;
-      const n = roundState.n, ids = [...roundSurvivors];
-      // NPC bots are simulated per client (local flavour), so only real players go into the shared list
-      setTimeout(() => net.setState('results', { n, survivors: ids }), net.online ? 600 : 0);
+      const n = roundState.n;
+      // NPC bots are simulated per client (local flavour), so only real players go into the shared list.
+      // Read the set when sending: the host's own 'survived' echo arrives async (mp local echo is a microtask).
+      setTimeout(() => net.setState('results', { n, survivors: [...roundSurvivors] }), net.online ? 600 : 0);
     }
     function beginDisaster() {
       const big = !!current.big;

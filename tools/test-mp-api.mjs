@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 globalThis.document ??= { visibilityState: 'visible' };
 globalThis.requestAnimationFrame ??= () => 0; globalThis.cancelAnimationFrame ??= () => {};
+await import('node:module').then(m => m.register('./asset-stub-loader.mjs', import.meta.url));   // .ogg/.glb imports (tornado hat audio) stubbed in node
 const { createMultiplayer, plainJSON } = await import('../src/mp/multiplayer.js');
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
