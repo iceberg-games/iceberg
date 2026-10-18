@@ -5,6 +5,7 @@
 //   getDeviceMode()            -> 'computer' | 'mobile'
 //   setDeviceMode('mobile')    -> saves to localStorage, emits bus 'device:changed'
 //   bus.on('device:changed', ({ mode, previous }) => ...)
+//   window.addEventListener('device:changed', (e) => e.detail.mode)
 //
 // The choice is remembered in localStorage (iceberg:v1:deviceMode). Until the
 // player picks, getDeviceMode() returns the auto-detected suggestion.
@@ -48,7 +49,11 @@ export function setDeviceMode(mode) {
   const previous = current;
   current = mode;
   applyBodyClass();
-  if (previous !== mode) bus.emit('device:changed', { mode, previous });
+  if (previous !== mode) {
+    const detail = { mode, previous };
+    bus.emit('device:changed', detail);
+    try { window.dispatchEvent(new CustomEvent('device:changed', { detail })); } catch { /* non-browser */ }
+  }
   return mode;
 }
 
