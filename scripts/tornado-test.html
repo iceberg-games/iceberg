@@ -1,0 +1,34 @@
+<!doctype html><html><body style="margin:0"><script type="module">
+import * as THREE from 'three';
+import { Avatar, TORNADO_WIND_URL } from '/src/game/avatar.js';
+const av = new Avatar(); const scene = new THREE.Scene(); scene.add(av.root);
+av.applyLoadout({ equipped: { hat: 'tornado_hat' } });
+const hat = () => Object.values(av.attached).find(o => o.userData.isTornado);
+window.run = async () => {
+  const out = { url: TORNADO_WIND_URL };
+  av.animate(0.016); out.defaultProx = hat().userData.proximity;            // never told -> 0
+  out.factors = [20, 12, 7, 2, 0.5].map(d => { av.setNearbyDistance(d); return +av.proximityFactor().toFixed(2); });
+  av.updateProximity([{ x: 30, y: 0, z: 0 }, { x: 0, y: 0, z: 4 }]); out.fromList = +av.proximityFactor().toFixed(2);
+  av.updateProximity([]); out.emptyList = av.proximityFactor();
+  // spin speed: shell rotation advance over 1s far vs near
+  const shell = hat().children[0].children.find(c => c.userData.sp);
+  const adv = (d) => { av.setNearbyDistance(d); const r0 = shell.rotation.y; for (let i = 0; i < 60; i++) av.animate(1 / 60); return Math.abs(shell.rotation.y - r0); };
+  out.spinFar = +adv(50).toFixed(2); out.spinNear = +adv(1).toFixed(2);
+  // audio: listener attach with missing file must be a silent no-op
+  let listener = null; try { listener = new THREE.AudioListener(); } catch (e) { out.noAudio = String(e); }
+  av.attachWindAudio(listener);
+  av.setNearbyDistance(40); av.animate(0.016); out.windFar = !!av._wind;          // nobody within 20u -> silent
+  av.setNearbyDistance(3); av.animate(0.016); out.windCreated = !!av._wind;
+  await new Promise(r => setTimeout(r, 1500)); for (let i = 0; i < 10; i++) av.animate(0.016);
+  out.windPlaying = !!av._wind?.main; out.highLayer = !!av._wind?.high;
+  await new Promise(r => setTimeout(r, 1000)); out.ctxState = av._audioListener.context.state;
+  out.highGain = av._wind?.high ? +av._wind.high.g.gain.value.toFixed(2) : null;
+  av.setNearbyDistance(25); av.animate(0.016); out.windHysteresis = !!av._wind;    // 20..30: keeps playing
+  av.setNearbyDistance(35); av.animate(0.016); out.windStoppedFar = !av._wind;
+  av.setNearbyDistance(3); av.animate(0.016);
+  av.applyLoadout({ equipped: {} }); out.windAfterUnequip = !!av._wind;
+  av.attachWindAudio(null); av.animate(0.016);
+  return out;
+};
+window.__ready = true;
+</script></body></html>
