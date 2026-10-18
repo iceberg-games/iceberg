@@ -12,6 +12,7 @@
 //      cosmetics from the server roster, cap + overflow instance, Join friend from the portal,
 //      Realtime Authorization, junk/spoofed broadcasts dropped, message budget.
 import { spawnSync } from 'node:child_process';
+import { createServer } from 'node:net';
 import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync, unlinkSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -20,15 +21,21 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // Parallel runs (other worktrees/agents) must not share the temp dir or ports: a second run used to
 // rmSync the first run's built site mid-test (-> waitForSelector timeouts). Each run takes a free slot.
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+const portFree = (port) => new Promise((ok) => { const srv = createServer().once('error', () => ok(false)).once('listening', () => srv.close(() => ok(true))).listen(port); });
+const BASE_PORTS = [54420, 8420, 54430, 8430, 54431, 8431];   // other tools (studio e2e, dev servers) may hold these too
 let SLOT = 0;
 for (; SLOT < 10; SLOT++) {
   const lock = `/tmp/iceberg-e2e-${SLOT}.lock`;
-  try { writeFileSync(lock, String(process.pid), { flag: 'wx' }); break; }
-  catch { const pid = +readFileSync(lock, 'utf8'); if (!alive(pid)) { writeFileSync(lock, String(process.pid)); break; } }
+  let got = false;
+  try { writeFileSync(lock, String(process.pid), { flag: 'wx' }); got = true; }
+  catch { const pid = +readFileSync(lock, 'utf8'); if (!alive(pid)) { writeFileSync(lock, String(process.pid)); got = true; } }
+  if (!got) continue;
+  if ((await Promise.all(BASE_PORTS.map(p => portFree(p + SLOT * 20)))).every(Boolean)) break;
+  unlinkSync(lock);
 }
 if (SLOT === 10) throw new Error('e2e: 10 runs already in progress');
 process.on('exit', () => { try { if (readFileSync(`/tmp/iceberg-e2e-${SLOT}.lock`, 'utf8') === String(process.pid)) unlinkSync(`/tmp/iceberg-e2e-${SLOT}.lock`); } catch { /* gone */ } });
-if (SLOT) console.log(`e2e: another run is in progress, using slot ${SLOT} (ports +${SLOT * 20}, /tmp/iceberg-test-${SLOT})`);
+if (SLOT) console.log(`e2e: default ports/dir busy (another run?), using slot ${SLOT} (ports +${SLOT * 20}, /tmp/iceberg-test-${SLOT})`);
 const PORT = (n) => n + SLOT * 20;
 const TMP = SLOT ? `/tmp/iceberg-test-${SLOT}` : '/tmp/iceberg-test';
 const SHOTS = resolve(TMP, 'shots');
