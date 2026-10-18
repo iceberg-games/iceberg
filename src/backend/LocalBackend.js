@@ -34,9 +34,15 @@ export const DEFAULT_PROFILE = {
 };
 
 export class LocalBackend {
+  constructor() { this.profileKey = 'profile'; }
   // ---- profile / wallet ----
-  loadProfile() { return { ...DEFAULT_PROFILE, ...read('profile', {}) }; }
-  saveProfile(profile) { write('profile', profile); }
+  // Guests use key 'profile'. When signed in, core/economy.js switches to
+  // 'profile:<userId>' so the server copy is cached separately from guest progress.
+  loadProfile() { return { ...DEFAULT_PROFILE, ...read(this.profileKey, {}) }; }
+  saveProfile(profile) { write(this.profileKey, profile); }
+  useProfileKey(key) { this.profileKey = key || 'profile'; }
+  loadGuestProfile() { return { ...DEFAULT_PROFILE, ...read('profile', {}) }; }
+  saveGuestProfile(profile) { write('profile', profile); }
 
   /**
    * Server-authoritative purchase hook. A real backend would validate the
