@@ -12,6 +12,7 @@ import { ISLAND_R, LOBBY, BUILDINGS, CELL, buildBlocks, buildBunker, inBunker, B
 import { DISASTERS, findDisaster } from './disasters.js';
 import { DisasterAudio } from './audio.js';
 import { DisasterUI } from './ui.js';
+import { HuntMenu } from './hunt.js';
 import { QUESTS } from './quests.js';
 import { createQuestTracker } from '../_event/questAdapter.js';
 import { QuestHud } from '../_event/questHud.js';
@@ -106,7 +107,7 @@ export default {
   description: 'Round-based survival on an icy island town. A random disaster strikes every round: tornado, blizzard, avalanche, earthquake, flood, meteor shower or lightning. Survive to earn Birg Bucks.',
   get thumbnail() { if (!_thumb) { try { _thumb = drawThumb(); } catch { _thumb = 'frost'; } } return _thumb; },
   music: 'none',
-  credits: C.CREDITS,
+  credits: C.CREDITS, mobile: true,  // tap HUD + joystick (Portal Mobile mode)
 
   async create(ctx) {
     const { economy, engine, avatar, music } = ctx;
@@ -381,7 +382,7 @@ export default {
       },
     };
 
-    const audio = new DisasterAudio(music, { dir: C.AUDIO_DIR, files: C.AUDIO_FILES }); W.audio = audio;
+    const audio = new DisasterAudio(music, { dir: C.AUDIO_DIR, files: C.AUDIO_FILES, kit: C.KIT_SFX }); W.audio = audio;
 
     // ---------- player state ----------
     let hp = C.MAX_HP, alive = true, onMap = false, dyingT = 0, hurtSfxT = 0, lastVy = 0, wasGround = true;
@@ -497,12 +498,17 @@ export default {
       ui.setBalloon(owned(), on, C.GEAR_PRICES_BB.greenBalloon);
     }
     const deny = (text) => { audio.sfx('deny'); bus.emit('toast', { text, icon: '😕' }); };
-    function buyConsumable(id) {
+    // Paid one-use items go through the Publisher's economy.buyConsumable (server prices them from
+    // CONSUMABLE_PRICES_BB). The effect is applied only once it resolves ok. A per-purchase ref makes retries free.
+    const sess = Math.random().toString(36).slice(2, 8);
+    let buySeq = 0;
+    async function buyConsumable(id) {
       const price = C.CONSUMABLE_PRICES_BB[id];
-      if (typeof economy.buyConsumable === 'function') { const r = economy.buyConsumable(C.GAME_ID, id, price); return r === true || !!(r && r.ok); }
-      return economy.spend(price, `${id === 'apple' ? 'Apple' : 'Bigger Storm'} (Natural Disaster Survival)`);
+      const r = await economy.buyConsumable(C.GAME_ID, id, price, `nds:${sess}:r${api.round}:${id}:${++buySeq}`);
+      return !!(r && r.ok);
     }
-    let stormQueued = null;
+    let stormQueued = null, buying = false, applesThisRound = 0, lastAppleT = -1e9, stormsBoughtRound = -1;
+    const nowS = () => performance.now() / 1000;
     const api = {
       phase: 'intermission', timer: C.T_INTERMISSION, round: 0, bots, get hp() { return hp; }, get alive() { return alive; }, get onMap() { return onMap; },
       get disaster() { return current?.def.id || null; }, get inst() { return current?.inst || null; }, get blocksAlive() { return blocks.filter(b => b.alive).length; }, get debris() { return debris.length; },
@@ -519,17 +525,36 @@ export default {
       apple() {
         if (!alive) { deny('You can eat an apple once you are back in the game'); return false; }
         if (hp >= C.MAX_HP) { deny('You are already at full health'); return false; }
-        if (!buyConsumable('apple')) { deny(`You need ${C.APPLE_PRICE_BB} Birg Bucks for an Apple`); return false; }
+        if (applesThisRound >= C.APPLES_PER_ROUND) { deny(`Only ${C.APPLES_PER_ROUND} Apples per round`); return false; }
+        const wait = C.APPLE_COOLDOWN_S - (nowS() - lastAppleT);
+        if (wait > 0) { deny(`Still chewing… ${Math.ceil(wait)}s`); return false; }
+        if (buying) return false;
+        buying = true; applesThisRound++; lastAppleT = nowS(); // reserve before the await so double taps can't slip through
+        return buyConsumable('apple').then((ok) => {
+          buying = false;
+          if (!ok) { applesThisRound--; lastAppleT = -1e9; deny(`You need ${C.APPLE_PRICE_BB} Birg Bucks for an Apple`); return false; }
+          if (!alive) return true;
+          eatApple(); return true;
+        });
+      },
+      get applesThisRound() { return applesThisRound; },
+    };
+    function eatApple() {
         hp = Math.min(C.MAX_HP, hp + C.APPLE_HEAL); ui.setHp(hp, C.MAX_HP); audio.sfx('eat');
         burst(player.pos.clone().setY(player.pos.y + 2), [0x7dff6a, 0xffffff], 12, 3, 0.2);
-        bus.emit('toast', { text: `Crunch! +${C.APPLE_HEAL} HP`, icon: '🍎' }); return true;
-      },
-      storm() { if (stormQueued) { deny(`Bigger Storm already set: ${findDisaster(stormQueued).name}`); return false; } ui.showPick(); return true; },
+        bus.emit('toast', { text: `Crunch! +${C.APPLE_HEAL} HP`, icon: '🍎' });
+    }
+    Object.assign(api, {
+      storm() { if (stormsBoughtRound === api.round) { deny('One Bigger Storm per round'); return false; } if (stormQueued) { deny(`Bigger Storm already set: ${findDisaster(stormQueued).name}`); return false; } ui.showPick(); return true; },
       pickStorm(id) {
-        if (stormQueued || !findDisaster(id)) return false;
-        if (!buyConsumable('biggerStorm')) { deny(`You need ${C.BIGGER_STORM_PRICE_BB} Birg Bucks for a Bigger Storm`); ui.hidePick(); return false; }
-        stormQueued = id; ui.hidePick(); ui.setStormQueued(findDisaster(id).name); audio.sfx('buy');
-        bus.emit('toast', { text: `Next round: a BIGGER ${findDisaster(id).name}!`, icon: '🌪️' }); return true;
+        if (stormQueued || buying || stormsBoughtRound === api.round || !findDisaster(id)) return false;
+        buying = true; const forRound = api.round; stormsBoughtRound = forRound; ui.hidePick();
+        return buyConsumable('biggerStorm').then((ok) => {
+          buying = false;
+          if (!ok) { if (stormsBoughtRound === forRound) stormsBoughtRound = -1; deny(`You need ${C.BIGGER_STORM_PRICE_BB} Birg Bucks for a Bigger Storm`); return false; }
+          stormQueued = id; ui.setStormQueued(findDisaster(id).name); audio.sfx('buy');
+          bus.emit('toast', { text: `Next round: a BIGGER ${findDisaster(id).name}!`, icon: '🌪️' }); return true;
+        });
       },
       /** Test/debug: jump straight to a round with this disaster. */
       startRound(id, big = false) { if (current) endDisaster(); if (!alive) toLobby(); if (id) { forced = { id, big }; } api.phase = 'intermission'; if (id) nextPhase(); else { toLobby(); api.timer = C.T_INTERMISSION; } },
@@ -544,15 +569,17 @@ export default {
       visitMap() { api.paused = true; if (!onMap) teleportToMap(); return true; },
       /** Console/filming helper: no damage while true. */
       godMode: false,
-    };
-    const ui = new DisasterUI({ prices: C.CONSUMABLE_PRICES_BB, disasters: DISASTERS, onBalloon: api.balloon, onApple: api.apple, onStorm: api.storm, onPick: api.pickStorm });
+    });
+    const ui = new DisasterUI({ prices: C.CONSUMABLE_PRICES_BB, disasters: DISASTERS, onBalloon: api.balloon, onApple: api.apple, onStorm: api.storm, onPick: api.pickStorm, onHunt: () => hunt.toggle() });
+    const hunt = new HuntMenu({ sfx: (n) => audio.sfx(n), ambience: (on) => audio.sampleLoop('hunt', on ? 0.35 : 0, { name: 'huntAmb', freq: 380, type: 'lowpass', lfo: 0.25 }) });
+    api.hunt = hunt;
     W.ui = ui;
     ui.setHp(hp, C.MAX_HP); ui.setBalloon(owned(), false, C.GEAR_PRICES_BB.greenBalloon);
 
     // ---------- event quest ----------
     const quest = QUESTS[0];
     const qhud = new QuestHud(quest);
-    const tracker = createQuestTracker(quest, { onChange: (s) => qhud.update(s), onResult: (r) => { if (r.granted) bus.emit('toast', { text: `Quest complete! ${quest.rewardName} unlocked`, icon: '🎁' }); } });
+    const tracker = createQuestTracker(quest, { onChange: (s) => qhud.update(s), onResult: (r) => { if (r.granted) { hunt.celebrate(r.itemId || quest.rewardItemId); if (hunt.open) hunt.refresh(); } } });
     api.quest = tracker;
 
     // ---------- round flow ----------
@@ -591,7 +618,7 @@ export default {
         else { const pool = DISASTERS.filter(d => d.id !== lastId); pick = pool[(Math.random() * pool.length) | 0].id; }
         lastId = pick;
         current = { def: findDisaster(pick), big, inst: null };
-        api.round++;
+        api.round++; applesThisRound = 0;
         teleportToMap();
         api.phase = 'warning'; api.timer = C.T_WARNING;
         applyMood(current.def.mood, 0);
@@ -627,8 +654,8 @@ export default {
     const prevKeys = {};
     const pressed = (code) => { const d = engine.input.down(code), was = prevKeys[code]; prevKeys[code] = d; return d && !was; };
     let live = true;
-    const hot = (code) => { if (code === 'Digit1') api.balloon(); else if (code === 'Digit2') api.apple(); else if (code === 'Digit3') api.storm(); };
-    engine.input.onKey((e) => { if (!live || engine.game !== game || prevKeys[e.code]) return; if (/^Digit[1-3]$/.test(e.code)) { prevKeys[e.code] = true; hot(e.code); } });
+    const hot = (code) => { if (code === 'Digit1') api.balloon(); else if (code === 'Digit2') api.apple(); else if (code === 'Digit3') api.storm(); else if (code === 'KeyH') hunt.toggle(); };
+    engine.input.onKey((e) => { if (!live || engine.game !== game || prevKeys[e.code]) return; if (/^Digit[1-3]$/.test(e.code)) { prevKeys[e.code] = true; hot(e.code); } else if (e.code === 'KeyH') { prevKeys[e.code] = true; hot(e.code); } else if (e.code === 'Escape' && hunt.open) hunt.close(); });
 
     resetMap();
     toLobby();
@@ -640,7 +667,7 @@ export default {
       onFall: () => { if (!onMap) player.teleport(lobbySpawn(), Math.PI); },
       update(dt, t, pl) {
         if (!audio.timer) audio.start();
-        for (const code of ['Digit1', 'Digit2', 'Digit3']) if (pressed(code)) hot(code);
+        for (const code of ['Digit1', 'Digit2', 'Digit3', 'KeyH']) if (pressed(code)) hot(code);
         // timers
         if (!api.paused) api.timer -= dt; hurtSfxT -= dt;
         if (api.timer <= 0) nextPhase();
@@ -749,7 +776,7 @@ export default {
       },
       dispose() {
         live = false;
-        endDisaster(); setBalloon(false); audio.stop(); ui.dispose(); tracker.dispose(); qhud.dispose();
+        endDisaster(); setBalloon(false); audio.stop(); ui.dispose(); hunt.dispose(); tracker.dispose(); qhud.dispose();
         avatar.root.visible = true; player.enabled = true;
         engine.camera.far = camFar; engine.camera.updateProjectionMatrix();
         for (const d of disposables) d.dispose?.();

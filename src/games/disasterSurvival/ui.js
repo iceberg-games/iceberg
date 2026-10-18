@@ -46,7 +46,7 @@ const CSS = `
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 
 export class DisasterUI {
-  constructor({ prices, disasters, onBalloon, onApple, onStorm, onPick }) {
+  constructor({ prices, disasters, onBalloon, onApple, onStorm, onPick, onHunt }) {
     this.style = el('style'); this.style.textContent = CSS; document.head.append(this.style);
     this.root = el('div', 'nds'); this.root.id = 'nds-root';
     this.white = el('div', 'nds-white'); this.frost = el('div', 'nds-frost'); this.flashEl = el('div', 'nds-flash');
@@ -57,6 +57,7 @@ export class DisasterUI {
     this.bBalloon = mk('nds-balloon', '🎈', 'Green Balloon', 'Floaty low-gravity jumps', '1', onBalloon);
     this.bApple = mk('nds-apple', '🍎', 'Apple', 'Heals 50 HP', '2', onApple);
     this.bStorm = mk('nds-storm', '🌪️', 'Bigger Storm', 'Pick & boost next disaster', '3', onStorm);
+    if (onHunt) { this.bHunt = mk('nds-hunt', '🎯', 'Hunt', 'Event items · limited time', 'H', onHunt); this.bHunt.classList.add('hunt-btn'); this.bHunt.querySelector('.pr').textContent = 'EVENT'; }
     this.bApple.querySelector('.pr').textContent = `${prices.apple} BB`;
     this.bStorm.querySelector('.pr').textContent = `${prices.biggerStorm} BB`;
     this.prices = prices;

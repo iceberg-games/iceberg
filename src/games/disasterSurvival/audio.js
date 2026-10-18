@@ -6,7 +6,7 @@ const CALM = [[62, 65, 69, 76], [58, 62, 65, 69], [53, 57, 60, 64], [60, 64, 67,
 const STORM = [[50, 57, 62], [46, 53, 58], [48, 55, 60], [45, 52, 57]];
 
 export class DisasterAudio {
-  constructor(music, { dir = '', files = null } = {}) { this.music = music; this.timer = null; this.step = 0; this.mode = 'calm'; this.loops = {}; this.setAssets(dir, files); }
+  constructor(music, { dir = '', files = null, kit = null } = {}) { this.kit = kit; this.music = music; this.timer = null; this.step = 0; this.mode = 'calm'; this.loops = {}; this.setAssets(dir, files); }
   get ctx() { return this.music?.ctx; }
   get out() { return this.music?.master; }
   // ---------------- external samples (lazy, Web Audio buffers) ----------------
@@ -186,9 +186,19 @@ export class DisasterAudio {
     this.bus = null;
   }
 
+  /** One-shot from a loaded sample; false if not ready (then callers use the procedural sound). */
+  oneShot(name, vol = 1) {
+    const ctx = this.ctx, rec = this.bank?.[name]; if (!ctx || rec?.state !== 'ready') return false;
+    const src = ctx.createBufferSource(); src.buffer = rec.buffer; const g = ctx.createGain(); g.gain.value = vol * (this.files[name].gain ?? 1);
+    src.connect(g).connect(this.out); src.start(); return true;
+  }
   sfx(name, vol = 1) {
     const ctx = this.ctx; if (!ctx) return; const t = ctx.currentTime;
+    if (this.kit?.[name] && this.oneShot(this.kit[name], vol)) return;
     switch (name) {
+      case 'click': case 'open': this._tone(1200, t, 0.05, { vol: 0.05 }); break;
+      case 'close': this._tone(700, t, 0.06, { vol: 0.05 }); break;
+      case 'fall': this._tone(500, t, 0.6, { type: 'triangle', vol: 0.06, slideTo: 120 }); break;
       case 'siren': for (let k = 0; k < 3; k++) { this._tone(500, t + k * 0.9, 0.45, { type: 'sawtooth', vol: 0.05, slideTo: 900 }); this._tone(900, t + k * 0.9 + 0.45, 0.45, { type: 'sawtooth', vol: 0.05, slideTo: 500 }); } break;
       case 'boom': this._tone(90, t, 0.9, { type: 'sine', vol: 0.5 * vol, slideTo: 30 }); this._noise(t, 1.2, 0.35 * vol, 500, 'lowpass'); break;
       case 'whoosh': this._noise(t, 1.0, 0.08 * vol, 1800, 'bandpass', 2); break;

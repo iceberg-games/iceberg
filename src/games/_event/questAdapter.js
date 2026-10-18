@@ -7,33 +7,15 @@
 // The SERVER grants the cosmetic, once per account. This client never grants or equips an item itself:
 // it only reports progress and asks the server to complete the quest.
 //
-// Until src/core/quests.js lands on main, the API is resolved at runtime from window.iceberg.quests
-// (falling back to the older economy.questProgress / claimQuestReward names). If neither exists the
-// STUB below is used. It records calls, keeps local progress for the HUD, and grants nothing.
-const LS = 'iceberg:v1:ndquest:';
+// Wired to the Publisher's real API (src/core/quests.js, bound by main.js). If it isn't bound (e.g. a
+// standalone test page) every call fails soft and only local HUD progress is kept: nothing is granted.
+import { quests as coreQuests } from '../../core/quests.js';
 
-function realApi() {
-  const ic = (typeof window !== 'undefined' && window.iceberg) || {};
-  if (ic.quests && typeof ic.quests.progress === 'function') return ic.quests;
-  const e = ic.economy;
-  if (e && typeof e.questProgress === 'function' && typeof e.claimQuestReward === 'function') {
-    return { progress: (id, d) => e.questProgress(id, d), complete: (id) => e.claimQuestReward(id), status: (g) => e.questStatus?.(g) || [] };
-  }
-  return null;
+export function questApi() {
+  const w = typeof window !== 'undefined' && window.iceberg?.quests;
+  return w && typeof w.progress === 'function' ? w : coreQuests;
 }
-
-// ---------------- STUB (no server API yet). Never grants anything. ----------------
-export const STUB = {
-  isStub: true,
-  calls: { progress: [], complete: [] },
-  progress(id, delta = 1) { this.calls.progress.push([id, delta]); return { progress: null, goal: null, completed: false, stub: true }; },
-  async complete(id) { this.calls.complete.push(id); return { granted: false, itemId: null, alreadyClaimed: false, reason: 'server_api_pending' }; },
-  status() { return []; },
-};
-if (typeof window !== 'undefined') window.__icebergQuestStub = STUB;
-// -----------------------------------------------------------------------------------
-
-export function questApi() { return realApi() || STUB; }
+const unwrap = (r) => (r && r.quest ? { ...r, progress: r.quest.progress, goal: r.quest.goal, completed: r.quest.completed } : r);
 
 const load = (id) => { try { return JSON.parse(localStorage.getItem(LS + id)) || {}; } catch { return {}; } };
 const store = (id, s) => { try { localStorage.setItem(LS + id, JSON.stringify(s)); } catch { /* private mode */ } };
@@ -43,9 +25,11 @@ const store = (id, s) => { try { localStorage.setItem(LS + id, JSON.stringify(s)
  * progress call per flushMs) and complete() is called exactly once per session, when the goal is reached.
  * onChange(state) fires for the HUD: {progress, goal, done, claimed, pending, itemId}.
  */
-export function createQuestTracker(quest, { onChange = () => {}, onResult = () => {}, flushMs = 3000 } = {}) {
+export function createQuestTracker(quest, { onChange = () => {}, onResult = () => {}, flushMs } = {}) {
+  const maxPerCall = quest.maxPerCall ?? 1;
+  flushMs = flushMs ?? Math.max(3000, (quest.minIntervalMs ?? 2000) + 250); // never faster than the server allows
   const saved = load(quest.id);
-  const st = { progress: Math.min(quest.goal, saved.progress || 0), goal: quest.goal, claimed: !!saved.claimed, pending: false, itemId: quest.reward, done: false };
+  const st = { progress: Math.min(quest.goal, saved.progress || 0), goal: quest.goal, claimed: !!saved.claimed, pending: false, itemId: quest.rewardItemId, done: false };
   st.done = st.progress >= st.goal;
   let queued = 0, timer = null, completing = false, disposed = false;
   const emit = () => { if (!disposed) onChange({ ...st }); };
@@ -67,20 +51,22 @@ export function createQuestTracker(quest, { onChange = () => {}, onResult = () =
     let res;
     try { res = await questApi().complete(quest.id); } catch (e) { res = { granted: false, reason: 'network' }; }
     st.pending = false;
-    if (res?.granted || res?.alreadyClaimed) { st.claimed = true; st.itemId = res.itemId || quest.reward; persist(); }
+    if (res?.granted || res?.alreadyClaimed) { st.claimed = true; st.itemId = res.itemId || quest.rewardItemId; persist(); }
     else if (res?.reason === 'not_complete') completing = false; // server disagrees; allow one more try after more progress
     emit(); onResult(res || {});
   }
   function flush() {
     clearTimeout(timer); timer = null;
-    if (!queued) return;
-    const d = queued; queued = 0;
-    try {
-      Promise.resolve(questApi().progress(quest.id, d)).then((r) => {
-        if (r && r.progress != null) { st.progress = Math.max(st.progress, Math.min(st.goal, r.progress)); if (r.completed) st.done = true; persist(); emit(); }
-        if (st.done && !st.claimed) tryComplete();
-      }).catch(() => {});
-    } catch { if (st.done && !st.claimed) tryComplete(); }
+    if (!queued || disposed && !queued) return;
+    const d = Math.min(queued, maxPerCall); queued -= d;
+    const retry = (ms) => { queued += d; if (!timer && !disposed) timer = setTimeout(flush, Math.max(flushMs, ms || 0)); };
+    Promise.resolve().then(() => questApi().progress(quest.id, d)).then((raw) => {
+      const r = unwrap(raw);
+      if (r && r.ok === false) { if (r.reason === 'too_fast' || r.reason === 'network') retry(r.retryAfterMs); return; }
+      if (r && r.progress != null) { st.progress = Math.max(st.progress, Math.min(st.goal, r.progress)); if (r.completed) st.done = true; persist(); emit(); }
+      if (queued && !timer && !disposed) timer = setTimeout(flush, flushMs);
+      else if (!queued && st.done && !st.claimed) tryComplete();
+    }).catch(() => retry());
   }
   emit();
   return {
@@ -91,7 +77,7 @@ export function createQuestTracker(quest, { onChange = () => {}, onResult = () =
       if (st.progress >= st.goal) { flush(); return; }
       const d = Math.min(delta, st.goal - st.progress);
       st.progress += d; queued += d; st.done = st.progress >= st.goal; persist(); emit();
-      if (st.done) flush(); else if (!timer) timer = setTimeout(flush, flushMs);
+      if (!timer) timer = setTimeout(flush, st.done ? 0 : flushMs);
     },
     flush,
     dispose() { flush(); disposed = true; },

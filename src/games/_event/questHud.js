@@ -28,7 +28,7 @@ export class QuestHud {
     const q = this.quest, pct = Math.round((s.progress / s.goal) * 100);
     const status = s.claimed ? '✅ Unlocked!' : s.pending ? 'Claiming…' : s.done ? 'Complete! Reward pending server' : `${s.progress} / ${s.goal}`;
     this.el.classList.toggle('done', s.done || s.claimed);
-    this.el.innerHTML = `<div class="t">🌪 Natural Disasters event</div><div class="n">${q.title}</div><div class="d">${q.description}</div><div class="b"><i style="width:${pct}%"></i></div><div class="r">${status} · 🎁 ${q.rewardName} <code>${q.reward}</code></div>`;
+    this.el.innerHTML = `<div class="t">🌪 Natural Disasters event</div><div class="n">${q.title}</div><div class="d">${q.description}</div><div class="b"><i style="width:${pct}%"></i></div><div class="r">${status} · 🎁 ${q.rewardName} <code>${q.rewardItemId}</code></div>`;
   }
   dispose() { this._off?.(); this.el.remove(); if (!--refs) styleEl?.remove(); }
 }
