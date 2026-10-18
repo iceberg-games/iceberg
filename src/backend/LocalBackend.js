@@ -71,11 +71,13 @@ export class LocalBackend {
 
   // ---- events + quests (guest / offline only: a local mirror of the server rules, nothing leaves the device) ----
   // Local event window: from the event's QUESTS startsAt/endsAt when given, else an active 7-day window
-  // from this device's first run. Same shape as the server's event_status().
+  // from this device's first run; an event with no quests in this build is unscheduled (never live offline). Same shape as the server's event_status().
   eventStatus(eventId, now = Date.now()) {
     const ev = read('events', {});
     if (!ev[eventId]) { ev[eventId] = { firstRun: now }; write('events', ev); }
     const qs = questDefs().filter(q => q.eventId === eventId);
+    // no quest in this build belongs to the event (game not shipped yet): unscheduled, like the server's seed row
+    if (!qs.length) return { eventId, title: null, startsAt: null, endsAt: null, claimUntil: null, active: false, serverNow: new Date(now).toISOString(), local: true, unscheduled: true };
     const starts = qs.map(q => q.startsAt && Date.parse(q.startsAt)).filter(Number.isFinite);
     const ends = qs.map(q => q.endsAt && Date.parse(q.endsAt)).filter(Number.isFinite);
     const s0 = starts.length ? Math.min(...starts) : ev[eventId].firstRun;

@@ -148,7 +148,9 @@ limiting) over the real migrations. Don't expose it to the internet.
 
 Migration 8 seeds `public.game_events` row `natural_disasters` with **no dates**. Until they are set, the event is "not started": the Hunt menu shows no countdown and quest progress is refused.
 
-**At release (the deploy step), set the window.** Unless Colin or Jojo give dates, it starts at deploy time and ends 7 days later:
+**Release A (multiplayer/quests infrastructure, no Natural Disaster Survival): do NOT set the window.** Leave `natural_disasters` unscheduled. While it is unscheduled or not started, every event cosmetic (the buyable `event:` items and the earnOnly quest rewards) is hidden in the shop (`economy.shopVisible`), `buy_cosmetic` refuses them with `event_not_started`, and there are no quests.
+
+**At the event release (the deploy that ships the game), set the window.** Unless Colin or Jojo give dates, it starts at deploy time and ends 7 days later:
 
 ```bash
 . /workspace/iceberg-ops/load-env.sh && export SUPABASE_ACCESS_TOKEN="$SB_ACCESS_TOKEN" SUPABASE_PROJECT_REF="$SB_PROJECT_REF"

@@ -431,20 +431,26 @@ export class Economy {
   itemAvailability(id, now = Date.now()) {
     const item = COSMETIC_BY_ID[id], ev = eventOfItem(item);
     if (!item) return { forSale: false, limited: false, state: 'unknown_item' };
-    if (isGrantOnly(item)) return { forSale: false, limited: !!ev, eventId: ev, state: 'not_for_sale' };
-    if (!ev) return { forSale: true, limited: false };
+    if (!ev) return isGrantOnly(item) ? { forSale: false, limited: false, state: 'not_for_sale' } : { forSale: true, limited: false };
     let st, t = now;
     if (!this.remote) st = this.backend.eventStatus(ev, now);
     else {
       const c = this._evCache?.[ev];
       if (!c || now - c.at > 60000) { if (!this._evPending?.[ev]) { (this._evPending ||= {})[ev] = this.eventStatus(ev).finally(() => { delete this._evPending[ev]; }); } }
-      if (!c) return { forSale: true, limited: true, eventId: ev, state: 'unknown' };
+      if (!c) return { forSale: !isGrantOnly(item), limited: true, eventId: ev, state: 'unknown', hidden: true };
       st = c.status; t = now + c.offset;
     }
     const s0 = st.startsAt ? Date.parse(st.startsAt) : null, e0 = st.endsAt ? Date.parse(st.endsAt) : null;
-    const state = e0 != null && t >= e0 ? 'event_ended' : (s0 == null || t < s0) ? 'event_not_started' : st.active === false ? 'event_ended' : 'live';
-    return { forSale: state === 'live', limited: true, eventId: ev, state, startsAt: st.startsAt || null, endsAt: st.endsAt || null,
-      msLeft: state === 'live' && e0 != null ? e0 - t : null };
+    const evState = e0 != null && t >= e0 ? 'event_ended' : (s0 == null || t < s0) ? 'event_not_started' : st.active === false ? 'event_ended' : 'live';
+    const hidden = evState === 'event_not_started';                    // unscheduled / not started: not shown in the shop at all
+    if (isGrantOnly(item)) return { forSale: false, limited: true, eventId: ev, state: 'not_for_sale', eventState: evState, hidden };
+    return { forSale: evState === 'live', limited: true, eventId: ev, state: evState, eventState: evState, hidden, startsAt: st.startsAt || null, endsAt: st.endsAt || null,
+      msLeft: evState === 'live' && e0 != null ? e0 - t : null };
+  }
+  /** Shop listing rule: event items (sold or quest-earned) stay hidden until their event has started; owned items always show. */
+  shopVisible(id, now = Date.now()) {
+    if (this.owns(id)) return true;
+    return !this.itemAvailability(id, now).hidden;
   }
   /** Grant the quest's reward cosmetic once. Resolves { granted, itemId, alreadyClaimed?, reason? }. */
   async claimQuestReward(questId) {

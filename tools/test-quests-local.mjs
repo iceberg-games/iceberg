@@ -73,11 +73,21 @@ assert.ok(!b.getQuests('frost-fields', t0 + 9 * 86400e3).some(x => x.id === 'zz_
   COSMETICS.push(it); COSMETIC_BY_ID[it.id] = it;
   const t0 = Date.now();
   let av = eco.itemAvailability(it.id, t0);
+  { const nq = { id: 'zz_nq_hat', name: 'NQ', slot: 'hat', price: 10, event: 'zz_noquest' }, eo = { id: 'zz_nq_earn', name: 'NQE', slot: 'hat', price: 0, earnOnly: true, event: 'zz_noquest' };
+    for (const x of [nq, eo]) { COSMETICS.push(x); COSMETIC_BY_ID[x.id] = x; }
+    const a1 = eco.itemAvailability(nq.id, t0);                                      // event with no quests in this build: unscheduled
+    assert.equal(a1.state, 'event_not_started'); assert.equal(a1.hidden, true); assert.equal(a1.forSale, false);
+    assert.equal(eco.shopVisible(nq.id), false); assert.equal(eco.shopVisible(eo.id), false); assert.equal(eco.shopVisible('scarf'), true);
+    for (const x of [nq, eo]) { COSMETICS.splice(COSMETICS.indexOf(x), 1); delete COSMETIC_BY_ID[x.id]; } }
+  const unsched = eco.backend.eventStatus.bind(eco.backend);
+  eco.backend.eventStatus = (id, now = Date.now()) => id === 'zz_local' ? { ...unsched(id, now), startsAt: new Date(t0 - 1000).toISOString(), endsAt: new Date(t0 + 7 * 86400e3).toISOString(), active: true } : unsched(id, now);
+  av = eco.itemAvailability(it.id, t0);
+  assert.equal(eco.shopVisible(it.id), true);
   assert.equal(av.forSale, true); assert.equal(av.limited, true); assert.equal(av.state, 'live'); assert.ok(av.msLeft > 6 * 86400e3);
   assert.equal(eco.itemAvailability(it.id, t0 + 8 * 86400e3).state, 'event_ended');
   assert.deepEqual(eco.itemAvailability('scarf'), { forSale: true, limited: false });
   if (COSMETIC_BY_ID.tornado_hat) assert.equal(eco.itemAvailability('tornado_hat').state, 'not_for_sale');
-  const real = eco.backend.eventStatus.bind(eco.backend);
+  const real = eco.backend.eventStatus;
   eco.profile.coins = 500;
   eco.backend.eventStatus = (id, now) => ({ ...real(id, now), startsAt: new Date(t0 + 3600e3).toISOString(), active: false });
   let r = eco.buy(it.id); assert.equal(r.ok, false); assert.equal(r.code, 'event_not_started'); assert.equal(eco.coins, 500);
@@ -86,11 +96,11 @@ assert.ok(!b.getQuests('frost-fields', t0 + 9 * 86400e3).some(x => x.id === 'zz_
   eco.backend.eventStatus = (id, now) => ({ ...real(id, now), endsAt: new Date(t0 - 1000).toISOString(), active: false });
   r = eco.buy(it.id); assert.equal(r.reason, 'Already owned');                                  // owned copy is kept
   assert.equal(eco.equip(it.id), true);
-  eco.backend.eventStatus = real;
+  eco.backend.eventStatus = unsched;
   // signed-in: unknown until the first event_status arrives, then the server window (serverNow offset applied)
   const fakeRemote = { eventStatus: async (id) => ({ eventId: id, startsAt: new Date(t0 - 86400e3).toISOString(), endsAt: new Date(t0 + 3600e3).toISOString(), active: true, serverNow: new Date().toISOString() }) };
   const eco2 = new Economy(new LocalBackend()); eco2.remote = fakeRemote;
-  assert.equal(eco2.itemAvailability(it.id).state, 'unknown');
+  assert.equal(eco2.itemAvailability(it.id).state, 'unknown'); assert.equal(eco2.itemAvailability(it.id).hidden, true); assert.equal(eco2.shopVisible(it.id), true);   // hidden until known, unless owned
   await new Promise(r => setTimeout(r, 20));
   av = eco2.itemAvailability(it.id); assert.equal(av.state, 'live'); assert.ok(av.msLeft > 3500e3 && av.msLeft <= 3600e3);
   assert.equal(eco2.itemAvailability(it.id, Date.now() + 2 * 3600e3).state, 'event_ended');
