@@ -1,0 +1,7 @@
+{
+  "_comment": "Fallback featured-game banner list shipped with the site (used offline / before the backend is live). Live list: public.featured_games (see DEPLOY.md). Also seeds that table on first deploy.",
+  "featured": [
+    { "gameId": "giant-rainbow-obby", "blurb": "1000 rainbow stages over glowing lava. How far can you climb?", "image": "featured/giant-rainbow-obby.png" },
+    { "gameId": "birg-hq", "blurb": "Warm up by the fireplace in the coziest log cabin on the glacier.", "image": "featured/birg-hq.png" }
+  ]
+}

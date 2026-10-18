@@ -15,6 +15,8 @@ import { signIn, signUp, validateCredentials } from '../net/auth.js';
 import { getDeviceMode, setDeviceMode, onDeviceChange } from '../core/device.js';
 import { registerServiceWorker } from '../net/pwa.js';
 import { mountChatRoom } from '../chat/chatRoom.js';
+import { loadGameStats, SORTS } from '../net/gameStats.js';
+import { loadFeatured, createFeaturedBanner } from './featured.js';
 
 const root = document.getElementById('portal');
 if (CONFIG.isSite) document.body.classList.add('iceberg-site');
@@ -22,7 +24,8 @@ document.body.classList.add('portal-page');
 const economy = new Economy(backend);
 let remote = null;
 let view = new URLSearchParams(location.search).get('view') || 'games';
-let chatRoom = null, friendsTimer = null;
+let chatRoom = null, friendsTimer = null, banner = null;
+let gameSort = new URLSearchParams(location.search).get('sort') || 'newest';
 
 const toastBox = h('div.p-toasts');
 function toast(text, icon = 'ℹ️') {
@@ -51,14 +54,40 @@ function nav() {
 }
 
 function gamesView() {
-  const card = (def) => h('div.game-card', { 'data-game': def.id },
+  const publicApi = getRemote();     // stats + featured are public: works for guests too when accounts are configured
+  const bannerHolder = h('div#featured-holder');
+  const grid = h('div.p-grid#games-grid', h('p.muted', 'Loading games…'));
+  const note = h('p.muted.small#games-note');
+  const tab = (id, label) => h('button' + (gameSort === id ? '.on' : ''), { type: 'button', 'data-sort': id, onclick: () => { gameSort = id; const u = new URL(location.href); u.searchParams.set('sort', id); history.replaceState(null, '', u); fill(); sortBar.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.sort === id)); } }, label);
+  const sortBar = h('div.p-sort#games-sort', { role: 'tablist' }, tab('newest', '🆕 Newest'), tab('popular', '🔥 Most Popular'), tab('active', '👥 Most Active Players'));
+  const defsById = Object.fromEntries(BUILTIN_GAMES.map(d => [d.id, d]));
+  loadFeatured(publicApi).then(({ items }) => {
+    banner?.destroy(); banner = createFeaturedBanner(items, defsById, { onPlay: openGame, playUrl });
+    if (banner) bannerHolder.append(banner.el);
+  });
+  let stats = null;
+  async function fill() {
+    if (!stats) stats = await loadGameStats(BUILTIN_GAMES, publicApi);
+    const list = [...stats.games];
+    clear(note);
+    if (gameSort === 'active' && !stats.online) note.textContent = 'Live player counts are not available offline.';
+    if (gameSort === 'popular') note.textContent = stats.online ? 'Plays in the last 7 days.' : 'Your plays on this device in the last 7 days (offline).';
+    list.sort(SORTS[gameSort] || SORTS.newest);
+    clear(grid).append(...list.map(g => card(g)));
+  }
+  const card = ({ def, visits, playing, publishedAt }) => h('div.game-card', { 'data-game': def.id },
     h('div.thumb', { style: { backgroundImage: `url(${thumb(def.thumbnail)})` } }),
-    h('div.gc-body', h('div.gc-name', def.name), h('div.gc-tag', def.tagline || ''), h('div.gc-desc', def.description || '')),
+    h('div.gc-body', h('div.gc-name', def.name), h('div.gc-tag', def.tagline || ''), h('div.gc-desc', def.description || ''),
+      h('div.gc-stats', [
+        gameSort === 'newest' && publishedAt ? `🆕 ${new Date(publishedAt).toLocaleDateString()}` : null,
+        gameSort === 'popular' ? `🔥 ${visits} plays (7 days)` : null,
+        gameSort === 'active' ? (playing == null ? '👥 offline' : `👥 ${playing} playing now`) : null].filter(Boolean).join(' '))),
     h('div.gc-actions', h('a.btn.play', { href: playUrl(def.id), target: '_blank', rel: 'noopener', onclick: (e) => { e.preventDefault(); openGame(def.id); } }, '▶ Play')));
-  return h('section.p-view#view-games',
+  fill();
+  return h('section.p-view#view-games', bannerHolder,
     h('h2', 'Games'),
     h('p.muted', 'Each game opens in a new tab. Your avatar, cosmetics and Birg Bucks follow you everywhere.'),
-    h('div.p-grid', BUILTIN_GAMES.map(card)),
+    sortBar, note, grid,
     h('p.muted.small', getDeviceMode() === 'computer' ? 'Want to make your own? Open any game and press Create on the Games screen.' : ''));
 }
 
@@ -162,7 +191,7 @@ async function signOutNow() {
 function go(v) { view = v; const u = new URL(location.href); u.searchParams.set('view', v); history.replaceState(null, '', u); render(); }
 
 function render() {
-  chatRoom?.destroy(); chatRoom = null; clearInterval(friendsTimer);
+  chatRoom?.destroy(); chatRoom = null; clearInterval(friendsTimer); banner?.destroy(); banner = null;
   const views = { games: gamesView, chat: chatView, friends: friendsView, settings: settingsView, account: accountView };
   clear(root).append(h('div.snowbg'), h('div.p-wrap', header(), nav(), (views[view] || gamesView)()), toastBox);
 }
@@ -174,4 +203,4 @@ render();
   render();
   registerServiceWorker('./');
 })();
-window.icebergPortal = { economy, get remote() { return remote; }, get chatRoom() { return chatRoom; }, go, render, playUrl };
+window.icebergPortal = { economy, get remote() { return remote; }, get chatRoom() { return chatRoom; }, get banner() { return banner; }, go, render, playUrl };
