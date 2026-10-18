@@ -125,3 +125,23 @@ for (const c of [
     colorPresets: [['Snow Cloud', '#e9f2fa'], ['Storm', '#7d8796'], ['Pink Dusk', '#f3c6da'], ['Night Sky', '#3b4566']],
     desc: 'Your own personal storm cloud, snowing softly on you wherever you go. Earned in Natural Disasters.' },
 ]) { const item = { ...ND, ...c }; COSMETICS.push(item); COSMETIC_BY_ID[item.id] = item; }
+
+// ---- Natural Disasters themed shop items (buyable, not earn-only) + more icy/cozy extras.
+for (const c of [
+  { id: 'storm_goggles', name: 'Storm Chaser Goggles', slot: 'face', price: 200, icon: '🥽', rarity: 'rare', event: 'natural_disasters',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#3fd0ff',
+    colorPresets: [['Radar Cyan', '#3fd0ff'], ['Warning Amber', '#ffb020'], ['Siren Red', '#ff4a4a'], ['Night Vision', '#5dff7a']],
+    desc: 'Rugged storm-chaser goggles with a live radar sweep on the visor and a brow lamp. Seen any twisters lately?' },
+  { id: 'hail_umbrella', name: 'Hailstone Umbrella', slot: 'hand', price: 240, icon: '☂️', rarity: 'epic', event: 'natural_disasters',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#3f6fd8',
+    colorPresets: [['Storm Blue', '#3f6fd8'], ['Hazard Yellow', '#f2c230'], ['Cherry', '#d8344a'], ['Charcoal', '#3a3f48']],
+    desc: 'A sturdy storm umbrella. Hailstones bounce right off it. Built for the worst the weather can throw.' },
+  { id: 'aurora_skin', name: 'Aurora Frost Skin', slot: 'skin', price: 400, icon: '🌌', rarity: 'epic',
+    kind: 'skin', winter: true, customizable: true, shimmer: true, color: '#8fe8ff', defaultColor: '#8fe8ff',
+    colorPresets: [['Polar Teal', '#8fe8ff'], ['Borealis Green', '#8affc1'], ['Violet Sky', '#c4a0ff'], ['Rose Dawn', '#ffb3d1']],
+    desc: 'Your skin glows with the slow, shifting shimmer of the northern lights.' },
+  { id: 'ice_skates', name: 'Ice Skates', slot: 'back', price: 180, icon: '⛸️', rarity: 'common',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#f4f1ea',
+    colorPresets: [['Classic White', '#f4f1ea'], ['Midnight Black', '#23262d'], ['Berry', '#b3245c'], ['Lake Blue', '#3f8fd0']],
+    desc: 'A pair of figure skates tied together and slung over your shoulder, ready for the frozen lake.' },
+]) { COSMETICS.push(c); COSMETIC_BY_ID[c.id] = c; }
