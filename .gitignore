@@ -9,3 +9,6 @@ playwright-report/
 .env.*
 dist-site/
 .devdb/
+
+# local-only test scripts (kept out of the published repo)
+scripts/rocket-*
