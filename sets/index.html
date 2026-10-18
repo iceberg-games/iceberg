@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex" />
+  <title>Iceberg Sets</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: 'Nunito', system-ui, sans-serif; }
+    #stage { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+    #stage canvas { display: block; }
+    body.clean, body.clean * { cursor: none !important; }
+    body.clean .ui { display: none !important; }
+    #help { position: fixed; top: 12px; left: 12px; width: 300px; max-height: calc(100% - 24px); overflow: auto; padding: 12px 14px;
+      background: rgba(10, 22, 44, 0.78); color: #e8f4ff; border: 1px solid rgba(160, 210, 255, 0.35); border-radius: 12px;
+      font-size: 12.5px; line-height: 1.45; backdrop-filter: blur(6px); }
+    #help h1 { font-size: 15px; margin: 0 0 6px; color: #9fe3ff; }
+    #help h2 { font-size: 11px; margin: 10px 0 3px; text-transform: uppercase; letter-spacing: .08em; color: #8fb6d8; }
+    #help kbd { display: inline-block; min-width: 14px; padding: 0 4px; border-radius: 4px; background: #23406b; color: #fff; font: 11px/16px ui-monospace, monospace; text-align: center; }
+    #help .row { display: flex; gap: 6px; }
+    #status { position: fixed; bottom: 12px; left: 12px; padding: 6px 10px; background: rgba(10,22,44,.7); color: #cfe7ff; border-radius: 8px; font: 12px ui-monospace, monospace; }
+    #toast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); padding: 7px 14px; background: rgba(10,22,44,.85); color: #fff; border-radius: 10px; font-size: 13px; opacity: 0; transition: opacity .25s; pointer-events: none; }
+    #toast.on { opacity: 1; }
+    .bar { position: fixed; left: 0; right: 0; background: #000; height: 0; transition: height .6s ease; pointer-events: none; z-index: 5; }
+    #barT { top: 0; } #barB { bottom: 0; }
+  </style>
+</head>
+<body>
+  <div id="stage"></div>
+  <div class="bar" id="barT"></div><div class="bar" id="barB"></div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

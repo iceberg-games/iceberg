@@ -12,3 +12,7 @@ dist-site/
 
 # local-only test scripts (kept out of the published repo)
 scripts/rocket-*
+dist-sets/
+# set stills are regenerated with scripts/sets-shots.mjs (keep only the preview)
+sets/*/shots/*
+!sets/*/shots/preview-for-colin.png
