@@ -32,7 +32,13 @@ try {
   check('Play opens the game in a new tab', /\/play\/\?game=giant-rainbow-obby$/.test(tab.url()), tab.url());
   await tab.waitForFunction(() => window.iceberg?.economy?.remote, null, { timeout: 25000 }).catch(() => {});
   check('game tab shares the signed-in session', await tab.evaluate(() => !!window.iceberg?.economy?.remote));
+  await tab.waitForSelector('#start-btn', { timeout: 20000 }); await tab.click('#start-btn');   // title screen Start (unlocks audio), then ?game= auto-launches
+  await tab.waitForFunction(() => window.iceberg?.engine?.game?.obby, null, { timeout: 30000 }).catch(() => {});
+  const g = await tab.evaluate(() => ({ loaded: !!window.iceberg?.engine?.game?.obby, canvas: !!document.querySelector('canvas') }));
+  check('game loads in the new tab (Giant Rainbow Obby running)', g.loaded && g.canvas, JSON.stringify(g));
+  await tab.waitForTimeout(1500); await tab.screenshot({ path: '/tmp/live-play.png' });
   await tab.close();
+  await p.screenshot({ path: '/tmp/live-portal.png' });
   check('no page errors', errs.length === 0, errs.join(' | ').slice(0, 400));
 } catch (e) { check('unexpected error', false, e.stack); }
 await b.close();
