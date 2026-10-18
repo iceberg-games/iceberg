@@ -38,7 +38,7 @@ $$;
 
 create or replace function public._mp_roster(g text, i int) returns jsonb
 language sql stable security definer set search_path = public as $$
-  select coalesce(jsonb_agg(public._public_player(p) || jsonb_build_object('joinedAt', m.joined_at) order by m.joined_at, p.username), '[]'::jsonb)   -- joinedAt: host = earliest present
+  select coalesce(jsonb_agg(public._public_player(p) order by m.joined_at), '[]'::jsonb)
   from public.mp_members m join public.profiles p on p.id = m.user_id
   where m.game_id = g and m.instance_id = i and m.last_seen > now() - make_interval(secs => public._cfg('mp_member_ttl_s'))
 $$;
@@ -85,7 +85,7 @@ begin
     on conflict (user_id) do update set game_id = excluded.game_id, instance_id = excluded.instance_id, last_seen = now(),
       joined_at = case when public.mp_members.game_id = excluded.game_id and public.mp_members.instance_id = excluded.instance_id
                        then public.mp_members.joined_at else now() end;
-  return jsonb_build_object('ok', true, 'serverNow', now(), 'gameId', p_game_id, 'instance', v_inst, 'topic', public._mp_topic(p_game_id, v_inst),
+  return jsonb_build_object('ok', true, 'gameId', p_game_id, 'instance', v_inst, 'topic', public._mp_topic(p_game_id, v_inst),
     'cap', v_cap, 'sendHz', public._mp_send_hz(), 'note', v_note, 'roster', public._mp_roster(p_game_id, v_inst));
 end $$;
 
@@ -96,7 +96,7 @@ declare v_uid uuid := public._uid();
 begin
   update public.mp_members set last_seen = now() where user_id = v_uid and game_id = p_game_id and instance_id = p_instance;
   if not found then return jsonb_build_object('ok', false, 'reason', 'rejoin'); end if;
-  return jsonb_build_object('ok', true, 'serverNow', now(), 'sendHz', public._mp_send_hz(), 'roster', public._mp_roster(p_game_id, p_instance));
+  return jsonb_build_object('ok', true, 'sendHz', public._mp_send_hz(), 'roster', public._mp_roster(p_game_id, p_instance));
 end $$;
 
 create or replace function public.mp_leave() returns void
