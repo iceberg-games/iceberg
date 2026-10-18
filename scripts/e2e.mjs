@@ -168,10 +168,12 @@ if (want('site')) {
       const cb = await c1.newPage(); const ecb = []; watch(cb, ecb);
       const glb = cb.waitForResponse(r => /bakery-props-[\w-]+\.glb/.test(r.url()), { timeout: 30000 }).catch(() => null);
       await cb.goto(BASE + 'play/?game=corner-bakery');
+      await cb.waitForSelector('#start-btn'); await cb.click('#start-btn');
       const gr = await glb;
       check('corner-bakery: props .glb served beside play/ and loads on demand', !!gr && gr.ok() && gr.url().startsWith(BASE + 'play/'), gr ? gr.status() + ' ' + gr.url() : 'no request');
       await cb.waitForTimeout(2500);
-      check('corner-bakery: starts on the site build without errors', ecb.length === 0, ecb.join(' | '));
+      await cb.waitForSelector('[class*=cbr-]', { timeout: 20000 }).catch(() => {});
+      check('corner-bakery: starts on the site build without errors (HUD up)', ecb.length === 0 && !!(await cb.$('[class*=cbr-]')), ecb.join(' | '));
       await cb.close();
     }
     await p1.evaluate(() => localStorage.setItem('iceberg:v1:profile', JSON.stringify({ coins: 300, demoGranted: 0, owned: ['cap', 'icerocket'], equipped: { hat: 'cap', back: 'icerocket' },

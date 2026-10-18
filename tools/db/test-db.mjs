@@ -613,6 +613,46 @@ await t('events: event_status (anon, serverNow), admin-only window, quest window
   assert.throws(() => eventWindowSQL("x'; drop table y; --", {}));
   await su(db, `delete from public.quest_defs where quest_id = 'zz_hunt_q' and not exists (select 1 from public.quest_progress where quest_id = 'zz_hunt_q')`);
 });
+await t('limited-time shop items: buy_cosmetic sells event items only while the event is live (no grace); owned kept; guest import window', async () => {
+  await su(db, `insert into public.game_events (id, title, starts_at, ends_at) values ('zz_sale', 'ZZ Sale', now() + interval '1 day', now() + interval '8 days')`);
+  await su(db, `insert into public.catalog_items (id, name, slot, price, event_id) values ('zz_sale_goggles', 'ZZ Goggles', 'hat', 200, 'zz_sale'), ('zz_sale_skates', 'ZZ Skates', 'back', 180, 'zz_sale')`);
+  const U = await createUser(db, { username: 'zz_shopper' }), V = await createUser(db, { username: 'zz_shopper2' });
+  await su(db, `update public.profiles set coins = 1000 where id = any($1)`, [[U, V]]);
+  const setWin = (s0, e0) => su(db, `update public.game_events set starts_at = now() + interval '${s0}', ends_at = now() + interval '${e0}' where id = 'zz_sale'`);
+  const coins = async (u) => Number((await su(db, `select coins from public.profiles where id = $1`, [u]))[0].coins);
+  let r = await rpc(db, U, 'buy_cosmetic', { p_item_id: 'zz_sale_goggles' });
+  assert.equal(r.ok, false); assert.equal(r.reason, 'event_not_started'); assert.equal(r.event, 'zz_sale'); assert.equal(await coins(U), 1000);
+  await su(db, `update public.game_events set starts_at = null where id = 'zz_sale'`);          // unscheduled = not started
+  assert.equal((await rpc(db, U, 'buy_cosmetic', { p_item_id: 'zz_sale_goggles' })).reason, 'event_not_started');
+  await setWin('-1 day', '6 days');
+  r = await rpc(db, U, 'buy_cosmetic', { p_item_id: 'zz_sale_goggles' });
+  assert.equal(r.ok, true); assert.equal(r.coins, 800);
+  assert.equal((await rpc(db, U, 'buy_cosmetic', { p_item_id: 'zz_sale_goggles' })).reason, 'already_owned');
+  await su(db, `update public.game_events set active = false where id = 'zz_sale'`);           // paused by admin
+  assert.equal((await rpc(db, V, 'buy_cosmetic', { p_item_id: 'zz_sale_goggles' })).reason, 'event_ended');
+  await su(db, `update public.game_events set active = true where id = 'zz_sale'`);
+  await setWin('-8 days', '-1 hour');                                                          // ended, inside claim grace: no sales
+  r = await rpc(db, V, 'buy_cosmetic', { p_item_id: 'zz_sale_skates' });
+  assert.equal(r.ok, false); assert.equal(r.reason, 'event_ended'); assert.equal(await coins(V), 1000);
+  assert.equal((await rpc(db, U, 'buy_cosmetic', { p_item_id: 'zz_sale_goggles' })).reason, 'already_owned');
+  const inv = await su(db, `select item_id from public.inventory where user_id = $1 and item_id = 'zz_sale_goggles'`, [U]);
+  assert.equal(inv.length, 1);                                                                  // kept forever
+  r = await rpc(db, U, 'save_loadout', { p_equipped: { hat: 'zz_sale_goggles' } });
+  assert.equal(r.equipped?.hat ?? r.profile?.equipped?.hat, 'zz_sale_goggles');                // still equippable after the event
+  // guest import: limited items only from event start until end + claim grace
+  const W = await createUser(db, { username: 'zz_importer' }), X = await createUser(db, { username: 'zz_importer2' });
+  r = await rpc(db, W, 'migrate_local_profile', { p_local: { coins: 0, owned: ['zz_sale_skates', 'scarf'] } });
+  assert.deepEqual([...r.items].sort(), ['scarf', 'zz_sale_skates']);                         // ended 1 h ago: inside 24 h grace
+  await setWin('-9 days', '-2 days');
+  r = await rpc(db, X, 'migrate_local_profile', { p_local: { coins: 0, owned: ['zz_sale_skates', 'scarf'] } });
+  assert.deepEqual([...r.items], ['scarf']);
+  // sync writes event_id from Cosmetics' `event:` field
+  const { toSQL, validate } = await import(resolve(ROOT, 'scripts/sync-catalog.mjs'));
+  const items = [{ id: 'zz_sale_goggles', name: 'ZZ Goggles', slot: 'hat', price: 200, event: 'zz_sale2', rarity: 'rare' }];
+  assert.deepEqual(validate({ items, phrases: [] }), []);
+  assert.match(toSQL({ items, phrases: [] }), /insert into public\.game_events \(id, title\) values\n  \('zz_sale2'/);
+  assert.deepEqual(validate({ items: [{ ...items[0], event: 'Bad Id!' }], phrases: [] }).length, 1);
+});
 await db.close();
 for (const r of results) console.log(r[0], r[1], r[2] ? '\n     ' + r[2] : '');
 const failed = results.filter(r => r[0] === 'FAIL').length;
