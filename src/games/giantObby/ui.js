@@ -1,6 +1,8 @@
 // DOM overlay for the Giant Rainbow Obby (stage panel, skip button, gear
 // hotbar, death popup, banners). Styles are injected and removed with the game,
 // so no shared CSS is touched.
+import { getDeviceMode, onDeviceChange } from '../../core/device.js';
+
 const CSS = `
 .gro-root{position:absolute;inset:0;pointer-events:none;z-index:12;font-family:inherit}
 .gro-root button{pointer-events:auto;font-family:inherit;cursor:pointer}
@@ -36,13 +38,15 @@ const CSS = `
 .gro-banner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
 .gro-help{position:absolute;right:16px;top:76px;background:rgba(255,255,255,.85);border-radius:12px;padding:8px 12px;font-size:12px;font-weight:700;color:#345;max-width:220px}
 .gro-reset{position:absolute;right:16px;bottom:170px;border:0;border-radius:12px;padding:8px 12px;font-weight:900;font-size:13px;color:#fff;background:rgba(20,30,50,.6)}
+.gro-mobile .gro-slot{width:60px;height:60px}.gro-mobile .gro-skip{padding:14px 18px}.gro-mobile .gro-reset{padding:12px 14px}
+.gro-mobile .gro-help{display:none}
 .gro-root button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
-@media (max-width:700px),(pointer:coarse) and (max-height:500px){
- .gro-stage{top:56px;min-width:0;width:min(70vw,260px);padding:4px 10px 6px}
+@media (max-width:700px){
+ .gro-stage{top:100px;min-width:0;width:min(70vw,260px);padding:4px 10px 6px}
  .gro-stage .gro-num{font-size:18px}.gro-stage .gro-sec{font-size:9px}
- .gro-skip{bottom:auto;top:130px;right:8px;padding:8px 10px;font-size:12px}
- .gro-reset{bottom:auto;top:186px;right:8px}
- .gro-hotbar{left:50%;transform:translateX(-50%);bottom:auto;top:130px}
+ .gro-skip{bottom:auto;top:176px;right:8px;padding:8px 10px;font-size:12px}
+ .gro-reset{bottom:auto;top:232px;right:8px}
+ .gro-hotbar{left:8px;bottom:auto;top:176px;flex-direction:column}
  .gro-slot{width:52px;height:52px;font-size:22px}
  .gro-pop{min-width:0;width:calc(100vw - 24px);bottom:auto;top:50%;transform:translate(-50%,-40%);padding:10px}
  .gro-pop.show{transform:translate(-50%,-50%)}
@@ -80,6 +84,8 @@ export class ObbyUI {
     this.onToggleGear = onToggleGear;
     this.root.append(this.flash, this.panel, this.help, this.skip, this.reset, this.hotbar, this.pop, this.banner);
     document.getElementById('app').append(this.root);
+    const applyMode = () => this.root.classList.toggle('gro-mobile', getDeviceMode() === 'mobile');
+    applyMode(); this._offDev = onDeviceChange(applyMode);
     setTimeout(() => this.help.remove(), 12000);
   }
   setStage(stage, sectionName) {
@@ -110,5 +116,5 @@ export class ObbyUI {
     this.banner.innerHTML = `${title}${sub ? `<small>${sub}</small>` : ''}`; this.banner.classList.add('show');
     clearTimeout(this._bT); this._bT = setTimeout(() => this.banner.classList.remove('show'), 2600);
   }
-  dispose() { clearTimeout(this._popT); clearTimeout(this._bT); this.root.remove(); this.style.remove(); }
+  dispose() { if (typeof this._offDev === 'function') this._offDev(); clearTimeout(this._popT); clearTimeout(this._bT); this.root.remove(); this.style.remove(); }
 }

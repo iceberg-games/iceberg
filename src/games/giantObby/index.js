@@ -301,9 +301,16 @@ export default {
     // simulated keys from on-screen touch controls work exactly like a keyboard.
     const prevKeys = {};
     const pressed = (code) => { const d = engine.input.down(code), was = prevKeys[code]; prevKeys[code] = d; return d && !was; };
+    const hotkey = (code) => {
+      const m = /^Digit([1-3])$/.exec(code);
+      if (m && !engine.game?.buildMode) { const id = backpack.items[+m[1] - 1]; if (id) api.toggleGear(id); }
+      if (code === 'KeyR' && dying <= 0) die('reset');
+    };
+    let alive = true;
+    // engine.input.onKey catches very short key taps between frames (it has no off(), so guard with alive).
+    engine.input.onKey((e) => { if (!alive || engine.game !== game || prevKeys[e.code]) return; if (/^(Digit[1-3]|KeyR)$/.test(e.code)) { prevKeys[e.code] = true; hotkey(e.code); } });
     const pollKeys = () => {
-      for (let n = 1; n <= 3; n++) if (pressed(`Digit${n}`) && !engine.game?.buildMode) { const id = backpack.items[n - 1]; if (id) api.toggleGear(id); }
-      if (pressed('KeyR') && dying <= 0) die('reset');
+      for (const code of ['Digit1', 'Digit2', 'Digit3', 'KeyR']) if (pressed(code)) hotkey(code);
     };
 
     rebuild(stage); updateSection(false);
@@ -395,6 +402,7 @@ export default {
         }
       },
       dispose() {
+        alive = false;
                 backpack.dispose(); audio.stop(); ui.dispose();
         avatar.root.visible = true; player.enabled = true;
         engine.camera.far = camFar; engine.camera.updateProjectionMatrix();
