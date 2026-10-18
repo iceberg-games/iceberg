@@ -9,9 +9,9 @@ export const GAME_META = {
   'giant-rainbow-obby': { publishedAt: '2026-10-17T20:18:51-07:00', mobile: true },  // own touch layout (gro-mobile: big gear/skip/reset buttons)
   'birg-hq':            { publishedAt: '2026-10-16T21:55:48-07:00', mobile: true },  // walk/jump hub, no keyboard-only actions
   'frost-fields':       { publishedAt: '2026-10-16T21:54:06-07:00', mobile: true },  // walk/jump/coins; build mode via taps
-  'corner-bakery':      { publishedAt: '2026-10-18T00:26:09-07:00', mobile: true },  // publishedAt = release A deploy time
+  'corner-bakery':      { publishedAt: '2026-10-17T22:26:50-07:00', mobile: true },  // publishedAt added on the release merge (Game Maker's commit time)
   //                     tap buttons for every station action (cbr mobile HUD) + shared joystick
-  'natural-disaster-survival': { publishedAt: '2026-10-18T00:47:04-07:00', mobile: true },  // PREVIEW date (tornado-1); Publisher sets the real publishedAt at release. Tap HUD (items, Hunt), joystick + jump
+  'natural-disaster-survival': { publishedAt: '2026-10-18T00:00:00-07:00', mobile: true },  // event start; tap HUD (items, Hunt), joystick + jump
   'rainbow-obby':       { publishedAt: '2026-10-16T22:11:58-07:00', retired: true },  // replaced by Giant Rainbow Obby
 };
 
