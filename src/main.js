@@ -73,7 +73,9 @@ async function boot() {
   // ONE AudioListener on the camera, shared by cosmetics/games/sfx (core/audio.js). The local avatar gets it now.
   setAudioCamera(engine.camera);
   try { avatar.attachWindAudio?.(getAudioListener()); } catch (e) { console.warn('audio listener', e); }
-  const mp = createMultiplayer({ engine, getRemote: () => remote, bubbles: gameChat.bubbles, me: () => me, getListener: getAudioListener });
+  const mp = createMultiplayer({ engine, getRemote: () => remote, bubbles: gameChat.bubbles, me: () => me, getListener: getAudioListener,
+    localName: () => economy.profile.displayName || economy.profile.username || 'You' });
+  engine.mp = mp;                  // games: ctx.mp (engine ctx) / ctx.engine.mp / window.iceberg.mp (docs/MULTIPLAYER_API.md)
   mp.onChatHint(() => gameChat.pollNow());
   addEventListener('pagehide', () => { mp.leave(); });
   bus.on('economy:rejected', (e) => ui.toast(e.action === 'buy' ? 'The server said no to that purchase; your Birg Bucks were refunded.' : 'Not enough Birg Bucks on the server.', '⚠️'));
