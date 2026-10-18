@@ -193,6 +193,9 @@ if (want('site')) {
     await ob.goto(BASE + 'play/?game=giant-rainbow-obby');
     await ob.waitForSelector('#start-btn'); await ob.click('#start-btn');
     await ob.waitForFunction(() => window.iceberg?.engine?.game?.obby, null, { timeout: 20000 });
+    await ob.waitForTimeout(500);
+    const live = Object.fromEntries((await api(null, 'list_game_stats')).map(g => [g.gameId, g]));
+    check('stats: play page records a visit + heartbeat (live player)', live['giant-rainbow-obby'].playing >= 1 && live['giant-rainbow-obby'].visits7d >= 1, JSON.stringify(live['giant-rainbow-obby']));
     const coinsBefore = (await api(token1, 'get_my_profile')).coins;
     const bought = await ob.evaluate(() => window.iceberg.engine.game.obby.buyGear('speedCoil'));
     await ob.waitForTimeout(900); await ob.evaluate(() => window.iceberg.economy.flush());
@@ -264,6 +267,42 @@ if (want('site')) {
     await p1.waitForFunction(() => /Friends \(1\)/.test(document.querySelector('#friends-lists')?.textContent || ''));
     check('friends: request + accept by exact username', true);
     await p1.screenshot({ path: resolve(SHOTS, 'friends.png') });
+    // --- featured banner + game tabs (online)
+    await p1.click('.p-tab[data-view="games"]');
+    await p1.waitForSelector('#featured-banner .fb-slide');
+    const fb = await p1.evaluate(async () => {
+      const el = document.querySelector('#featured-banner');
+      const img = getComputedStyle(el.querySelector('.fb-img')).backgroundImage.match(/url\("?(.*?)"?\)/)[1];
+      return { first: el.querySelector('.fb-slide').dataset.game, dots: el.querySelectorAll('.fb-dot').length, imgOk: (await fetch(img)).ok, title: el.querySelector('.fb-title').textContent };
+    });
+    check('featured: banner shows Giant Rainbow Obby first, 2 dots, image loads', fb.first === 'giant-rainbow-obby' && fb.dots === 2 && fb.imgOk, JSON.stringify(fb));
+    await p1.click('#featured-banner .fb-next');
+    check('featured: arrow goes to BIRG HQ', (await p1.$eval('#featured-banner .fb-slide', e => e.dataset.game)) === 'birg-hq');
+    await p1.hover('#featured-banner .fb-title');
+    check('featured: pauses on hover', await p1.evaluate(() => window.icebergPortal.banner.rotating === false && document.querySelector('#featured-banner').dataset.paused === 'true'));
+    await p1.mouse.move(5, 5);
+    check('featured: auto-rotates when not hovered', await p1.evaluate(() => window.icebergPortal.banner.rotating === true));
+    const [fbTab] = await Promise.all([c1.waitForEvent('page'), p1.click('#featured-banner .fb-play')]);
+    await fbTab.waitForLoadState();
+    check('featured: Play opens the game in a new tab', fbTab.url() === BASE + 'play/?game=birg-hq', fbTab.url());
+    await fbTab.close();
+    const rm = await b.newContext({ reducedMotion: 'reduce' }); const rp = await rm.newPage();
+    await rp.goto(BASE); await rp.waitForSelector('#featured-banner .fb-slide');
+    check('featured: no auto-rotation with prefers-reduced-motion', await rp.evaluate(() => window.icebergPortal.banner.rotating === false && document.querySelector('#featured-banner').dataset.reducedMotion === 'true'));
+    await rm.close();
+    // make the ranking deterministic: BIRG HQ gets 2 visits, Frost Fields gets a live player
+    const token2 = (await (await fetch(`http://localhost:${API}/auth/v1/token?grant_type=password`, { method: 'POST', headers: { apikey: ANON_KEY, 'content-type': 'application/json' }, body: JSON.stringify({ email: 'polar_pal@users.iceberg.test', password: 'iglooigloo' }) })).json()).access_token;
+    await api(token1, 'record_visit', { p_game_id: 'birg-hq' }); await api(token2, 'record_visit', { p_game_id: 'birg-hq' });
+    await api(token1, 'record_visit', { p_game_id: 'birg-hq' });                       // deduped
+    await api(token2, 'game_heartbeat', { p_game_id: 'frost-fields' });
+    await api(token1, 'game_heartbeat', { p_game_id: 'frost-fields' });                // one row per user: moves player 1 off Giant Obby
+    await p1.reload(); await p1.waitForSelector('#games-grid .game-card');
+    const order = async (sort) => { await p1.click(`#games-sort button[data-sort="${sort}"]`); await p1.waitForTimeout(150); return p1.$$eval('#games-grid .game-card', e => e.map(x => x.dataset.game)); };
+    const newest = await order('newest'), popular = await order('popular'), active = await order('active');
+    check('tabs: Newest = publish date, newest first', newest.join() === 'giant-rainbow-obby,birg-hq,frost-fields', newest.join());
+    check('tabs: Most Popular = 7-day plays (deduped), ties by all-time then newest', popular[0] === 'birg-hq' && popular.indexOf('giant-rainbow-obby') < popular.indexOf('frost-fields'), popular.join());
+    check('tabs: Most Active Players = live heartbeats', active[0] === 'frost-fields' && /2 playing now/.test(await p1.$eval('#games-grid .game-card', e => e.textContent)), active.join());
+    await p1.screenshot({ path: resolve(SHOTS, 'portal-featured-tabs.png') });
     check('portal: no page errors', e1.length === 0 && e2.length === 0, [...e1, ...e2].join(' | '));
     // sign out + wrong password (the browser logs the expected 400 from /auth/v1/token)
     await p2.click('#p-signout'); await p2.waitForSelector('#p-signin-open');
@@ -276,6 +315,29 @@ if (want('site')) {
     check('pwa: SW cached the shell only (no auth/API URLs)', cached.length > 0 && !cached.some(u => /\/(auth|rest)\/v1|:54420/.test(u)), JSON.stringify(cached));
   } catch (e) { check('site: unexpected error', false, e.stack); }
   finally { await b.close(); web.close(); await dev.close(); }
+
+  // --- offline site (no backend configured): banner from featured.json, local dates/plays
+  const offOut = resolve(TMP, 'site-offline');
+  run('build: site without backend (offline/guest)', 'node', ['scripts/build-site.mjs', '--out', offOut], { env: { VITE_SUPABASE_URL: '', VITE_SUPABASE_ANON_KEY: '' } });
+  const web2 = await serveStatic(offOut, WEB + 1, { prefix: '/iceberg/' });
+  const b2 = await launch();
+  try {
+    const c = await b2.newContext(); const p = await c.newPage(); const eoff = []; watch(p, eoff);
+    const today = new Date().toISOString().slice(0, 10), old = new Date(Date.now() - 8 * 86400000).toISOString().slice(0, 10);
+    await p.goto(`http://localhost:${WEB + 1}/iceberg/`);
+    await p.evaluate(({ today, old }) => localStorage.setItem('iceberg:v1:playCounts', JSON.stringify({ 'frost-fields': { [today]: 3 }, 'birg-hq': { [old]: 50, [today]: 1 } })), { today, old });
+    await p.reload(); await p.waitForSelector('#featured-banner .fb-slide'); await p.waitForSelector('#games-grid .game-card');
+    check('offline: featured banner from site featured.json', (await p.$eval('#featured-banner .fb-slide', e => e.dataset.game)) === 'giant-rainbow-obby');
+    const ord = async (sort) => { await p.click(`#games-sort button[data-sort="${sort}"]`); await p.waitForTimeout(150); return p.$$eval('#games-grid .game-card', e => e.map(x => x.dataset.game)); };
+    check('offline: Newest uses local publish dates', (await ord('newest')).join() === 'giant-rainbow-obby,birg-hq,frost-fields');
+    const pop = await ord('popular');
+    check('offline: Most Popular = local plays in last 7 days (8-day-old plays ignored)', pop[0] === 'frost-fields' && pop[1] === 'birg-hq', pop.join());
+    await ord('active');
+    check('offline: Most Active shows "not available offline"', /not available offline/.test(await p.$eval('#games-note', e => e.textContent)));
+    check('offline: no sign-in, no page errors', !(await p.$('#p-signin-open')) && eoff.length === 0, eoff.join(' | '));
+    await p.screenshot({ path: resolve(SHOTS, 'portal-offline.png') });
+  } catch (e) { check('offline site: unexpected error', false, e.stack); }
+  finally { await b2.close(); web2.close(); }
 }
 
 console.log('\n' + results.map(r => `${r[0]}  ${r[1]}${r[0] === 'FAIL' && r[2] ? '\n      ' + String(r[2]).replace(/\n/g, '\n      ') : ''}`).join('\n'));
