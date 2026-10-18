@@ -29,12 +29,13 @@ export const MAX_TOTAL_REWARD_BB = [...Array(1001).keys()].reduce((s, i) => s + 
 export const DEFAULT_SAVE = { checkpoint: 0, best: 0, claimed: [], gears: [], deaths: 0, skips: 0 };
 
 /** Pure helper: returns { save, reward } after reaching stage i. Never pays twice. */
-export function reachStage(save, i) {
+export function reachStage(save, i, { skipped = false } = {}) {
   const s = { ...save, claimed: [...save.claimed] };
   if (i > s.checkpoint) s.checkpoint = i;
   if (i > s.best) s.best = i;
   let reward = 0;
   const r = milestoneReward(i);
-  if (r && !s.claimed.includes(i)) { s.claimed.push(i); reward = r; }
+  // Skipping onto a milestone never pays it (skip 15 -> earn 15/40/100 would be a loophole).
+  if (r && !skipped && !s.claimed.includes(i)) { s.claimed.push(i); reward = r; }
   return { save: s, reward };
 }

@@ -242,7 +242,7 @@ export default {
     const respawnPos = () => { const c = L.checkpointPos(stage); return new THREE.Vector3(c.x, c.y + 0.05, c.z); };
     const setStage = (s, how) => {
       const before = stage; stage = s;
-      const res = reachStage(save, s); save = res.save;
+      const res = reachStage(save, s, { skipped: how === 'skip' }); save = res.save;
       if (how === 'skip') save.skips++;
       persist(economy, save);
       if (res.reward) {
