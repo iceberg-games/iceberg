@@ -1,5 +1,6 @@
 // In-game HUD + drawers (Shop, Locker, Get Birg Bucks, Models, Help).
 import { h, clear } from './dom.js';
+import { toast as showToast, confirmModal } from './overlay.js';
 import { playUi } from '../audio/uiSounds.js';
 import { bus } from '../core/events.js';
 import { CURRENCY, fmt } from '../core/currency.js';
@@ -174,8 +175,7 @@ export class UI {
   updateRocketHint() { this.root.querySelector('#rocket-hint').classList.toggle('hidden', !this.avatar.hasRocket()); }
 
   toast(text, icon = '❄️') {
-    const t = h('div.toast', h('span', icon), h('span', text));
-    this.toasts.append(t); setTimeout(() => t.classList.add('out'), 2600); setTimeout(() => t.remove(), 3100);
+    return showToast(text, { icon, place: 'top', timeout: 3000 });   // shared helper (ui/overlay.js)
   }
 
   // ---------- drawers ----------
@@ -391,7 +391,7 @@ export class UI {
             const w = { modelId: m.id, bone: 'head', scale: 0.5, x: 0, y: 0.62, z: 0, rotY: 0 };
             modelPrefs.saveWear(w); this.avatar.setCustomWear(this.models.instance(m.id), w); this.openDrawer('locker');
           } }, 'Wear'),
-          h('button.btn.small.secondary', { onclick: () => { if (confirm(`Delete ${m.name}?`)) this.models.remove(m.id); } }, '🗑')))))
+          h('button.btn.small.secondary', { onclick: async () => { if (await confirmModal(`Delete ${m.name}?`, { title: 'Delete model?', okLabel: 'Delete', danger: true })) this.models.remove(m.id); } }, '🗑')))))
         : h('div.empty', 'No models yet.'),
       canPlace ? null : h('p.muted.small', 'Tip: you can place models in Frost Fields or in your own games (Create a Game).'));
   }

@@ -2,7 +2,7 @@
 // Auto-rotates (7 s) with dots + arrows; pauses on hover/focus; no auto-rotation when
 // prefers-reduced-motion is set. List: server featured_games, else site featured.json.
 import { h, clear } from '../ui/dom.js';
-import { thumb } from '../ui/thumbs.js';
+import { thumb, GAME_THUMBS } from '../ui/thumbs.js';
 
 const ROTATE_MS = 7000;
 
@@ -30,7 +30,7 @@ export function createFeaturedBanner(items, defsById, { onPlay, playUrl }) {
   function show(k, user = false) {
     i = (k + slides.length) % slides.length;
     const s = slides[i];
-    const img = s.image || thumb(s.def.thumbnail);
+    const img = GAME_THUMBS[s.gameId] || s.image || thumb(s.def.thumbnail);
     clear(stage).append(h('div.fb-slide' + (reduced ? '' : '.fb-anim'), { 'data-game': s.gameId },
       h('div.fb-img', { style: { backgroundImage: `url("${img}")` }, role: 'img', 'aria-label': s.def.name }),
       h('div.fb-text',

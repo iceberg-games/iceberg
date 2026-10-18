@@ -49,6 +49,8 @@ for (const p of pages) {
 }
 await rm(tmp, { recursive: true, force: true });
 await cp(resolve(ROOT, 'site/public'), OUT, { recursive: true });
+await cp(resolve(ROOT, 'src/assets/events'), resolve(OUT, 'events'), { recursive: true });   // event posters (portal popup, lazy)
+await cp(resolve(ROOT, 'src/assets/thumbnails'), resolve(OUT, 'thumbnails'), { recursive: true });   // game card art (ui/thumbs.js GAME_THUMBS)
 
 // cache-busting id for the service worker = hash of the built pages
 const h = createHash('sha256');

@@ -9,7 +9,7 @@ import { bus } from '../core/events.js';
 import { fmt, CURRENCY } from '../core/currency.js';
 import { BUILTIN_GAMES } from '../games/registry.js';
 import { isMobilePlayable } from '../data/gameMeta.js';
-import { thumb } from '../ui/thumbs.js';
+import { gameThumb } from '../ui/thumbs.js';
 import { accountsEnabled, CONFIG } from '../net/config.js';
 import { getRemote, connectStoredSession } from '../net/session.js';
 import { signIn, signUp, validateCredentials } from '../net/auth.js';
@@ -19,9 +19,12 @@ import { isDev, devUpdateButton } from '../net/devAccess.js';
 import { mountChatRoom } from '../chat/chatRoom.js';
 import { loadGameStats, SORTS } from '../net/gameStats.js';
 import { loadFeatured, createFeaturedBanner } from './featured.js';
+import { toast as showToast } from '../ui/overlay.js';
 import { initUiSounds, isMuted as soundsMuted } from '../audio/uiSounds.js';
 import { uiSoundOptions } from '../audio/siteSounds.js';
 import { modelPrefs } from '../backend/LocalBackend.js';
+import { maybeShowEventPopup, eventPopup, createEventStatusSource } from './eventPopup.js';
+import { createStormTheme } from './stormTheme.js';
 
 const root = document.getElementById('portal');
 if (CONFIG.isSite) document.body.classList.add('iceberg-site');
@@ -32,13 +35,14 @@ let dev = false;   // server says this account is on the developer allowlist (is
 let view = new URLSearchParams(location.search).get('view') || 'games';
 let chatRoom = null, friendsTimer = null, banner = null;
 let gameSort = new URLSearchParams(location.search).get('sort') || 'newest';
+let ready = false;   // stored session checked (so the event popup knows guest vs account)
 
 const uiSounds = initUiSounds(uiSoundOptions());   // one delegated click-sound listener for the whole page
-
-const toastBox = h('div.p-toasts');
-function toast(text, icon = 'ℹ️') {
-  const t = h('div.p-toast', `${icon} ${text}`); toastBox.append(t); setTimeout(() => t.remove(), 4200);
-}
+const toast = (text, icon = 'ℹ️') => showToast(text, { icon });
+const eventSource = createEventStatusSource(economy, getRemote);   // server event window (quests.eventStatus semantics, 60 s cache)
+const storm = createStormTheme({ source: eventSource });            // Natural Disasters theme, only while the event is active
+storm.check();
+const cardThumb = gameThumb;
 bus.on('toast', (t) => toast(t.text, t.icon));
 bus.on('coins:changed', () => { const b = document.querySelector('#p-bucks'); if (b) b.textContent = fmt(economy.coins); });
 
@@ -100,7 +104,7 @@ function gamesView() {
     clear(grid).append(...(list.length ? list.map(g => card(g)) : [h('p.muted', 'No mobile games yet. Switch to Computer in Settings to see everything.')]));
   }
   const card = ({ def, visits, playing, publishedAt }) => h('div.game-card', { 'data-game': def.id },
-    h('div.thumb', { style: { backgroundImage: `url(${thumb(def.thumbnail)})` } }),
+    h('div.thumb', { style: { backgroundImage: `url(${cardThumb(def)})` } }),
     h('div.gc-body', h('div.gc-name', def.name), h('div.gc-tag', def.tagline || ''), h('div.gc-desc', def.description || ''),
       h('div.gc-stats', [
         gameSort === 'newest' && publishedAt ? `🆕 ${new Date(publishedAt).toLocaleDateString()}` : null,
@@ -225,15 +229,20 @@ function go(v) { view = v; const u = new URL(location.href); u.searchParams.set(
 function render() {
   chatRoom?.destroy(); chatRoom = null; clearInterval(friendsTimer); banner?.destroy(); banner = null;
   const views = { games: gamesView, chat: chatView, friends: friendsView, settings: settingsView, account: accountView };
-  clear(root).append(h('div.snowbg'), h('div.p-wrap', header(), devRow(), nav(), (views[view] || gamesView)()), toastBox);
+  clear(root).append(h('div.snowbg'), h('div.p-wrap', header(), devRow(), nav(), (views[view] || gamesView)()));
+  if (ready && (view === 'games' || !views[view])) checkEventPopup();
+}
+function checkEventPopup() {
+  return maybeShowEventPopup({ economy, getRemote, onPlay: openGame, source: eventSource });
 }
 
 onDeviceChange(() => { if (view === 'settings' || view === 'games') render(); });
 render();
 (async () => {
   remote = await connectStoredSession(economy);
+  ready = true;
   render();
   registerServiceWorker('./');
   refreshDev();
 })();
-window.icebergPortal = { economy, get remote() { return remote; }, get chatRoom() { return chatRoom; }, get banner() { return banner; }, go, render, playUrl, sounds: uiSounds };
+window.icebergPortal = { economy, get remote() { return remote; }, get chatRoom() { return chatRoom; }, get banner() { return banner; }, go, render, playUrl, toast, sounds: uiSounds, eventPopup, checkEventPopup, storm, cardThumb };
