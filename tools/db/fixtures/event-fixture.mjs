@@ -14,11 +14,11 @@ export const CONSUMABLE_PRICES_BB = { apple: 10, biggerStorm: 25 };
 // src/games/naturalDisasters/quests.js (Game Maker)
 export const QUESTS = [
   { id: 'nd_quest_disaster_survival', gameId: ND_GAME_ID, title: 'Survive 5 disasters', goal: 5, rewardItemId: 'tornado_hat',
-    eventId: 'natural-disasters', startsAt: '2026-10-01T00:00:00Z', endsAt: '2099-01-01T00:00:00Z', maxPerCall: 1, minIntervalMs: 2000, maxPerHour: 30 },
+    eventId: 'natural_disasters', startsAt: '2026-10-01T00:00:00Z', endsAt: '2099-01-01T00:00:00Z', maxPerCall: 1, minIntervalMs: 2000, maxPerHour: 30 },
   { id: 'nd_quest_frost_fields', gameId: 'frost-fields', title: 'Collect 20 snowflakes in Frost Fields', goal: 20, rewardItemId: 'blizzard_hat',
-    eventId: 'natural-disasters', startsAt: '2026-10-01T00:00:00Z', endsAt: '2099-01-01T00:00:00Z', maxPerCall: 5, minIntervalMs: 1000, maxPerHour: 40 },
+    eventId: 'natural_disasters', startsAt: '2026-10-01T00:00:00Z', endsAt: '2099-01-01T00:00:00Z', maxPerCall: 5, minIntervalMs: 1000, maxPerHour: 40 },
   { id: 'nd_quest_giant_obby', gameId: 'giant-rainbow-obby', title: 'Reach stage 50 in Giant Rainbow Obby', goal: 50, rewardItemId: 'lightning_back',
-    eventId: 'natural-disasters', startsAt: '2026-10-01T00:00:00Z', endsAt: '2099-01-01T00:00:00Z', maxPerCall: 10, minIntervalMs: 0, maxPerHour: 200 },
+    eventId: 'natural_disasters', startsAt: '2026-10-01T00:00:00Z', endsAt: '2099-01-01T00:00:00Z', maxPerCall: 10, minIntervalMs: 0, maxPerHour: 200 },
   // Game Maker's own field names (event/natural-disasters branch): reward / event / maxPerMinute / description
   { id: 'nd_quest_birg_hq', gameId: 'birg-hq', title: 'Fallen Star', description: 'Find the 5 frozen meteor shards hidden in the cabin.', goal: 20,
     event: 'natural_disasters', reward: 'meteor_pet', rewardName: 'Frozen Meteor Pet', maxPerMinute: 10 },

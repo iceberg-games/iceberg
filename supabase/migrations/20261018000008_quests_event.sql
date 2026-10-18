@@ -9,13 +9,32 @@
 
 alter table public.catalog_items add column if not exists grant_only boolean not null default false;
 
+-- Limited-time events. The server owns the window (clients show a countdown from event_status().serverNow).
+-- starts_at null = not scheduled yet (= not started). Set at release with scripts/event-window.mjs (DEPLOY.md).
+create table if not exists public.game_events (
+  id          text primary key check (id ~ '^[a-z0-9_-]{1,40}$'),
+  title       text not null check (char_length(title) between 1 and 80),
+  starts_at   timestamptz,
+  ends_at     timestamptz,
+  claim_grace interval not null default interval '24 hours' check (claim_grace >= interval '0' and claim_grace <= interval '90 days'),
+  active      boolean not null default true,
+  updated_at  timestamptz not null default now(),
+  check (ends_at is null or starts_at is null or ends_at > starts_at)
+);
+alter table public.game_events enable row level security;
+drop policy if exists game_events_read on public.game_events;
+create policy game_events_read on public.game_events for select to anon, authenticated using (true);
+revoke insert, update, delete on public.game_events from anon, authenticated;
+grant select on public.game_events to anon, authenticated;     -- writes: set_event_window (admins) / SQL editor
+insert into public.game_events (id, title) values ('natural_disasters', 'Natural Disasters Hunt') on conflict (id) do nothing;
+
 create table if not exists public.quest_defs (
   quest_id        text primary key check (quest_id ~ '^[a-z0-9_]{1,60}$'),
   game_id         text not null check (game_id ~ '^[a-zA-Z0-9_-]{1,40}$'),
   title           text not null check (char_length(title) between 1 and 80),
   goal            integer not null check (goal between 1 and 100000),
   reward_item_id  text not null references public.catalog_items(id),
-  event_id        text check (event_id is null or event_id ~ '^[a-z0-9_-]{1,40}$'),
+  event_id        text references public.game_events(id),
   starts_at       timestamptz,
   ends_at         timestamptz,
   max_per_call    integer not null default 1 check (max_per_call between 1 and 1000),
@@ -130,26 +149,56 @@ begin
   return jsonb_build_object('ok', true, 'coins', v_coins, 'items', to_jsonb(v_items), 'profile', public._profile_json(v_uid));
 end $$;
 
+-- Effective window of a quest: its own starts/ends narrowed by its event's window.
+-- state: live | not_started | ended.  claimable: a completed quest may still be claimed
+-- (event quests: until ends + claim_grace; quests without an event: always).
+create or replace function public._quest_eff(q public.quest_defs) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare e public.game_events; v_s timestamptz; v_e timestamptz; v_unsched boolean := false; v_on boolean := q.active;
+        v_state text; v_until timestamptz;
+begin
+  if q.event_id is not null then select * into e from public.game_events where id = q.event_id; end if;
+  if e.id is not null then
+    v_unsched := e.starts_at is null;
+    v_s := case when e.starts_at is null then null else greatest(e.starts_at, coalesce(q.starts_at, e.starts_at)) end;
+    v_e := case when e.ends_at is null then q.ends_at else least(e.ends_at, coalesce(q.ends_at, e.ends_at)) end;
+    v_on := v_on and e.active;
+    v_until := v_e + e.claim_grace;
+  else
+    v_s := q.starts_at; v_e := q.ends_at;
+  end if;
+  v_state := case when v_unsched or (v_s is not null and now() < v_s) then 'not_started'
+                  when (v_e is not null and now() >= v_e) or not v_on then 'ended' else 'live' end;
+  return jsonb_build_object('state', v_state, 'startsAt', v_s, 'endsAt', v_e, 'claimUntil', v_until, 'event', e.id is not null,
+    'claimable', v_until is null or now() < v_until);
+end $$;
+
 create or replace function public._quest_live(q public.quest_defs) returns boolean
-language sql stable as $$ select q.active and (q.starts_at is null or now() >= q.starts_at) and (q.ends_at is null or now() < q.ends_at) $$;
+language sql stable as $$ select q.active and public._quest_eff(q)->>'state' = 'live' $$;
 
 create or replace function public._quest_json(q public.quest_defs, p public.quest_progress) returns jsonb
 language sql stable as $$
   select jsonb_build_object('id', q.quest_id, 'gameId', q.game_id, 'title', q.title, 'description', q.description, 'goal', q.goal,
     'progress', least(coalesce(p.count, 0), q.goal), 'completed', p.completed_at is not null or coalesce(p.count, 0) >= q.goal, 'claimed', p.claimed_at is not null,
-    'itemId', q.reward_item_id, 'eventId', q.event_id, 'startsAt', q.starts_at, 'endsAt', q.ends_at, 'live', public._quest_live(q))
+    'itemId', q.reward_item_id, 'eventId', q.event_id, 'startsAt', w->'startsAt', 'endsAt', w->'endsAt', 'claimUntil', w->'claimUntil',
+    'live', q.active and w->>'state' = 'live')
+  from (select public._quest_eff(q) w) x
 $$;
 
 -- Add progress. Server-side limits: delta 1..max_per_call, >= min_interval_ms between calls,
 -- <= max_per_minute per minute window (too_fast), <= max_per_hour per hour window, only while the quest is live, capped at goal.
 create or replace function public.quest_progress(p_quest_id text, p_delta integer default 1) returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare v_uid uuid := public._uid(); q public.quest_defs; p public.quest_progress; v_add int; v_wait bigint;
+declare v_uid uuid := public._uid(); q public.quest_defs; p public.quest_progress; v_add int; v_wait bigint; v_w jsonb;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
   select * into q from public.quest_defs where quest_id = p_quest_id and active;
   if not found then return jsonb_build_object('ok', false, 'reason', 'unknown_quest'); end if;
-  if not public._quest_live(q) then return jsonb_build_object('ok', false, 'reason', 'not_live', 'quest', public._quest_json(q, null)); end if;
+  v_w := public._quest_eff(q);
+  if v_w->>'state' <> 'live' then
+    return jsonb_build_object('ok', false, 'reason', case when not (v_w->>'event')::boolean then 'not_live' when v_w->>'state' = 'not_started' then 'event_not_started' else 'event_ended' end,
+      'quest', public._quest_json(q, null));
+  end if;
   if p_delta is null or p_delta < 1 or p_delta > q.max_per_call then return jsonb_build_object('ok', false, 'reason', 'invalid_delta', 'maxPerCall', q.max_per_call); end if;
   insert into public.quest_progress (user_id, quest_id) values (v_uid, p_quest_id) on conflict do nothing;
   select * into p from public.quest_progress where user_id = v_uid and quest_id = p_quest_id for update;
@@ -181,7 +230,8 @@ language sql stable security definer set search_path = public as $$
   from public.quest_defs q
   left join public.quest_progress p on p.quest_id = q.quest_id and p.user_id = auth.uid()   -- auth.uid(): anon gets progress 0
   where q.active and (p_game_id is null or q.game_id = p_game_id)
-    and (public._quest_live(q) or ((p.completed_at is not null or p.count >= q.goal) and p.claimed_at is null))   -- finished-but-unclaimed stays visible
+    and (public._quest_eff(q)->>'state' in ('live', 'not_started')                                  -- upcoming event quests show (live:false)
+         or ((p.completed_at is not null or p.count >= q.goal) and p.claimed_at is null and (public._quest_eff(q)->>'claimable')::boolean))   -- finished-but-unclaimed, inside the claim window
 $$;
 
 -- Grant the reward cosmetic once. No Birg Bucks. Works after the event ends if the quest was completed.
@@ -196,8 +246,12 @@ begin
   if p.completed_at is null and coalesce(p.count, 0) >= q.goal then   -- goal lowered after progress: counts as done
     update public.quest_progress set completed_at = now() where user_id = v_uid and quest_id = p_quest_id returning * into p;
   end if;
+  if p.completed_at is null and not (public._quest_eff(q)->>'claimable')::boolean then return jsonb_build_object('granted', false, 'reason', 'event_ended', 'itemId', q.reward_item_id); end if;
   if p.completed_at is null then return jsonb_build_object('granted', false, 'reason', 'not_complete', 'itemId', q.reward_item_id, 'progress', coalesce(p.count, 0), 'goal', q.goal); end if;
   if p.claimed_at is not null then return jsonb_build_object('granted', false, 'alreadyClaimed', true, 'itemId', q.reward_item_id); end if;
+  if not (public._quest_eff(q)->>'claimable')::boolean then   -- after ends_at + claim_grace (owned items are never revoked)
+    return jsonb_build_object('granted', false, 'reason', 'event_ended', 'itemId', q.reward_item_id);
+  end if;
   insert into public.inventory (user_id, item_id, source) values (v_uid, q.reward_item_id, 'quest:' || q.quest_id) on conflict do nothing;
   get diagnostics v_new = row_count;
   update public.quest_progress set claimed_at = now() where user_id = v_uid and quest_id = p_quest_id;
@@ -221,6 +275,37 @@ begin
   insert into public.game_consumable_purchases (user_id, game_id, item_id, price, ref) values (v_uid, p_game_id, p_item_id, v_price, p_ref) returning id into v_id;
   return jsonb_build_object('ok', true, 'coins', v_bal, 'price', v_price, 'purchaseId', v_id);
 end $$;
+
+-- Public event status for countdowns. active = flag && inside the window. serverNow: clients compute
+-- the countdown from (endsAt - serverNow) instead of trusting the device clock.
+create or replace function public.event_status(p_event_id text) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select coalesce((select jsonb_build_object('eventId', e.id, 'title', e.title, 'startsAt', e.starts_at, 'endsAt', e.ends_at,
+      'claimUntil', e.ends_at + e.claim_grace,
+      'active', e.active and e.starts_at is not null and now() >= e.starts_at and (e.ends_at is null or now() < e.ends_at),
+      'serverNow', now())
+    from public.game_events e where e.id = p_event_id),
+    jsonb_build_object('eventId', p_event_id, 'title', null, 'startsAt', null, 'endsAt', null, 'claimUntil', null, 'active', false, 'serverNow', now(), 'unknown', true))
+$$;
+
+-- Admins (profiles.is_admin) set/extend an event window; the SQL editor / scripts/event-window.mjs can too.
+create or replace function public.set_event_window(p_event_id text, p_starts_at timestamptz, p_ends_at timestamptz,
+  p_active boolean default true, p_claim_grace interval default null) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_uid uuid := auth.uid();
+begin
+  if v_uid is null or not coalesce((select is_admin from public.profiles where id = v_uid), false) then
+    raise exception 'admin_only' using errcode = '42501';
+  end if;
+  update public.game_events set starts_at = p_starts_at, ends_at = p_ends_at, active = coalesce(p_active, active),
+    claim_grace = coalesce(p_claim_grace, claim_grace), updated_at = now() where id = p_event_id;
+  if not found then return jsonb_build_object('ok', false, 'reason', 'unknown_event'); end if;
+  return jsonb_build_object('ok', true, 'status', public.event_status(p_event_id));
+end $$;
+
+revoke execute on function public.event_status(text), public.set_event_window(text, timestamptz, timestamptz, boolean, interval), public._quest_eff(public.quest_defs) from public, anon, authenticated;
+grant execute on function public.event_status(text) to anon, authenticated;
+grant execute on function public.set_event_window(text, timestamptz, timestamptz, boolean, interval) to authenticated;   -- body enforces is_admin
 
 revoke execute on function public._quest_live(public.quest_defs), public._quest_json(public.quest_defs, public.quest_progress),
   public.quest_progress(text, integer), public.get_quests(text), public.claim_quest_reward(text), public.buy_consumable(text, text, text),

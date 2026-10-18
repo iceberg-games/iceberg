@@ -505,6 +505,7 @@ if (want('quests')) {
     { env: { VITE_SUPABASE_URL: `http://localhost:${API}`, VITE_SUPABASE_ANON_KEY: ANON_KEY, VITE_USERNAME_EMAIL_DOMAIN: 'users.iceberg.test' } });
   const dev = await startDevServer({ port: API, quiet: true });
   await dev.db.exec(toSQL(withEvent(await loadSources(ROOT))));   // event fixture rows (local db only) until Game Maker/Cosmetics land
+  const { eventWindowSQL } = await import(pathToFileURL(resolve(ROOT, 'scripts/event-window.mjs')).href);
   const web = await serveStatic(out, WEB, { prefix: '/iceberg/' });
   const b = await launch();
   const r = await (await fetch(`http://localhost:${API}/auth/v1/signup`, { method: 'POST', headers: { apikey: ANON_KEY, 'content-type': 'application/json' },
@@ -517,6 +518,12 @@ if (want('quests')) {
     await p.goto(BASE); await p.evaluate((s) => localStorage.setItem('iceberg:v1:session', JSON.stringify(s)), session);
     await p.goto(BASE + 'play/?game=frost-fields'); await p.waitForSelector('#start-btn'); await p.click('#start-btn');
     await p.waitForFunction(() => window.iceberg?.economy?.signedIn, null, { timeout: 20000 });
+    // event not scheduled yet (fresh migration): Hunt menu would show "starts soon"; progress refused
+    const pre = await p.evaluate(async () => ({ st: await window.iceberg.quests.eventStatus('natural_disasters'), pr: await window.iceberg.quests.progress('nd_quest_disaster_survival') }));
+    check('event: unscheduled -> inactive, progress event_not_started', pre.st.active === false && pre.st.startsAt === null && pre.pr.reason === 'event_not_started' && !!pre.st.serverNow, JSON.stringify(pre));
+    await dev.db.exec(eventWindowSQL('natural_disasters', { start: 'now', days: 7 }));                  // = the release step
+    const ev = await p.evaluate(() => window.iceberg.quests.eventStatus('natural_disasters', { refresh: true }));
+    check('event: release step -> active, server countdown ~7 days', ev.active && Math.abs(ev.msLeft - 7 * 86400e3) < 120e3, JSON.stringify(ev));
     const res = await p.evaluate(async (nd) => {
       const q = window.iceberg.quests, e = window.iceberg.economy, o = {};
       o.status = await q.status(nd);
@@ -533,6 +540,7 @@ if (want('quests')) {
       return o;
     }, ND_GAME_ID);
     check('quests: status via server (anon-safe RPC, one ND quest)', res.status.length === 1 && res.status[0].itemId === 'tornado_hat' && res.status[0].progress === 0, JSON.stringify(res.status));
+    check('quests: status carries the effective event window', res.status[0].eventId === 'natural_disasters' && res.status[0].live === true && Date.parse(res.status[0].endsAt) === Date.parse(ev.endsAt), JSON.stringify(res.status[0]));
     check('quests: complete() before goal -> not_complete', res.early.granted === false && res.early.reason === 'not_complete');
     check('quests: progress counted, spam -> too_fast, oversized delta refused', res.p1.ok && res.p1.added === 1 && res.fast.reason === 'too_fast' && res.bad.reason === 'invalid_delta', JSON.stringify([res.p1, res.fast, res.bad]));
     check('quests: event cosmetic not buyable from the client', res.buyEvent.ok === false || res.buyEvent.reason, JSON.stringify(res.buyEvent));
@@ -546,6 +554,11 @@ if (want('quests')) {
     const claim = await p.evaluate(async () => { const q = window.iceberg.quests; const c1 = await q.complete('nd_quest_disaster_survival'); const c2 = await q.complete('nd_quest_disaster_survival');
       const st = await q.status('natural-disaster-survival'); await window.iceberg.economy.resync(); return { c1, c2, st, owns: window.iceberg.economy.owns('tornado_hat'), coins: window.iceberg.economy.coins }; });
     check('quests: complete() grants tornado_hat once, second call alreadyClaimed, no Birg Bucks', claim.c1.granted && claim.c1.itemId === 'tornado_hat' && claim.c2.alreadyClaimed && !claim.c2.granted && claim.owns && claim.coins === res.coins && claim.st[0].claimed, JSON.stringify(claim));
+    // event ends: progress refused, an unfinished quest can't be claimed after the grace, owned reward stays
+    await dev.db.exec(eventWindowSQL('natural_disasters', { start: new Date(Date.now() - 9 * 86400e3).toISOString(), end: new Date(Date.now() - 25 * 3600e3).toISOString() }));
+    const after = await p.evaluate(async () => { const q = window.iceberg.quests; return { st: await q.eventStatus('natural_disasters', { refresh: true }),
+      pr: await q.progress('nd_quest_giant_obby'), cl: await q.complete('nd_quest_giant_obby'), owns: window.iceberg.economy.owns('tornado_hat') }; });
+    check('event: after end + grace -> inactive, event_ended, reward kept', !after.st.active && after.st.msLeft === 0 && after.pr.reason === 'event_ended' && after.cl.reason === 'event_ended' && after.owns, JSON.stringify(after));
     const inv = await dev.db.query(`select count(*)::int n from public.inventory i join public.profiles p on p.id = i.user_id where p.username = 'q_eve' and item_id = 'tornado_hat'`);
     check('quests: exactly one inventory row for the reward', inv.rows[0].n === 1);
     check('quests: no page errors', errs.filter(e => !/401|403|Unauthorized/.test(e)).length === 0, errs.join(' | ').slice(0, 500));

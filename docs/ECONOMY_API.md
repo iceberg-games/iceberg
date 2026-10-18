@@ -120,7 +120,7 @@ never moves Birg Bucks.
 
 | Call | Result |
 |---|---|
-| `quests.progress(questId, delta = 1)` | `Promise<{ ok, added, quest }>` or `{ ok:false, reason }`. Reasons are `unknown_quest`, `not_live` (outside the event window), `invalid_delta` (more than `maxPerCall`), `too_fast` (with `retryAfterMs`), `hourly_cap`, and `network`. Progress stops at the goal. |
+| `quests.progress(questId, delta = 1)` | `Promise<{ ok, added, quest }>` or `{ ok:false, reason }`. Reasons are `unknown_quest`, `event_not_started` / `event_ended` (event quests; `not_live` for quests without an event), `invalid_delta` (more than `maxPerCall`), `too_fast` (with `retryAfterMs`), `hourly_cap`, and `network`. Progress stops at the goal. |
 | `quests.complete(questId)` | `Promise<{ granted, itemId, alreadyClaimed, reason? }>`. You get `reason:'not_complete'` until the goal is reached. The server owns the questId→itemId mapping and the once-per-account rule, so calling it again is safe and returns `{granted:false, alreadyClaimed:true}`. |
 | `quests.status(gameId?)` | `Promise<[{ id, gameId, title, goal, progress, completed, claimed, itemId }]>`. Lists live quests, plus quests that are completed but not yet claimed after their event ended. |
 
@@ -145,7 +145,7 @@ export const QUESTS = [
     gameId: 'natural-disaster-survival',    // optional; per-quest override (event quests in other games)
     title: 'Survive 5 disasters', goal: 5,
     rewardItemId: 'tornado_hat',            // must be a grant-only cosmetic (earnOnly: true)
-    eventId: 'natural-disasters',
+    eventId: 'natural_disasters',          // must match a public.game_events id (window comes from the event)
     startsAt: '2026-10-18T00:00:00Z', endsAt: '2026-11-15T00:00:00Z',   // optional live window
     maxPerCall: 1, minIntervalMs: 2000, maxPerHour: 60 },             // anti-farm limits (these are the defaults)
 ];
@@ -180,6 +180,43 @@ export const QUESTS = [
 | `get_quests(p_game_id)` | anon or authenticated | Anon gets progress 0. |
 | `claim_quest_reward(p_quest_id)` | authenticated | Idempotent. Uses the inventory PK plus `quest_progress.claimed_at`. Writes no wallet ledger row. |
 | `buy_consumable(p_game_id, p_item_id, p_ref)` | authenticated | Idempotent per ref. Ledger reason `consumable:<ref>`. |
+| `event_status(p_event_id)` | anon or authenticated | `{eventId, title, startsAt, endsAt, claimUntil, active, serverNow}`. An unknown id returns `active:false, unknown:true`. |
+| `set_event_window(p_event_id, p_starts_at, p_ends_at, p_active?, p_claim_grace?)` | admins only (`profiles.is_admin`) | Sets or extends a window. The SQL editor or `scripts/event-window.mjs` can do the same. |
+
+### Limited-time events (the "Hunt" menu)
+
+Events live in `public.game_events`:
+
+| Column | Notes |
+|---|---|
+| `id` | e.g. `natural_disasters` |
+| `title` | |
+| `starts_at` | `null` means not scheduled yet, which counts as not started |
+| `ends_at` | |
+| `claim_grace` | default 24 h |
+| `active` | |
+
+- Anyone can read the table. Only admins can change it (`set_event_window`, or the SQL editor via `scripts/event-window.mjs`).
+- The quest sync creates any event its quests reference, unscheduled, and never overwrites existing dates.
+- **Quest window:** a quest with an `eventId` uses the event's window. If the quest also has its own `startsAt`/`endsAt`, the narrower of the two applies. That effective window is what `get_quests` and `quests.status()` return.
+- **Progress** outside the window is refused with `event_not_started` or `event_ended`. Quests without an event keep returning `not_live`.
+- **Claiming:** a quest that was completed in time can still be claimed until `endsAt + claim_grace`. After that, `claim_quest_reward` / `quests.complete()` returns `reason:'event_ended'`.
+- An item that was already granted is owned forever. Nothing is ever revoked.
+- `active:false` pauses an event: no progress, but claims still work until the grace ends.
+- **Listing:** `get_quests` lists upcoming event quests with `live:false`, and keeps listing finished-but-unclaimed quests until the claim window closes.
+
+Client calls:
+
+```js
+const ev = await quests.eventStatus('natural_disasters');
+// { eventId, title, startsAt, endsAt, claimUntil, active, serverNow, msLeft, msToStart }
+// cached 60 s; pass { refresh: true } to force a fetch
+countdown.textContent = ev.active ? fmt(ev.msLeft) : ev.msToStart ? `Starts in ${fmt(ev.msToStart)}` : 'Event over';
+bus.on('event:changed', (ev) => redrawHuntMenu(ev));   // emitted when a fetch shows new dates or a new active state
+```
+
+- `serverNow` is the server's clock at the fetch, advanced by the local time elapsed since. `msLeft` (`endsAt − serverNow`) is therefore correct even if the device clock is wrong. Re-check `active` when `msLeft` reaches 0, or just call `eventStatus` again.
+- **Offline / guests:** the window comes from the event's `QUESTS` `startsAt`/`endsAt`. Without dates it defaults to an active 7-day window starting from this device's first run, with the same 24 h claim grace. The result carries `local: true`.
 
 ## Multiplayer RPCs (migration `20261018000007_multiplayer.sql`)
 

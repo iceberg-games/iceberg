@@ -399,6 +399,11 @@ export class Economy {
     if (this.remote) { try { return await this.remote.getQuests(gameId) || []; } catch { return []; } }
     return this.backend.getQuests(gameId);
   }
+  /** Event window from the server ({ eventId, title, startsAt, endsAt, claimUntil, active, serverNow }); guests: local window. */
+  async eventStatus(eventId) {
+    if (this.remote) { try { return await this.remote.eventStatus(eventId); } catch (e) { return { eventId, active: false, error: 'network', serverNow: new Date().toISOString() }; } }
+    return this.backend.eventStatus(eventId);
+  }
   /** Grant the quest's reward cosmetic once. Resolves { granted, itemId, alreadyClaimed?, reason? }. */
   async claimQuestReward(questId) {
     let res;

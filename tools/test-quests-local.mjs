@@ -10,7 +10,8 @@ const { Economy } = await import('../src/core/economy.js');
 const { createQuests } = await import('../src/core/quests.js');
 const eco = new Economy(new LocalBackend()); const q = createQuests(eco);
 let st = await q.status(ND_GAME_ID);
-assert.deepEqual(st, [{ id: 'nd_quest_disaster_survival', gameId: ND_GAME_ID, title: 'Survive 5 disasters', goal: 5, progress: 0, completed: false, claimed: false, itemId: 'tornado_hat' }]);
+assert.deepEqual(st, [{ id: 'nd_quest_disaster_survival', gameId: ND_GAME_ID, title: 'Survive 5 disasters', goal: 5, progress: 0, completed: false, claimed: false, itemId: 'tornado_hat',
+  eventId: 'natural_disasters', startsAt: '2026-10-01T00:00:00.000Z', endsAt: '2099-01-01T00:00:00.000Z', live: true }]);
 assert.equal((await q.status()).length, 4);
 assert.deepEqual(await q.complete('nd_quest_disaster_survival'), { granted: false, itemId: 'tornado_hat', alreadyClaimed: false, reason: 'not_complete' });
 assert.equal((await q.progress('nd_quest_disaster_survival', 2)).reason, 'invalid_delta');
@@ -39,4 +40,31 @@ assert.equal((await eco.buyConsumable(ND_GAME_ID, 'biggerStorm', 25)).ok, false)
 { let n = 0, r, t = Date.now(); for (let i = 0; i < 12; i++) { r = b.questProgress('nd_quest_birg_hq', 1, t + i); if (r.ok) n += r.added; }
   assert.equal(n, 10); assert.equal(r.reason, 'too_fast');
   assert.equal(b.questProgress('nd_quest_birg_hq', 1, t + 61000).added, 1); }
+// ---- events offline: default 7-day window from first run, before/during/after/grace ----
+registerQuests([{ id: 'zz_local_hunt', gameId: 'frost-fields', title: 'Local hunt', goal: 1, rewardItemId: 'blizzard_hat', eventId: 'zz_local', minIntervalMs: 0 }]);
+const t0 = Date.now();
+const ev = b.eventStatus('zz_local', t0);
+assert.equal(ev.active, true); assert.equal(Date.parse(ev.endsAt) - Date.parse(ev.startsAt), 7 * 86400e3); assert.equal(ev.local, true);
+assert.equal(Date.parse(b.eventStatus('zz_local', t0 + 5000).startsAt), Date.parse(ev.startsAt));         // stable: first run is remembered
+assert.equal(b.questProgress('zz_local_hunt', 1, t0 - 1000).reason, 'event_not_started');
+assert.equal(b.claimQuestReward('zz_local_hunt', t0 + 8 * 86400e3).reason, 'event_ended');                 // incomplete + past grace
+assert.equal(b.questProgress('zz_local_hunt', 1, t0 + 7 * 86400e3 + 1).reason, 'event_ended');
+assert.equal(b.questProgress('zz_local_hunt', 1, t0 + 1000).added, 1);                                       // during
+assert.ok(b.getQuests('frost-fields', t0 + 7 * 86400e3 + 3600e3).some(x => x.id === 'zz_local_hunt'));     // ended, completed, in grace: listed
+assert.equal(b.claimQuestReward('zz_local_hunt', t0 + 7 * 86400e3 + 3600e3).granted, true);                 // claim in grace
+assert.equal(b.claimQuestReward('zz_local_hunt', t0 + 30 * 86400e3).alreadyClaimed, true);
+assert.ok(eco.backend.loadProfile().owned.includes('blizzard_hat'));
+assert.ok(!b.getQuests('frost-fields', t0 + 9 * 86400e3).some(x => x.id === 'zz_local_hunt'));
+// ---- facade: eventStatus cache (60 s), serverNow advances, event:changed ----
+{ const { bus } = await import('../src/core/events.js');
+  let clock = 1_000_000, calls = 0, srv = { eventId: 'e', title: 'E', startsAt: new Date(0).toISOString(), endsAt: new Date(10 * 86400e3).toISOString(), active: true, serverNow: new Date(5 * 86400e3).toISOString() };
+  const fakeEco = { eventStatus: async () => { calls++; return { ...srv }; } };
+  const fq = createQuests(fakeEco, { now: () => clock });
+  const changes = []; const off = bus.on('event:changed', (x) => changes.push(x));
+  const s1 = await fq.eventStatus('e'); assert.equal(s1.msLeft, 5 * 86400e3); assert.equal(calls, 1);
+  clock += 30e3; const s2 = await fq.eventStatus('e'); assert.equal(calls, 1); assert.equal(s2.msLeft, 5 * 86400e3 - 30e3);   // cached, clock advanced
+  clock += 31e3; srv = { ...srv, endsAt: new Date(12 * 86400e3).toISOString() };                                              // admin extended it
+  const s3 = await fq.eventStatus('e'); assert.equal(calls, 2); assert.equal(changes.length, 1); assert.equal(changes[0].endsAt, srv.endsAt);
+  assert.equal((await fq.eventStatus('e', { refresh: true })).eventId, 'e'); assert.equal(calls, 3);
+  off?.(); }
 console.log('quests (local/offline): all checks passed');

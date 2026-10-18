@@ -424,6 +424,16 @@ await t('event: fixture validates + syncs (grant-only cosmetics, ND gear + consu
   await db.exec(toSQL(src));
   const fp = async () => JSON.stringify(await su(db, `select (select json_agg(q order by quest_id) from public.quest_defs q) q, (select json_agg(c order by item_id) from public.game_consumable_prices c) c, (select json_agg(i order by id) from public.catalog_items i) i`));
   const a = await fp(); await db.exec(toSQL(src)); assert.equal(await fp(), a);
+  // the event exists but is unscheduled until the release step sets its window
+  const ev0 = (await su(db, `select starts_at, ends_at, claim_grace::text g, active from public.game_events where id = 'natural_disasters'`))[0];
+  assert.deepEqual([ev0.starts_at, ev0.ends_at, ev0.g, ev0.active], [null, null, '24:00:00', true]);
+  const pre = await createUser(db, { username: 'ev_early' });
+  assert.equal((await rpc(db, pre, 'quest_progress', { p_quest_id: 'nd_quest_disaster_survival', p_delta: 1 })).reason, 'event_not_started');
+  assert.equal((await rpc(db, null, 'event_status', { p_event_id: 'natural_disasters' })).active, false);
+  // release step (scripts/event-window.mjs): started yesterday, 8 days long
+  const { eventWindowSQL } = await import(resolve(ROOT, 'scripts/event-window.mjs'));
+  await db.exec(eventWindowSQL('natural_disasters', { start: new Date(Date.now() - 86400e3).toISOString(), days: 8 }));
+  assert.equal((await rpc(db, null, 'event_status', { p_event_id: 'natural_disasters' })).active, true);
   assert.deepEqual((await su(db, `select id from public.catalog_items where grant_only order by id`)).map(r => r.id), ['blizzard_hat', 'lightning_back', 'meteor_pet', 'tornado_hat']);
   assert.equal((await su(db, `select count(*)::int n from public.quest_defs where active`))[0].n, 4);
   // validation catches a buyable reward and an unknown game
@@ -467,7 +477,7 @@ await t('quests: progress only via RPC, per-call max, min interval, hourly cap, 
   await su(db, `update public.quest_defs set goal = 20 where quest_id = 'nd_quest_frost_fields'`);
   // outside the window: no progress
   await su(db, `update public.quest_defs set ends_at = now() - interval '1 minute' where quest_id = 'nd_quest_birg_hq'`);
-  assert.equal((await rpc(db, u, 'quest_progress', { p_quest_id: 'nd_quest_birg_hq', p_delta: 1 })).reason, 'not_live');
+  assert.equal((await rpc(db, u, 'quest_progress', { p_quest_id: 'nd_quest_birg_hq', p_delta: 1 })).reason, 'event_ended');   // quest's own end narrows the event window
   assert.ok(!(await rpc(db, null, 'get_quests', {})).some(q => q.id === 'nd_quest_birg_hq'));        // ended quests hidden
   await su(db, `update public.quest_defs set ends_at = '2099-01-01' where quest_id = 'nd_quest_birg_hq'`);
   assert.equal((await rpc(db, null, 'get_quests', {})).find(q => q.id === 'nd_quest_birg_hq').progress, 0);   // anon read
@@ -488,7 +498,7 @@ await t('quests: claim_quest_reward grants the cosmetic once (no BB), not before
   const lo = await rpc(db, u, 'save_loadout', { p_equipped: { hat: 'tornado_hat' }, p_rocket_colors: null, p_cosmetic_colors: null });
   assert.equal((lo.profile || lo).equipped?.hat ?? (await su(db, `select equipped->>'hat' h from public.profiles where id = $1`, [u]))[0].h, 'tornado_hat');
   // claim still works after the event ends (completed in time)
-  await su(db, `update public.quest_defs set ends_at = now() - interval '1 day', starts_at = now() - interval '9 days' where quest_id = 'nd_quest_frost_fields'`);
+  await su(db, `update public.quest_defs set ends_at = now() - interval '1 hour', starts_at = now() - interval '9 days' where quest_id = 'nd_quest_frost_fields'`);
   const fr = (await rpc(db, u, 'get_quests', {})).find(q => q.id === 'nd_quest_frost_fields');
   assert.ok(fr && fr.completed && !fr.claimed && fr.live === false);
   assert.equal((await rpc(db, u, 'claim_quest_reward', { p_quest_id: 'nd_quest_frost_fields' })).granted, true);
@@ -527,6 +537,71 @@ await t("quests: Game Maker format (reward/event/maxPerMinute) syncs; per-minute
   await su(db, `update public.quest_progress set minute_start = minute_start - interval '61 seconds' where user_id = $1`, [u]);
   assert.equal((await rpc(db, u, 'quest_progress', { p_quest_id: 'nd_quest_birg_hq', p_delta: 1 })).added, 1);
   assert.equal((await rpc(db, null, 'get_quests', { p_game_id: 'birg-hq' }))[0].description, 'Find the 5 frozen meteor shards hidden in the cabin.');
+});
+
+await t('events: event_status (anon, serverNow), admin-only window, quest window = narrower of quest + event; before / during / after / grace / after grace', async () => {
+  // a separate test event + quest so the ND fixtures stay untouched
+  await su(db, `insert into public.game_events (id, title, starts_at, ends_at) values ('zz_hunt', 'ZZ Hunt', now() + interval '1 day', now() + interval '8 days')`);
+  await su(db, `insert into public.quest_defs (quest_id, game_id, title, goal, reward_item_id, event_id, min_interval_ms, ends_at) values ('zz_hunt_q', 'frost-fields', 'Hunt', 2, 'lightning_back', 'zz_hunt', 0, now() + interval '5 days')`);
+  // writes: no direct table writes; set_event_window is admin-only
+  const usr = await createUser(db, { username: 'zz_hunter_1' }), u2 = await createUser(db, { username: 'zz_hunter_2' }), u3 = await createUser(db, { username: 'zz_hunter_3' });
+  await denied(as(db, usr, tx => tx.query(`update public.game_events set ends_at = now() + interval '99 days' where id = 'zz_hunt'`)));
+  await denied(as(db, usr, tx => tx.query(`insert into public.game_events (id, title) values ('zz_x', 'x')`)));
+  await denied(rpc(db, usr, 'set_event_window', { p_event_id: 'zz_hunt', p_starts_at: null, p_ends_at: null }));
+  await denied(rpc(db, null, 'set_event_window', { p_event_id: 'zz_hunt', p_starts_at: null, p_ends_at: null }));
+  const setWin = (s0, e0) => su(db, `update public.game_events set starts_at = now() + interval '${s0}', ends_at = now() + interval '${e0}' where id = 'zz_hunt'`);
+  // BEFORE start
+  let st = await rpc(db, null, 'event_status', { p_event_id: 'zz_hunt' });
+  assert.equal(st.active, false); assert.equal(st.title, 'ZZ Hunt'); assert.ok(Math.abs(Date.parse(st.serverNow) - Date.now()) < 60e3);
+  assert.ok(Date.parse(st.endsAt) - Date.parse(st.serverNow) > 7 * 86400e3);
+  assert.equal((await rpc(db, usr, 'quest_progress', { p_quest_id: 'zz_hunt_q', p_delta: 1 })).reason, 'event_not_started');
+  let q = (await rpc(db, null, 'get_quests', { p_game_id: 'frost-fields' })).find(x => x.id === 'zz_hunt_q');
+  assert.equal(q.live, false); assert.equal(q.eventId, 'zz_hunt');                                   // upcoming: listed, not live
+  assert.equal((await rpc(db, usr, 'claim_quest_reward', { p_quest_id: 'zz_hunt_q' })).reason, 'not_complete');
+  { const n = await rpc(db, null, 'event_status', { p_event_id: 'nope' }); assert.equal(n.active, false); assert.equal(n.unknown, true); assert.ok(n.serverNow); }
+  // DURING (event: -1d..+7d, quest own end +5d -> effective end = quest's)
+  await setWin('-1 day', '7 days');
+  st = await rpc(db, null, 'event_status', { p_event_id: 'zz_hunt' }); assert.equal(st.active, true);
+  q = (await rpc(db, usr, 'get_quests', { p_game_id: 'frost-fields' })).find(x => x.id === 'zz_hunt_q');
+  const qEnd = (await su(db, `select ends_at from public.quest_defs where quest_id = 'zz_hunt_q'`))[0].ends_at;
+  assert.equal(q.live, true); assert.equal(Date.parse(q.endsAt), qEnd.getTime()); assert.equal(Date.parse(q.startsAt), st.startsAt && Date.parse(st.startsAt));
+  for (const u of [usr, usr, u3, u3]) assert.equal((await rpc(db, u, 'quest_progress', { p_quest_id: 'zz_hunt_q', p_delta: 1 })).ok, true);   // usr + u3 complete
+  assert.equal((await rpc(db, u2, 'quest_progress', { p_quest_id: 'zz_hunt_q', p_delta: 1 })).ok, true);                                // u2: 1/2
+  // narrower: event ends before the quest's own end
+  await setWin('-1 day', '2 days');
+  q = (await rpc(db, null, 'get_quests', { p_game_id: 'frost-fields' })).find(x => x.id === 'zz_hunt_q');
+  assert.equal(Date.parse(q.endsAt), Date.parse((await rpc(db, null, 'event_status', { p_event_id: 'zz_hunt' })).endsAt));
+  // AFTER end, inside the 24 h grace: no more progress; completed quests still claim
+  await setWin('-3 days', '-1 hour');
+  assert.equal((await rpc(db, null, 'event_status', { p_event_id: 'zz_hunt' })).active, false);
+  assert.equal((await rpc(db, u2, 'quest_progress', { p_quest_id: 'zz_hunt_q', p_delta: 1 })).reason, 'event_ended');
+  assert.equal((await rpc(db, u2, 'claim_quest_reward', { p_quest_id: 'zz_hunt_q' })).reason, 'not_complete');
+  q = (await rpc(db, usr, 'get_quests', { p_game_id: 'frost-fields' })).find(x => x.id === 'zz_hunt_q');
+  assert.ok(q && q.completed && !q.live && Date.parse(q.claimUntil) > Date.now());                     // still listed for claiming
+  const c = await rpc(db, usr, 'claim_quest_reward', { p_quest_id: 'zz_hunt_q' });
+  assert.equal(c.granted, true); assert.equal(c.itemId, 'lightning_back');
+  // AFTER grace: claims refused with event_ended; granted items stay owned; nothing listed
+  await setWin('-9 days', '-25 hours');
+  assert.deepEqual(await rpc(db, u3, 'claim_quest_reward', { p_quest_id: 'zz_hunt_q' }), { granted: false, reason: 'event_ended', itemId: 'lightning_back' });
+  assert.equal((await rpc(db, u2, 'claim_quest_reward', { p_quest_id: 'zz_hunt_q' })).reason, 'event_ended');
+  assert.equal((await rpc(db, usr, 'claim_quest_reward', { p_quest_id: 'zz_hunt_q' })).alreadyClaimed, true);
+  assert.ok((await rpc(db, usr, 'get_my_profile')).owned.includes('lightning_back'));                 // never revoked
+  assert.ok(!(await rpc(db, u3, 'get_quests', { p_game_id: 'frost-fields' })).some(x => x.id === 'zz_hunt_q'));
+  // admin sets/extends via RPC; script SQL extends ends_at
+  const adm = await createUser(db, { username: 'zz_evadm' });
+  await su(db, `update public.profiles set is_admin = true where id = $1`, [adm]);
+  const s1 = await rpc(db, adm, 'set_event_window', { p_event_id: 'zz_hunt', p_starts_at: new Date(Date.now() - 3600e3).toISOString(), p_ends_at: new Date(Date.now() + 7 * 86400e3).toISOString() });
+  assert.equal(s1.ok, true); assert.equal(s1.status.active, true);
+  assert.equal((await rpc(db, adm, 'set_event_window', { p_event_id: 'nope', p_starts_at: null, p_ends_at: null })).reason, 'unknown_event');
+  const { eventWindowSQL } = await import(resolve(ROOT, 'scripts/event-window.mjs'));
+  const before = Date.parse((await rpc(db, null, 'event_status', { p_event_id: 'zz_hunt' })).endsAt);
+  await db.exec(eventWindowSQL('zz_hunt', { extendDays: 2 }));
+  assert.equal(Date.parse((await rpc(db, null, 'event_status', { p_event_id: 'zz_hunt' })).endsAt) - before, 2 * 86400e3);
+  await db.exec(eventWindowSQL('zz_hunt', { active: false }));
+  assert.equal((await rpc(db, null, 'event_status', { p_event_id: 'zz_hunt' })).active, false);           // paused by flag
+  assert.equal((await rpc(db, u2, 'quest_progress', { p_quest_id: 'zz_hunt_q', p_delta: 1 })).reason, 'event_ended');
+  assert.throws(() => eventWindowSQL("x'; drop table y; --", {}));
+  await su(db, `delete from public.quest_defs where quest_id = 'zz_hunt_q' and not exists (select 1 from public.quest_progress where quest_id = 'zz_hunt_q')`);
 });
 await db.close();
 for (const r of results) console.log(r[0], r[1], r[2] ? '\n     ' + r[2] : '');

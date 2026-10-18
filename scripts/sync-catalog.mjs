@@ -195,6 +195,11 @@ on conflict (game_id, item_id) do update set price = excluded.price, active = tr
   where (game_consumable_prices.price, game_consumable_prices.active) is distinct from (excluded.price, true);` : ''}
 update public.game_consumable_prices set active = false, updated_at = now()
   where active and (game_id || '/' || item_id) not in (${consumables.length ? consumables.map(c => q(c.gameId + '/' + c.itemId)).join(', ') : "''"});
+${quests.some(x => x.eventId) ? `
+-- events referenced by quests exist (unscheduled until set with scripts/event-window.mjs; never overwritten here)
+insert into public.game_events (id, title) values
+${[...new Set(quests.filter(x => x.eventId).map(x => x.eventId))].map(e => `  (${q(e)}, ${q(e.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))})`).join(',\n')}
+on conflict (id) do nothing;` : ''}
 ${quests.length ? `
 insert into public.quest_defs (quest_id, game_id, title, goal, reward_item_id, event_id, starts_at, ends_at, max_per_call, min_interval_ms, max_per_hour, max_per_minute, description, active) values
 ${quests.map(x => `  (${q(x.id)}, ${q(x.gameId)}, ${q(x.title)}, ${x.goal}, ${q(x.rewardItemId)}, ${x.eventId ? q(x.eventId) : 'null'}, ${ts(x.startsAt)}::timestamptz, ${ts(x.endsAt)}::timestamptz, ${x.maxPerCall ?? 1}, ${x.minIntervalMs ?? 2000}, ${x.maxPerHour ?? 60}, ${x.maxPerMinute ?? 'null'}, ${x.description ? q(x.description) : 'null'}, true)`).join(',\n')}
