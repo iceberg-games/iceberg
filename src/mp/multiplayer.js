@@ -76,8 +76,10 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     syncOthers();
   }
   async function refreshRoster() {
-    if (!s || now() - s.rosterAt < 2500) return;
-    s.rosterAt = now(); await heartbeat();
+    const sess = s; if (!sess) return;
+    const wait = 2500 - (now() - sess.rosterAt);
+    if (wait > 0) { if (!sess.rosterRetry) sess.rosterRetry = setTimeout(() => { sess.rosterRetry = null; if (s === sess) refreshRoster(); }, wait); return; }   // throttled: retry, don't drop
+    sess.rosterAt = now(); await heartbeat();
   }
   async function heartbeat() {
     const sess = s; if (!sess) return;
@@ -194,7 +196,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
   async function leave() {
     const sess = s; if (!sess) return;
     s = null; cancelAnimationFrame(raf); lastFrame = 0;
-    sess.timers.forEach(clearInterval);
+    sess.timers.forEach(clearInterval); clearTimeout(sess.rosterRetry);
     for (const k of [...sess.others.keys()]) { const o = sess.others.get(k); bubbles?.untrack(k); o.avatar.root.parent?.remove(o.avatar.root); try { o.avatar.attachWindAudio?.(null); o.avatar.dispose?.(); } catch { /* */ } stats.disposed++; }
     try { engine.avatar?.updateProximity?.([]); } catch { /* */ }   // alone again: local hat calms down
     sess.others.clear();

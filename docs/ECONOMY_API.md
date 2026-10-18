@@ -174,6 +174,7 @@ export const QUESTS = [
   - Signed in, it uses the last `event_status`, refreshed in the background every 60 s and corrected by `serverNow`. Before the first answer it is `'unknown'`, and a buy then goes to the server, which decides. Bus `shop:availability` fires when the first answer arrives.
   - Guests use the local event window.
   - `economy.buy(id)` applies the same rule and returns `{ ok:false, code:'event_not_started'|'event_ended', reason:<message> }`. A server refusal rolls back and emits `economy:rejected` with `reason` set to the server reason.
+- **Hidden before the event:** `itemAvailability(id).hidden` is `true` for every item with an `event` tag (buyable or earnOnly) while that event is unscheduled or not started, and while signed-in status is still unknown. `economy.shopVisible(id)` is the shop's listing rule: owned items are always shown, otherwise `!hidden`. Offline, an event with no quests in the build counts as unscheduled.
 - Shop UI (Cosmetics / ui.js owner): show a "Limited time" badge with `msLeft` when `limited && forSale`. After the event, hide unowned items or show "Event ended" (`state === 'event_ended' && !economy.owns(id)`).
 
 ### Paid items in a game: gears and consumables
