@@ -14,6 +14,8 @@ import { CreatorPanel } from './ui/creator.js';
 import { h } from './ui/dom.js';
 import { CREATOR, findGame } from './games/registry.js';
 import { customGameDef } from './games/customGame.js';
+import { showDevicePicker } from './ui/devicePicker.js';
+import { mountTouchControls } from './ui/touchControls.js';
 
 async function boot() {
   const app = document.getElementById('app');
@@ -60,6 +62,8 @@ async function boot() {
 
   setInterval(() => music.rocket(engine.running && engine.player.flying), 80);
 
+  mountTouchControls(engine);
+  await showDevicePicker(document.body);
   menu.showTitle();
 
   // Handy hooks for automated tests / debugging in the console.

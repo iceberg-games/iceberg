@@ -1,0 +1,27 @@
+/* Device mode styles (body.device-mobile / body.device-computer set by core/device.js). */
+
+/* Fallback: Create/Studio are computer-only. menu.js also handles this; this rule
+   keeps it hidden even if that code changes. */
+body.device-mobile .game-card[data-game="creator"],
+body.device-mobile #create-btn,
+body.device-mobile .edit-btn { display: none !important; }
+
+/* Production site build: no free demo packs or dev grants (see core/economy.js). */
+body.iceberg-site .dev,
+body.iceberg-site .dev-grants,
+body.iceberg-site .dev-grant,
+body.iceberg-site .packs .price-btn { display: none !important; }
+body.iceberg-site .packs::after { content: 'Birg Bucks packs are coming soon. Earn BB by playing!'; display: block; grid-column: 1 / -1; padding: 10px; color: #5b7891; font-weight: 700; text-align: center; }
+
+.device-picker { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px;
+  background: radial-gradient(ellipse at top, #eaf7ff, #bfe2f8 60%, #8cc6ec); }
+.device-card { background: var(--glass-strong, #fff); border-radius: 22px; box-shadow: 0 10px 34px rgba(14,42,69,.25);
+  padding: 22px; max-width: 560px; width: 100%; text-align: center; }
+.device-card h2 { margin: 6px 0 14px; color: var(--ice-800, #18466e); }
+.device-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+@media (max-width: 460px) { .device-opts { grid-template-columns: 1fr; } }
+.device-opt { display: flex; flex-direction: column; gap: 4px; align-items: center; padding: 16px 10px; border-radius: 16px; cursor: pointer;
+  border: 3px solid transparent; background: #fff; font: inherit; color: inherit; box-shadow: 0 2px 8px rgba(14,42,69,.12); }
+.device-opt.selected { border-color: var(--ice-500, #3f9de0); background: #eef8ff; }
+.device-ico { font-size: 40px; }
+.device-guess { font-size: 11px; font-weight: 800; color: #fff; background: var(--ice-500, #3f9de0); border-radius: 999px; padding: 2px 8px; }
