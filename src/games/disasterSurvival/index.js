@@ -11,6 +11,7 @@ import * as C from './config.js';
 import { ISLAND_R, LOBBY, BUILDINGS, CELL, buildBlocks, buildBunker, inBunker, BUNKER, hillBoxes, groundHeight, HILL_TOP, TREES, spawnPoints } from './map.js';
 import { DISASTERS, findDisaster } from './disasters.js';
 import { DisasterAudio } from './audio.js';
+import { UI_FILES, makePlayUi } from './uiSounds.js';
 import { DisasterUI } from './ui.js';
 import { HuntMenu } from './hunt.js';
 import { QUESTS } from './quests.js';
@@ -359,9 +360,9 @@ export default {
       scene, debris, audio: null, ui: null, fogOverride: null, playerExposed: false,
       get flood() { return flood; },
       setFlood(l) { flood = l; water.visible = l > 0.02; water.position.y = l; },
-      playerPos: () => player.pos,
+      playerPos: () => player.pos, playerAlive: () => alive && onMap,
       randomPoint(frac = 0.9, avoidBunker = false) { for (;;) { const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * ISLAND_R * frac, x = Math.cos(a) * r, z = Math.sin(a) * r; if (!avoidBunker || !inBunker(x, z)) return new THREE.Vector3(x, 0, z); } },
-      bunker, bunkerMinX: BUNKER.x - BUNKER.hx, nearOpening(p) { return bunker.openings.some(o => Math.abs(o.x - p.x) < 3.5 && Math.abs(o.z - p.z) < 3.5 && p.y > o.y - 1 && p.y < o.y + 4); },
+      bunker, bunkerBox: BUNKER, bunkerMinX: BUNKER.x - BUNKER.hx, nearOpening(p) { return bunker.openings.some(o => Math.abs(o.x - p.x) < 3.5 && Math.abs(o.z - p.z) < 3.5 && p.y > o.y - 1 && p.y < o.y + 4); },
       surfaceAt(x, z) { let y = groundHeight(x, z); for (const b of blocks) if (b.alive && Math.abs(b.x - x) < b.w / 2 && Math.abs(b.z - z) < b.d / 2) y = Math.max(y, b.y + b.h / 2); return y; },
       forBlocksNear,
       forBlocksInBox(x0, x1, h, fn) { for (const b of blocks) if (b.alive && !b.perm && b.x > x0 && b.x < x1 && b.y - b.h / 2 < h) fn(b); },
@@ -382,7 +383,8 @@ export default {
       },
     };
 
-    const audio = new DisasterAudio(music, { dir: C.AUDIO_DIR, files: C.AUDIO_FILES, kit: C.KIT_SFX }); W.audio = audio;
+    const audio = new DisasterAudio(music, { dir: C.AUDIO_DIR, files: { ...C.AUDIO_FILES, ...UI_FILES }, kit: C.KIT_SFX, beds: C.DISASTER_BEDS }); W.audio = audio;
+    const playUi = makePlayUi(audio); W.playUi = playUi;
 
     // ---------- player state ----------
     let hp = C.MAX_HP, alive = true, onMap = false, dyingT = 0, hurtSfxT = 0, lastVy = 0, wasGround = true;
@@ -399,7 +401,7 @@ export default {
       burst(player.pos.clone().setY(player.pos.y + 1.3), [0xf5cd30, 0x3d7bd9, 0x4a9e4a, 0xffffff], 28, 9, 0.45);
       audio.stinger('lose', 0.8, 'death'); // local player only
       const msg = { tornado: 'Swept away by the tornado', blizzard: 'Frozen solid', avalanche: 'Buried by the avalanche', flood: 'Swept away by icy water', meteor: 'Flattened by a meteor', lightning: 'Struck by lightning', debris: 'Hit by falling debris', fall: 'Took a nasty fall' }[why] || 'You didn\'t make it';
-      ui.showBanner('💀 ELIMINATED', `${msg}. Wait for the next round!`, 3200);
+      popup('eliminated', { icon: '💀', title: 'ELIMINATED', sub: `${msg}. Wait for the next round!`, ms: 3200 });
     }
     const playerEnt = { player: true, get pos() { return player.pos; }, damage: (n, why) => damagePlayer(n, why), knock: (dx, dz, s) => { const d = Math.hypot(dx, dz) + 0.01; pushPlayer(dx / d * s * 0.05, dz / d * s * 0.05); player.vel.y = Math.max(player.vel.y, 6); } };
     function pushPlayer(dx, dz) {
@@ -425,7 +427,7 @@ export default {
       bot.way = [];
       const nearestBuilding = () => { let best = null, bd = 1e9; for (const B of BUILDINGS) { const d = Math.hypot(B.x - bot.pos.x, B.z - bot.pos.z); if (d < bd) { bd = d; best = B; } } return best; };
       if (smart && (id === 'flood' || id === 'avalanche')) bot.way = [new THREE.Vector3(HILL_TOP.x + (Math.random() - 0.5) * 3, 0, HILL_TOP.z + (Math.random() - 0.5) * 3)];
-      else if (smart && id === 'blizzard') { const B = nearestBuilding(); const dx = B.x - B.cw * CELL / 2 + Math.floor(B.cw / 2) * CELL + CELL / 2; bot.way = [new THREE.Vector3(dx, 0, B.z + B.cd * CELL / 2 + 2.5), new THREE.Vector3(dx, 0, B.z)]; }
+      else if (smart && (id === 'blizzard' || id === 'acidrain' || id === 'gritstorm')) { const B = nearestBuilding(); const dx = B.x - B.cw * CELL / 2 + Math.floor(B.cw / 2) * CELL + CELL / 2; bot.way = [new THREE.Vector3(dx, 0, B.z + B.cd * CELL / 2 + 2.5), new THREE.Vector3(dx, 0, B.z)]; }
       else if (smart && id === 'tornado' && current?.inst?.pos) { const tp = current.inst.pos, d = new THREE.Vector3(bot.pos.x - tp.x, 0, bot.pos.z - tp.z).normalize(); bot.way = [bot.pos.clone().addScaledVector(d, 25)]; }
       else if (smart && id === 'earthquake') { for (let k = 0; k < 10; k++) { const p = W.randomPoint(0.85, true); if (BUILDINGS.every(B => Math.hypot(B.x - p.x, B.z - p.z) > 14)) { bot.way = [p]; break; } } }
       if (!bot.way.length) bot.way = [W.randomPoint(0.85, true)];
@@ -497,7 +499,9 @@ export default {
       } else if (!on && balloonMesh) { balloonMesh.parent?.remove(balloonMesh); balloonMesh.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); }); balloonMesh = null; }
       ui.setBalloon(owned(), on, C.GEAR_PRICES_BB.greenBalloon);
     }
-    const deny = (text) => { audio.sfx('deny'); bus.emit('toast', { text, icon: '😕' }); };
+    /** Popup + its sound. Sound names live in C.POPUP_SFX so the Sound Designer's files can be swapped in one place. */
+    function popup(kind, opts, withSound = true) { ui.popup(kind, opts, () => playUi('popup_close')); playUi('popup_open'); const snd = C.POPUP_SFX[kind]; if (withSound && snd) audio.sfx(snd); }
+    const deny = (text) => { playUi('error'); bus.emit('toast', { text, icon: '😕' }); };
     // Paid one-use items go through the Publisher's economy.buyConsumable (server prices them from
     // CONSUMABLE_PRICES_BB). The effect is applied only once it resolves ok. A per-purchase ref makes retries free.
     const sess = Math.random().toString(36).slice(2, 8);
@@ -506,6 +510,18 @@ export default {
       const price = C.CONSUMABLE_PRICES_BB[id];
       const r = await economy.buyConsumable(C.GAME_ID, id, price, `nds:${sess}:r${api.round}:${id}:${++buySeq}`);
       return !!(r && r.ok);
+    }
+    let lastCount = 0;
+    const hatPos = [];
+    function feedHatProximity() {
+      const fn = avatar?.updateProximity, nd = avatar?.setNearbyDistance; if (!fn && !nd) return;
+      hatPos.length = 0;
+      for (const b of bots) if (b.alive && b.onMap && b.hat === 'tornado_hat') hatPos.push(b.pos);
+      try { const peers = window.iceberg?.mp?.nearby?.() || []; for (const p of peers) if (p?.pos && (p.equipped?.hat === 'tornado_hat' || p.wearing?.includes?.('tornado_hat'))) hatPos.push(p.pos); } catch { /* optional API */ }
+      try {
+        if (fn) avatar.updateProximity(hatPos);
+        else { let d = Infinity; for (const p of hatPos) d = Math.min(d, Math.hypot(p.x - player.pos.x, p.y - player.pos.y, p.z - player.pos.z)); avatar.setNearbyDistance(d); }
+      } catch (e) { console.warn('hat proximity', e); }
     }
     let stormQueued = null, buying = false, applesThisRound = 0, lastAppleT = -1e9, stormsBoughtRound = -1;
     const nowS = () => performance.now() / 1000;
@@ -519,7 +535,7 @@ export default {
         if (owned()) { setBalloon(!balloonOn); audio.sfx('balloon'); return true; }
         const r = economy.buyGear?.(C.GAME_ID, 'greenBalloon', C.GEAR_PRICES_BB.greenBalloon);
         if (!r || !r.ok) { deny(`You need ${C.GEAR_PRICES_BB.greenBalloon} Birg Bucks for the Green Balloon`); return false; }
-        audio.sfx('buy'); bus.emit('toast', { text: 'Green Balloon is yours! It works in Natural Disaster Survival only.', icon: '🎈' });
+        popup('bought', { icon: '🎈', title: 'Green Balloon', sub: 'Yours forever. Works in Natural Disaster Survival only.' });
         setBalloon(true); return true;
       },
       apple() {
@@ -542,7 +558,7 @@ export default {
     function eatApple() {
         hp = Math.min(C.MAX_HP, hp + C.APPLE_HEAL); ui.setHp(hp, C.MAX_HP); audio.sfx('eat');
         burst(player.pos.clone().setY(player.pos.y + 2), [0x7dff6a, 0xffffff], 12, 3, 0.2);
-        bus.emit('toast', { text: `Crunch! +${C.APPLE_HEAL} HP`, icon: '🍎' });
+        popup('bought', { icon: '🍎', title: `Crunch! +${C.APPLE_HEAL} HP`, sub: `${C.APPLES_PER_ROUND - applesThisRound} Apple${C.APPLES_PER_ROUND - applesThisRound === 1 ? '' : 's'} left this round`, ms: 1800 });
     }
     Object.assign(api, {
       storm() { if (stormsBoughtRound === api.round) { deny('One Bigger Storm per round'); return false; } if (stormQueued) { deny(`Bigger Storm already set: ${findDisaster(stormQueued).name}`); return false; } ui.showPick(); return true; },
@@ -552,8 +568,8 @@ export default {
         return buyConsumable('biggerStorm').then((ok) => {
           buying = false;
           if (!ok) { if (stormsBoughtRound === forRound) stormsBoughtRound = -1; deny(`You need ${C.BIGGER_STORM_PRICE_BB} Birg Bucks for a Bigger Storm`); return false; }
-          stormQueued = id; ui.setStormQueued(findDisaster(id).name); audio.sfx('buy');
-          bus.emit('toast', { text: `Next round: a BIGGER ${findDisaster(id).name}!`, icon: '🌪️' }); return true;
+          stormQueued = id; ui.setStormQueued(findDisaster(id).name);
+          popup('bought', { icon: findDisaster(id).icon, title: 'Bigger Storm ready', sub: `Next round: a BIGGER ${findDisaster(id).name}!` }); return true;
         });
       },
       /** Test/debug: jump straight to a round with this disaster. */
@@ -570,8 +586,8 @@ export default {
       /** Console/filming helper: no damage while true. */
       godMode: false,
     });
-    const ui = new DisasterUI({ prices: C.CONSUMABLE_PRICES_BB, disasters: DISASTERS, onBalloon: api.balloon, onApple: api.apple, onStorm: api.storm, onPick: api.pickStorm, onHunt: () => hunt.toggle() });
-    const hunt = new HuntMenu({ sfx: (n) => audio.sfx(n), ambience: (on) => audio.sampleLoop('hunt', on ? 0.75 : 0, { name: 'huntAmb', freq: 380, type: 'lowpass', lfo: 0.25 }) });
+    const ui = new DisasterUI({ prices: C.CONSUMABLE_PRICES_BB, disasters: DISASTERS, onBalloon: api.balloon, onApple: api.apple, onStorm: api.storm, onPick: api.pickStorm, onHunt: () => hunt.toggle(), onPress: () => playUi('click') });
+    const hunt = new HuntMenu({ sfx: (n) => (n === 'open' ? playUi('popup_open') : n === 'close' ? playUi('popup_close') : n === 'click' ? playUi('click') : n === 'deny' ? playUi('error') : n === 'big' ? playUi('play') : audio.sfx(n)), ambience: (on) => audio.sampleLoop('hunt', on ? 0.75 : 0, { name: 'huntAmb', freq: 380, type: 'lowpass', lfo: 0.25 }) });
     api.hunt = hunt;
     W.ui = ui;
     ui.setHp(hp, C.MAX_HP); ui.setBalloon(owned(), false, C.GEAR_PRICES_BB.greenBalloon);
@@ -579,7 +595,8 @@ export default {
     // ---------- event quest ----------
     const quest = QUESTS[0];
     const qhud = new QuestHud(quest);
-    const tracker = createQuestTracker(quest, { onChange: (s) => qhud.update(s), onResult: (r) => { if (r.granted) { hunt.celebrate(r.itemId || quest.rewardItemId); if (hunt.open) hunt.refresh(); } } });
+    let lastQP = null;
+    const tracker = createQuestTracker(quest, { onChange: (s) => { if (lastQP != null && s.progress > lastQP) playUi('notification'); lastQP = s.progress; qhud.update(s); }, onResult: (r) => { if (r.granted) { hunt.celebrate(r.itemId || quest.rewardItemId); if (hunt.open) hunt.refresh(); } } });
     api.quest = tracker;
 
     // ---------- round flow ----------
@@ -623,12 +640,11 @@ export default {
         api.phase = 'warning'; api.timer = C.T_WARNING;
         applyMood(current.def.mood, 0);
         audio.setMode('storm');
-        audio.sfx('siren');
-        ui.showBanner(`⚠ ${big ? 'BIGGER ' : ''}${current.def.name.toUpperCase()}!`, current.def.warn, 4200);
+        popup('warning', { icon: current.def.icon, title: `${big ? 'BIGGER ' : ''}${current.def.name.toUpperCase()}!`, sub: current.def.warn, ms: 4400 });
       } else if (api.phase === 'warning') {
         beginDisaster(); api.phase = 'disaster'; api.timer = C.T_DISASTER;
       } else if (api.phase === 'disaster') {
-        const name = current.def.name;
+        const name = current.def.name, dIcon = current.def.icon;
         endDisaster();
         const botSurv = bots.filter(b => b.alive && b.onMap).length;
         bots.forEach(b => { if (b.alive && b.onMap) sessionWins[b.name] = (sessionWins[b.name] || 0) + 1; });
@@ -638,11 +654,12 @@ export default {
         if (alive && onMap) {
           save.survived++; save.streak = (save.streak || 0) + 1; save.best = Math.max(save.best, save.streak);
           const pay = C.survivalPayout(paid);
-          if (pay > 0) { paid += pay; economy.earn(pay, C.EARN_REASON); audio.sfx('coin'); }
           audio.stinger('win', 0.9, 'survive');
-          ui.showBanner('🎉 YOU SURVIVED!', pay > 0 ? `+${pay} Birg Bucks · ${botSurv} others made it` : `${botSurv} others made it · session reward limit reached`, 3500);
+          popup('survived', { icon: '🎉', title: 'YOU SURVIVED!', sub: `${botSurv} other${botSurv === 1 ? '' : 's'} made it · streak ${save.streak}`, ms: 3500 }, false);
+          if (pay > 0) { paid += pay; economy.earn(pay, C.EARN_REASON); setTimeout(() => live && popup('reward', { title: `+${pay} Birg Bucks`, sub: `${C.SESSION_EARN_CAP_BB - paid} BB left to earn this session`, ms: 2600 }), 700); }
+          else popup('reward', { icon: '🧊', title: 'Session reward limit reached', sub: 'Keep playing for the quest and bragging rights!', ms: 2600 }, false);
           tracker.add(1);
-        } else { save.streak = 0; ui.showBanner(`${name} is over`, `${botSurv} survivor${botSurv === 1 ? '' : 's'}`, 3000); }
+        } else { save.streak = 0; popup('info', { icon: dIcon, title: `${name} is over`, sub: `${botSurv} survivor${botSurv === 1 ? '' : 's'}`, ms: 3000 }); }
         persist(economy, save);
         api.phase = 'results'; api.timer = C.T_RESULTS;
       } else {
@@ -666,6 +683,9 @@ export default {
       scene, collision, spawn, spawnFacing: Math.PI, music: 'none', maxCamDist: 22, nds: api,
       onFall: () => { if (!onMap) player.teleport(lobbySpawn(), Math.PI); },
       update(dt, t, pl) {
+        // Frost Tornado Hat proximity (effect owned by Cosmetics): feed the local avatar the positions of others wearing it.
+        if (api.phase === 'disaster' || api.phase === 'warning') feedHatProximity();
+        if (api.phase === 'warning' && current?.def.warnLoop) audio.sampleLoop(current.def.warnLoop[0], current.def.warnLoop[1]); // ground starts rumbling during the warning
         if (!audio.timer) audio.start();
         for (const code of ['Digit1', 'Digit2', 'Digit3', 'KeyH']) if (pressed(code)) hot(code);
         // timers
@@ -676,6 +696,7 @@ export default {
         lastTick = secs;
         const aliveCount = (alive && onMap ? 1 : 0) + bots.filter(b => b.alive && b.onMap).length;
         const mmss = `0:${String(secs).padStart(2, '0')}`;
+        if (api.phase === 'intermission' && api.timer <= 3.5 && !api.paused) { const n = Math.ceil(api.timer); if (n !== lastCount && n >= 1) { lastCount = n; popup('round', { title: `ROUND ${api.round + 1}`, count: n, sub: n === 1 ? 'Get ready to teleport!' : 'Survive the disaster to earn Birg Bucks', ms: 950 }); } } else if (api.phase !== 'intermission') lastCount = 0;
         if (api.phase === 'intermission') ui.setPanel('Intermission', `Next round in ${mmss}`, stormQueued ? `🌪️ Bigger Storm queued: ${findDisaster(stormQueued).name}` : `Round ${api.round + 1} · ${save.survived} survived all-time`);
         else if (api.phase === 'warning') ui.setPanel(`⚠ ${current.big ? 'Bigger ' : ''}${current.def.name} warning`, `${current.def.icon} Get ready! ${mmss}`, current.def.warn, true);
         else if (api.phase === 'disaster') ui.setPanel(`${current.def.icon} ${current.big ? 'Bigger ' : ''}${current.def.name}`, `Survive! ${mmss}`, `👥 ${aliveCount} / ${bots.length + 1} alive${!alive ? ' · you are out' : ''}`, true);

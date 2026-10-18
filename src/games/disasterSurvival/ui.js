@@ -42,18 +42,43 @@ const CSS = `
 .nds.m .nds-item .ic{font-size:22px}.nds.m .nds-item .pr{font-size:11px}
 .nds.m .nds-banner{font-size:26px;top:30%}.nds.m .nds-banner small{font-size:14px}
 .nds.m .nds-help{display:none}
+
+.nds-pop{position:fixed;left:50%;top:calc(120px + env(safe-area-inset-top,0px));z-index:40;pointer-events:none;transform:translate(-50%,-30px) scale(.6);opacity:0;transition:transform .45s cubic-bezier(.2,1.5,.4,1),opacity .3s;min-width:min(420px,88vw);max-width:92vw;text-align:center;font-family:system-ui,sans-serif}
+.nds-pop.show{transform:translate(-50%,0) scale(1);opacity:1}
+.nds-pop.out{transform:translate(-50%,-20px) scale(.9);opacity:0;transition-duration:.3s}
+.nds-pop .card{position:relative;overflow:hidden;padding:14px 22px 16px;border-radius:20px;color:#fff;background:linear-gradient(180deg,var(--a),var(--b));border:2px solid var(--c);box-shadow:0 10px 30px #0006,0 0 24px var(--c)}
+.nds-pop .ic{font-size:52px;line-height:1;display:inline-block;animation:ndsPopIc 1s ease-in-out infinite alternate}
+.nds-pop .tt{font-size:30px;font-weight:900;letter-spacing:1.5px;text-shadow:0 2px 0 #0005}
+.nds-pop .sb{font-size:15px;opacity:.95;margin-top:3px}
+.nds-pop .cnt{font-size:84px;font-weight:900;line-height:1;text-shadow:0 4px 0 #0005;animation:ndsCnt .9s ease-out}
+.nds-pop .shine{position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,#ffffff40 50%,transparent 70%);transform:translateX(-100%);animation:ndsShine 1.6s .2s ease-out}
+.nds-pop.warning .card{background:repeating-linear-gradient(-45deg,#c0261c 0 18px,#a51d15 18px 36px);border-color:#ffd24a}
+.nds-pop.warning .ic{animation:ndsShake .25s linear infinite}
+.nds-pop.round{--a:#1f6fb8;--b:#123e70;--c:#9fdcff}.nds-pop.survived{--a:#2bbf6a;--b:#16743f;--c:#b8ffcf}
+.nds-pop.eliminated{--a:#5a2030;--b:#2a0c16;--c:#ff7a8a}.nds-pop.reward{--a:#ffb020;--b:#c06a00;--c:#ffe9a8}
+.nds-pop.bought{--a:#7a4ae0;--b:#3c2190;--c:#d8c4ff}.nds-pop.info{--a:#3a5a7a;--b:#1d3049;--c:#a8c8e8}
+.nds-pop.reward .tt::before{content:'';display:inline-block;width:26px;height:26px;margin-right:8px;vertical-align:-3px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff6c0,#ffc020 55%,#b07000);animation:ndsCoin .8s linear infinite}
+@keyframes ndsPopIc{to{transform:translateY(-5px) rotate(6deg)}}
+@keyframes ndsShake{25%{transform:translateX(-3px) rotate(-6deg)}75%{transform:translateX(3px) rotate(6deg)}}
+@keyframes ndsCnt{from{transform:scale(2.2);opacity:0}}
+@keyframes ndsShine{to{transform:translateX(100%)}}
+@keyframes ndsCoin{50%{transform:scaleX(.15)}}
+.nds.m .nds-pop{top:calc(70px + env(safe-area-inset-top,0px));min-width:0;width:84vw}
+.nds.m .nds-pop .card{padding:9px 12px 11px;border-radius:16px}.nds.m .nds-pop .ic{font-size:34px}.nds.m .nds-pop .tt{font-size:20px}.nds.m .nds-pop .sb{font-size:12px}.nds.m .nds-pop .cnt{font-size:56px}
+@media (prefers-reduced-motion:reduce){.nds-pop,.nds-pop *{animation:none!important;transition:opacity .2s!important}}
 `;
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 
 export class DisasterUI {
-  constructor({ prices, disasters, onBalloon, onApple, onStorm, onPick, onHunt }) {
+  constructor({ prices, disasters, onBalloon, onApple, onStorm, onPick, onHunt, onPress = () => {} }) {
+    this.onPress = onPress;
     this.style = el('style'); this.style.textContent = CSS; document.head.append(this.style);
     this.root = el('div', 'nds'); this.root.id = 'nds-root';
     this.white = el('div', 'nds-white'); this.frost = el('div', 'nds-frost'); this.flashEl = el('div', 'nds-flash');
     this.panel = el('div', 'nds-panel', '<div class="nds-phase"></div><div class="nds-main"></div><div class="nds-sub"></div>'); this.panel.id = 'nds-panel';
     this.hp = el('div', 'nds-hp', '<i></i><span></span>'); this.hp.id = 'nds-hp';
     this.items = el('div', 'nds-items');
-    const mk = (id, ic, name, desc, key, fn) => { const b = el('button', 'nds-item', `<span class="ic">${ic}</span><span><b>${name}</b><small>${desc}</small></span><span class="pr"></span>`); b.id = id; b.title = `${name}: ${desc}${key ? ` (key ${key})` : ''}`; b.onclick = (e) => { e.currentTarget.blur(); fn(); }; this.items.append(b); return b; };
+    const mk = (id, ic, name, desc, key, fn) => { const b = el('button', 'nds-item', `<span class="ic">${ic}</span><span><b>${name}</b><small>${desc}</small></span><span class="pr"></span>`); b.id = id; b.title = `${name}: ${desc}${key ? ` (key ${key})` : ''}`; b.onclick = (e) => { e.currentTarget.blur(); this.onPress(); fn(); }; this.items.append(b); return b; };
     this.bBalloon = mk('nds-balloon', '🎈', 'Green Balloon', 'Floaty low-gravity jumps', '1', onBalloon);
     this.bApple = mk('nds-apple', '🍎', 'Apple', 'Heals 50 HP', '2', onApple);
     this.bStorm = mk('nds-storm', '🌪️', 'Bigger Storm', 'Pick & boost next disaster', '3', onStorm);
@@ -62,9 +87,9 @@ export class DisasterUI {
     this.bStorm.querySelector('.pr').textContent = `${prices.biggerStorm} BB`;
     this.prices = prices;
     this.pick = el('div', 'nds-pick', `<button class="x" title="Close">✕</button><h3>🌪️ Bigger Storm</h3><p>Choose next round's disaster. It hits 60% harder. ${prices.biggerStorm} BB, one round, this game only.</p><div class="grid"></div>`); this.pick.id = 'nds-storm-pick';
-    this.pick.querySelector('.x').onclick = () => this.hidePick();
+    this.pick.querySelector('.x').onclick = () => { this.onPress(); this.hidePick(); };
     const grid = this.pick.querySelector('.grid');
-    for (const d of disasters) { const b = el('button', null, `<span>${d.icon}</span>${d.name}`); b.id = `nds-pick-${d.id}`; b.onclick = (e) => { e.currentTarget.blur(); onPick(d.id); }; grid.append(b); }
+    for (const d of disasters) { const b = el('button', null, `<span>${d.icon}</span>${d.name}`); b.id = `nds-pick-${d.id}`; b.onclick = (e) => { e.currentTarget.blur(); this.onPress(); onPick(d.id); }; grid.append(b); }
     this.banner = el('div', 'nds-banner');
     this.help = el('div', 'nds-help', '🌋 <b>Survive the disaster!</b> Wait in the lobby, then you\'re sent to Frostbay Island. Watch the warning, find safety: get inside, get high, or get away. Survivors earn Birg Bucks.');
     this.root.append(this.white, this.frost, this.flashEl, this.panel, this.hp, this.items, this.pick, this.banner, this.help);
@@ -89,6 +114,21 @@ export class DisasterUI {
   flash() { this.flashEl.classList.add('on'); requestAnimationFrame(() => requestAnimationFrame(() => this.flashEl.classList.remove('on'))); }
   whiteFlash(a = 0.8) { this.white.style.transition = 'none'; this.white.style.opacity = a; requestAnimationFrame(() => requestAnimationFrame(() => { this.white.style.transition = 'opacity .6s'; this.white.style.opacity = 0; })); }
   setFrost(a) { this.frost.style.opacity = a; }
+  /** Animated popup card (never blocks touch: pointer-events none). kind: round|warning|survived|eliminated|reward|bought|info.
+   *  Popups of the same 'slot' replace each other; reward/bought stack below the main one. Sound is played by the caller (POPUP_SFX). */
+  popup(kind, { icon = '', title = '', sub = '', count = null, ms = 2600 } = {}, onHide = null) {
+    const slot = kind === 'reward' || kind === 'bought' ? 'b' : 'a';
+    this._pops = this._pops || {};
+    let el = this._pops[slot];
+    if (!el) { el = this._pops[slot] = document.createElement('div'); this.root.append(el); }
+    el.className = `nds-pop ${kind}`; el.id = `nds-pop-${slot}`; el.dataset.kind = kind;
+    if (slot === 'b') el.style.top = this.root.classList.contains('m') ? 'calc(170px + env(safe-area-inset-top,0px))' : 'calc(330px + env(safe-area-inset-top,0px))';
+    el.innerHTML = `<div class="card"><div class="shine"></div>${icon ? `<div class="ic">${icon}</div>` : ''}${count != null ? `<div class="cnt">${count}</div>` : ''}<div class="tt">${title}</div>${sub ? `<div class="sb">${sub}</div>` : ''}</div>`;
+    void el.offsetWidth; el.classList.add('show');
+    clearTimeout(el._t); clearTimeout(el._t2);
+    el._t = setTimeout(() => { el.classList.add('out'); if (ms > 1500) onHide?.(); el._t2 = setTimeout(() => el.classList.remove('show', 'out'), 320); }, ms);
+    return el;
+  }
   showBanner(title, sub = '', ms = 2800) {
     this.banner.innerHTML = `${title}${sub ? `<small>${sub}</small>` : ''}`; this.banner.classList.add('show');
     clearTimeout(this._bT); this._bT = setTimeout(() => this.banner.classList.remove('show'), ms);

@@ -62,17 +62,29 @@ export const AUDIO_FILES = {
   win: { files: ['win_survived.ogg', 'win_survived.mp3'] },
   lose: { files: ['lose_eliminated.ogg', 'lose_eliminated.mp3'] },
   // Sound Designer starter kit (approved by Colin): generic UI / item / hurt sounds, Ogg only (procedural fallback)
-  kit_ui_click: { files: ['kit/ui_click.ogg'], gain: 0.5 }, kit_ui_open: { files: ['kit/ui_open.ogg'], gain: 0.45 },
-  kit_ui_close: { files: ['kit/ui_close.ogg'], gain: 0.45 }, kit_ui_deny: { files: ['kit/ui_deny.ogg'], gain: 0.5 },
   kit_hurt: { files: ['kit/hurt.ogg'], gain: 0.8 }, kit_death_fall: { files: ['kit/death_fall.ogg'], gain: 0.6 },
-  kit_powerup: { files: ['kit/powerup.ogg'], gain: 0.5 }, kit_coin_collect: { files: ['kit/coin_collect.ogg'], gain: 0.45 },
+  kit_powerup: { files: ['kit/powerup.ogg'], gain: 0.5 }, kit_win_fanfare: { files: ['kit/win_fanfare.ogg'], gain: 0.6 }, kit_coin_collect: { files: ['kit/coin_collect.ogg'], gain: 0.45 },
   // Hunt menu (Sound Designer): 24 s seamless ambience loop (fade in 1 s / out 0.5 s) + 0.95 s collect jingle
   hunt: { files: ['hunt_menu_ambience_loop.ogg', 'hunt_menu_ambience_loop.mp3'], loopSeconds: 24, fadeIn: 1, fadeOut: 0.5 },
   collected: { files: ['item_collected.ogg', 'item_collected.mp3'], gain: 0.8 },
+  // Sound Designer batch 3: disaster beds (keys = disaster ids) + one-shots
+  volcano: { files: ['volcano_lava_loop.ogg', 'volcano_lava_loop.mp3'], loopSeconds: 11, fadeIn: 1.8, fadeOut: 2 },
+  volcano_eruption: { files: ['volcano_eruption.ogg', 'volcano_eruption.mp3'], gain: 0.95 },
+  gritstorm: { files: ['sandstorm_loop.ogg', 'sandstorm_loop.mp3'], loopSeconds: 11, fadeIn: 2.5, fadeOut: 3 },
+  acidrain: { files: ['acid_rain_loop.ogg', 'acid_rain_loop.mp3'], loopSeconds: 11, fadeIn: 2, fadeOut: 2 },
+  acid_sizzle: { files: ['acid_sizzle.ogg', 'acid_sizzle.mp3'], gain: 0.85 },
+  lightning: { files: ['storm_ambience_loop.ogg', 'storm_ambience_loop.mp3'], loopSeconds: 12, fadeIn: 2, fadeOut: 2 },
+  lightning_strike_1: { files: ['lightning_strike_1.ogg', 'lightning_strike_1.mp3'], gain: 0.95 }, lightning_strike_2: { files: ['lightning_strike_2.ogg', 'lightning_strike_2.mp3'], gain: 0.95 }, lightning_strike_3: { files: ['lightning_strike_3.ogg', 'lightning_strike_3.mp3'], gain: 0.95 },
+  sinkhole: { files: ['sinkhole_rumble_loop.ogg', 'sinkhole_rumble_loop.mp3'], loopSeconds: 10, fadeIn: 2, fadeOut: 2 },
+  sinkhole_collapse: { files: ['sinkhole_collapse.ogg', 'sinkhole_collapse.mp3'], gain: 0.95 },
 };
+/** Popup kind -> sfx name (swap to the Sound Designer's popup sounds here). survived/eliminated use the win/lose stingers. */
+export const POPUP_SFX = { round: 'tick', warning: 'siren', survived: null, eliminated: null, reward: 'coin', bought: 'buy', info: 'open' };
+/** Disaster beds that count for the 'two disasters overlap -> drop to ~0.45' rule. */
+export const DISASTER_BEDS = ['tornado', 'tsunami', 'volcano', 'gritstorm', 'acidrain', 'lightning', 'sinkhole'];
 /** Our sfx names -> kit sample (used when loaded, else the procedural sound plays). */
-export const KIT_SFX = { deny: 'kit_ui_deny', click: 'kit_ui_click', open: 'kit_ui_open', close: 'kit_ui_close', hurt: 'kit_hurt', fall: 'kit_death_fall',
-  buy: 'kit_powerup', eat: 'kit_powerup', balloon: 'kit_powerup', coin: 'kit_coin_collect' };
+export const KIT_SFX = { deny: 'ui_error', click: 'ui_click', open: 'ui_popup_open', close: 'ui_popup_close', hurt: 'kit_hurt', fall: 'kit_death_fall',
+  buy: 'kit_powerup', eat: 'kit_powerup', balloon: 'kit_powerup', coin: 'kit_coin_collect', tick: 'ui_click', survive: 'kit_win_fanfare' };
 const _unused = {};
 export const CREDITS = ['Music: Iceberg original soundtrack', 'Sound effects: Iceberg original sound design'];
 void _unused;

@@ -137,7 +137,7 @@ export const DISASTERS = [
   },
   // ------------------------------------------------------------------ EARTHQUAKE
   {
-    id: 'earthquake', name: 'Earthquake', icon: '🌋', warn: 'The ground is shaking! Get out of the buildings.',
+    id: 'earthquake', name: 'Earthquake', icon: '💥', warn: 'The ground is shaking! Get out of the buildings.',
     mood: { top: '#a8907a', bottom: '#e8d8c4', fog: '#d8c8b4', near: 40, far: 230, sun: 1.1, hemi: 0.9 },
     create(W, mult) {
       const cracks = new THREE.Group(); W.scene.add(cracks);
@@ -238,7 +238,7 @@ export const DISASTERS = [
   },
   // ------------------------------------------------------------------ LIGHTNING STORM
   {
-    id: 'lightning', name: 'Lightning Storm', icon: '⚡', warn: 'Thunderstorm overhead! Lightning strikes the highest points. Stay low.',
+    id: 'lightning', name: 'Lightning Storm', icon: '⚡', warn: 'A thunderstorm is rolling in! Lightning hits the highest points, so stay low and watch for blue strike markers.',
     mood: { top: '#1e2430', bottom: '#4a5466', fog: '#3a4454', near: 25, far: 170, sun: 0.25, hemi: 0.45 },
     create(W, mult) {
       W.precip({ count: 3500, color: '#9ab8e8', size: 0.08, fall: 34, wind: [-4, 2], streak: true });
@@ -246,7 +246,12 @@ export const DISASTERS = [
       const markG = new THREE.CylinderGeometry(1, 1, 1, 16, 1, true);
       const flashL = new THREE.PointLight('#cfe4ff', 0, 60, 1.2); W.scene.add(flashL);
       const pend = [], bolts = [];
-      let acc = 0.2;
+      let acc = 0.2, lastStrike = 0;
+      // dark storm cloud deck: a few big flattened puffs that drift and light up from inside on strikes
+      const cloudG = new THREE.SphereGeometry(1, 14, 8), cloudM = new THREE.MeshStandardMaterial({ color: '#2b3140', emissive: '#9fc4ff', emissiveIntensity: 0, roughness: 1, transparent: true, opacity: 0.92, depthWrite: false });
+      const clouds = new THREE.InstancedMesh(cloudG, cloudM, 34); const cm = new THREE.Matrix4(), cq = new THREE.Quaternion(), cpos = [];
+      for (let i = 0; i < 34; i++) { const a = i / 34 * Math.PI * 2 * 3, r = 12 + (i % 7) * 11; cpos.push([Math.cos(a) * r, 46 + rand(-3, 3), Math.sin(a) * r, rand(14, 24)]); }
+      W.scene.add(clouds);
       function bolt(from, to) {
         const g = new THREE.Group(); let a = from.clone();
         for (let i = 0; i < 9; i++) {
@@ -278,16 +283,181 @@ export const DISASTERS = [
               flashL.position.copy(q.tgt).setY(q.tgt.y + 6); flashL.intensity = 900;
               W.explode(q.tgt, 2.4, 55, { lightning: true });
               const near = W.playerPos().distanceTo(q.tgt);
-              W.audio.sfx('thunder', Math.max(0.25, 1 - near / 80)); if (near < 40) W.ui.whiteFlash(0.5 * (1 - near / 40));
+              { const pick = near < 30 ? (lastStrike === 1 ? 3 : lastStrike === 3 ? 1 : (Math.random() < 0.5 ? 1 : 3)) : (lastStrike === 2 ? (Math.random() < 0.5 ? 1 : 3) : 2); lastStrike = pick;
+                if (!W.audio.oneShot(`lightning_strike_${pick}`, Math.max(0.8, 1 - near / 200))) W.audio.sfx('thunder', Math.max(0.25, 1 - near / 80));
+                W.audio.duckLoop('lightning', 0.35, 2); }
+              if (near < 40) W.ui.whiteFlash(0.5 * (1 - near / 40));
             }
           }
           for (let i = bolts.length - 1; i >= 0; i--) { const b = bolts[i]; b.life -= dt; b.g.visible = Math.floor(b.life * 40) % 3 !== 0; if (b.life <= 0) { W.scene.remove(b.g); b.g.children.forEach(s => s.geometry.dispose()); bolts.splice(i, 1); } }
           flashL.intensity = Math.max(0, flashL.intensity - dt * 4000);
+          for (let i = 0; i < cpos.length; i++) { const c = cpos[i], sc = c[3] * Math.min(1, k * 6 + 0.2); cm.compose(new THREE.Vector3(c[0] + Math.sin(t * 0.05 + i) * 6 + t * 0.6 % 40 - 20, c[1], c[2]), cq, new THREE.Vector3(sc, sc * 0.32, sc)); clouds.setMatrixAt(i, cm); }
+          clouds.instanceMatrix.needsUpdate = true; cloudM.emissiveIntensity = flashL.intensity / 900 * 0.9;
+          if (!W.audio.bank?.lightning?.buffer && Math.random() < dt * 0.25) W.audio.sfx('thunder', 0.25);
           W.skyFlash(flashL.intensity / 900);
-          W.audio.loop('water', 0.35, { freq: 2500, type: 'highpass' });
+          W.audio.sampleLoop('lightning', 0.6, { name: 'water', freq: 2500, type: 'highpass' });
         },
         hazard() { return null; },
-        end() { for (const q of pend) { W.scene.remove(q.mk); q.mk.material.dispose(); } for (const b of bolts) W.scene.remove(b.g); W.scene.remove(flashL); markG.dispose(); boltM.dispose(); W.skyFlash(0); W.precip(null); W.audio.loop('water', 0); },
+        end() { for (const q of pend) { W.scene.remove(q.mk); q.mk.material.dispose(); } for (const b of bolts) W.scene.remove(b.g); W.scene.remove(flashL, clouds); cloudG.dispose(); cloudM.dispose(); markG.dispose(); boltM.dispose(); W.skyFlash(0); W.precip(null); W.audio.sampleLoop('lightning', 0); W.audio.loop('water', 0); },
+      };
+    },
+  },
+  // ------------------------------------------------------------------ VOLCANO (ice volcano erupts near the bunker)
+  {
+    warnLoop: ['volcano', 0.3], id: 'volcano', name: 'Volcano Eruption', icon: '🌋', warn: 'The ground is heating up! A volcano is about to burst out of the ice. Keep away from the lava!',
+    mood: { top: '#2a1418', bottom: '#a0482a', fog: '#5a3028', near: 35, far: 200, sun: 0.5, hemi: 0.6 },
+    create(W, mult) {
+      const a0 = rand(0, Math.PI * 2), R = 34, cx = Math.cos(a0) * R, cz = Math.sin(a0) * R * 0.8, base = W.surfaceAt(cx, cz);
+      const H = 13 * Math.min(1.4, Math.sqrt(mult));
+      const coneG = new THREE.ConeGeometry(11, 1, 24, 6, true); coneG.translate(0, 0.5, 0);
+      { const p = coneG.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i); if (y > 0.05 && y < 0.95) { p.setX(i, p.getX(i) * (1 + rand(-0.08, 0.08))); p.setZ(i, p.getZ(i) * (1 + rand(-0.08, 0.08))); } } coneG.computeVertexNormals(); }
+      const coneM = new THREE.MeshStandardMaterial({ color: '#3a3438', roughness: 0.95, flatShading: true, emissive: '#ff4a10', emissiveIntensity: 0.12 });
+      const cone = new THREE.Mesh(coneG, coneM); cone.position.set(cx, base - 0.2, cz); cone.scale.set(1, 0.01, 1); cone.castShadow = true;
+      const capG = new THREE.CircleGeometry(3.2, 20); capG.rotateX(-Math.PI / 2);
+      const lavaM = new THREE.MeshBasicMaterial({ color: '#ff6a1a' });
+      const cap = new THREE.Mesh(capG, lavaM); cone.add(cap); cap.position.y = 0.98;
+      const poolG = new THREE.CircleGeometry(1, 40); poolG.rotateX(-Math.PI / 2);
+      const poolM = new THREE.MeshBasicMaterial({ color: '#ff5a10', transparent: true, opacity: 0.95 });
+      const flows = []; // glowing lava tongues running downhill from the crater
+      for (let i = 0; i < 4; i++) { const m = new THREE.Mesh(poolG, poolM); const ang = a0 + Math.PI + rand(-1.2, 1.2) + i * 0.4; m.userData = { ang, len: 0 }; m.position.set(cx, base + 0.07 + i * 0.01, cz); m.visible = false; W.scene.add(m); flows.push(m); }
+      const glow = new THREE.PointLight('#ff6a20', 0, 70, 1.4); glow.position.set(cx, base + 6, cz);
+      W.scene.add(cone, glow);
+      const blobG = new THREE.IcosahedronGeometry(0.7, 0), blobM = new THREE.MeshStandardMaterial({ color: '#40160a', emissive: '#ff6a10', emissiveIntensity: 1.6, flatShading: true });
+      const blobs = []; let burstT = 0.4, erupted = 0, rumbleT = 0;
+      const ringG = new THREE.RingGeometry(0.85, 1, 28); ringG.rotateX(-Math.PI / 2);
+      const flowR = (m) => m.userData.len;
+      return {
+        update(dt, t, k) {
+          const rise = Math.min(1, k / 0.18);
+          cone.scale.set(0.5 + 0.5 * rise, Math.max(0.01, H * rise), 0.5 + 0.5 * rise);
+          if (k < 0.18) { W.shake(0.25); if (Math.random() < dt * 4) W.forBlocksNear(cx, cz, 9, (b) => Math.random() < 0.2 && W.detach(b, rand(-6, 6), 10, rand(-6, 6))); }
+          lavaM.color.setHSL(0.05 + Math.sin(t * 6) * 0.01, 1, 0.55 + Math.sin(t * 9) * 0.06);
+          coneM.emissiveIntensity = 0.12 + 0.25 * rise + Math.sin(t * 5) * 0.05;
+          glow.intensity = (200 + Math.sin(t * 13) * 40) * rise; glow.position.y = base + H * rise + 2;
+          // lava flows grow slowly (slow enough to outrun), then cool a bit near the end
+          const grow = k < 0.2 ? 0 : Math.min(1, (k - 0.2) / 0.55);
+          for (const m of flows) { const L = 4 + grow * 13 * Math.min(1.3, mult); m.userData.len = L; m.visible = grow > 0; const d = 8 + L * 0.55; m.position.set(cx + Math.cos(m.userData.ang) * d, base + 0.07, cz + Math.sin(m.userData.ang) * d); m.scale.set(L * 0.42, 1, L * 0.42); }
+          poolM.color.setHSL(0.04, 1, k > 0.9 ? 0.35 : 0.5 + Math.sin(t * 4) * 0.05);
+          // lava bombs with landing rings (warning 1.6 s)
+          // eruptions: a burst of 3-5 lava bombs every few seconds, each with the eruption one-shot + lava-bed duck
+          let launch = 0;
+          if (rise >= 1) { burstT -= dt; if (burstT <= 0) { burstT = rand(4.5, 7) / Math.sqrt(mult); launch = 3 + ((Math.random() * 3) | 0); erupted++;
+            if (!W.audio.oneShot('volcano_eruption', 1, erupted % 2 ? 0.9 : 1.05)) W.audio.sfx('boom', 0.8);
+            W.audio.duckLoop('volcano', 0.4, 1.5); W.shake(0.5); } }
+          while (launch-- > 0) {
+            const ang = rand(0, Math.PI * 2), r = rand(8, 34), tgt = new THREE.Vector3(cx + Math.cos(ang) * r, 0, cz + Math.sin(ang) * r);
+            tgt.y = W.surfaceAt(tgt.x, tgt.z);
+            const m = new THREE.Mesh(blobG, blobM), ring = new THREE.Mesh(ringG, new THREE.MeshBasicMaterial({ color: '#ff8a20', transparent: true, depthWrite: false }));
+            ring.position.set(tgt.x, tgt.y + 0.06, tgt.z); ring.scale.setScalar(2.6); W.scene.add(m, ring);
+            blobs.push({ m, ring, tgt, tt: 1.6, from: new THREE.Vector3(cx, base + H, cz) });
+          }
+          for (let i = blobs.length - 1; i >= 0; i--) {
+            const q = blobs[i]; q.tt -= dt; const u = 1 - q.tt / 1.6;
+            q.m.position.lerpVectors(q.from, q.tgt, u); q.m.position.y += Math.sin(u * Math.PI) * 18; q.m.rotation.x += dt * 5;
+            q.ring.material.opacity = 0.5 + 0.5 * Math.sin(t * 18);
+            if (q.tt <= 0) { W.scene.remove(q.m, q.ring); q.ring.material.dispose(); blobs.splice(i, 1); W.explode(q.tgt, 2.2, 30); }
+          }
+          rumbleT -= dt; if (rumbleT <= 0 && !W.audio.bank?.volcano?.buffer) { rumbleT = rand(1.5, 3); W.audio.sfx('boom', 0.25); }
+          W.audio.sampleLoop('volcano', 0.3 + 0.35 * rise, { name: 'rumble', freq: 140, type: 'lowpass', lfo: 0.6 });
+        },
+        hazard(e) {
+          const p = e.pos, d = Math.hypot(p.x - cx, p.z - cz), g = W.surfaceAt(p.x, p.z);
+          if (p.y > g + 0.8) return null;
+          for (const m of flows) if (m.visible && Math.hypot(p.x - m.position.x, p.z - m.position.z) < flowR(m) * 0.42) return { dmg: 26 * mult, lift: 0.4 };
+          if (d < 9 * cone.scale.x && cone.scale.y > 2) return { dmg: 18 * mult, px: (p.x - cx) / (d + 0.1) * 4, pz: (p.z - cz) / (d + 0.1) * 4 };
+          return null;
+        },
+        end() { W.scene.remove(cone, glow, ...flows); for (const q of blobs) { W.scene.remove(q.m, q.ring); q.ring.material.dispose(); } [coneG, capG, poolG, blobG, ringG].forEach(g => g.dispose()); [coneM, lavaM, poolM, blobM].forEach(m => m.dispose()); W.audio.sampleLoop('volcano', 0); W.audio.loop('rumble', 0); },
+      };
+    },
+  },
+  // ------------------------------------------------------------------ GRIT STORM (icy sand/grit storm)
+  {
+    id: 'gritstorm', name: 'Grit Storm', icon: '🌫️', warn: 'A grit storm is whipping up ice and sand! Find a wall to hide behind.',
+    mood: { top: '#a8957a', bottom: '#d8c8a8', fog: '#c8b694', near: 3, far: 40, sun: 0.45, hemi: 0.95 },
+    create(W, mult) {
+      const ang = rand(0, Math.PI * 2), wx = Math.cos(ang), wz = Math.sin(ang);
+      W.precip({ count: 7000, color: '#d9c7a2', size: 0.12, fall: 3, wind: [wx * 26 * mult, wz * 26 * mult], streak: true });
+      W.fogOverride = { near: 3, far: 40 / Math.sqrt(mult) };
+      let gust = 0;
+      return {
+        update(dt, t, k) {
+          gust = 0.6 + 0.4 * Math.sin(t * 0.9) * Math.sin(t * 0.37);
+          W.audio.sampleLoop('gritstorm', 0.55 + gust * 0.12, { name: 'wind', freq: 1400, type: 'bandpass', q: 0.9, lfo: 1.6 });
+          W.ui.setFrost(W.playerExposed ? 0.25 + gust * 0.2 : 0.08);
+          if (Math.random() < dt * 4) W.forBlocksNear(rand(-60, 60), rand(-60, 60), 3, (b) => { if (b.y > 2 && Math.random() < 0.06) W.detach(b, wx * 12, 2, wz * 12); });
+        },
+        hazard(e) { if (e.sheltered) return null; return { dmg: 2.2 * mult * gust, px: wx * 5.5 * mult * gust, pz: wz * 5.5 * mult * gust }; },
+        end() { W.precip(null); W.fogOverride = null; W.ui.setFrost(0); W.audio.sampleLoop('gritstorm', 0); W.audio.loop('wind', 0); },
+      };
+    },
+  },
+  // ------------------------------------------------------------------ ACID RAIN
+  {
+    id: 'acidrain', name: 'Acid Rain', icon: '🧪', warn: 'Toxic green clouds overhead! Acid rain is coming, so get under a roof.',
+    mood: { top: '#2e3a22', bottom: '#8aa060', fog: '#6a7c4a', near: 20, far: 140, sun: 0.35, hemi: 0.7 },
+    create(W, mult) {
+      W.precip({ count: 5000, color: '#9dff3a', size: 0.1, fall: 26, wind: [2, 1], streak: true });
+      const pudG = new THREE.CircleGeometry(1, 18); pudG.rotateX(-Math.PI / 2);
+      const pudM = new THREE.MeshBasicMaterial({ color: '#7dff2a', transparent: true, opacity: 0.5, depthWrite: false, blending: THREE.AdditiveBlending });
+      const puds = new THREE.InstancedMesh(pudG, pudM, 60); puds.count = 0; W.scene.add(puds);
+      const pm = new THREE.Matrix4(); let hiss = 0;
+      return {
+        update(dt, t, k) {
+          if (puds.count < 60 && Math.random() < dt * 6) { const p = W.randomPoint(0.95, true); p.y = W.surfaceAt(p.x, p.z) + 0.05; pm.makeScale(rand(0.8, 2.2), 1, rand(0.8, 2.2)).setPosition(p); puds.setMatrixAt(puds.count++, pm); puds.instanceMatrix.needsUpdate = true; }
+          pudM.opacity = 0.35 + 0.15 * Math.sin(t * 3);
+          if (Math.random() < dt * 1.5 * mult) { const b = W.randomBlock(true); if (b && b.y > 4 && Math.random() < 0.3) W.detach(b, 0, 1, 0); } // roofs slowly corrode
+          W.audio.sampleLoop('acidrain', 0.65, { name: 'water', freq: 3200, type: 'highpass', lfo: 0.3 });
+          hiss -= dt; if (W.playerExposed && W.playerAlive?.() && hiss <= 0) { hiss = 0.3; if (!W.audio.oneShot('acid_sizzle', 0.9, rand(0.9, 1.1))) W.audio.sfx('sizzle', 0.4); } // local, while the acid hurts you
+          W.ui.setFrost(0);
+        },
+        hazard(e) { return e.sheltered ? null : { dmg: 3.6 * mult, acid: true }; },
+        end() { W.scene.remove(puds); pudG.dispose(); pudM.dispose(); W.precip(null); W.audio.sampleLoop('acidrain', 0); W.audio.loop('water', 0); },
+      };
+    },
+  },
+  // ------------------------------------------------------------------ SINKHOLE
+  {
+    warnLoop: ['sinkhole', 0.45], id: 'sinkhole', name: 'Sinkhole', icon: '🕳️', warn: 'The ice is cracking underneath! Watch for dark cracks and run from the pit.',
+    mood: { top: '#6a7a8c', bottom: '#c8d4de', fog: '#aab8c4', near: 30, far: 200, sun: 0.7, hemi: 0.9 },
+    create(W, mult) {
+      const holes = [], crackG = new THREE.RingGeometry(0.92, 1, 40); crackG.rotateX(-Math.PI / 2);
+      const pitG = new THREE.CylinderGeometry(1, 0.7, 1, 32, 1, true); pitG.translate(0, -0.5, 0);
+      const pitM = new THREE.MeshStandardMaterial({ color: '#2a3a4a', side: THREE.BackSide, roughness: 1 });
+      const floorG = new THREE.CircleGeometry(1, 32); floorG.rotateX(-Math.PI / 2);
+      const darkM = new THREE.MeshBasicMaterial({ color: '#05080c' });
+      let acc = 0.6;
+      function spawn() {
+        const pp = W.playerPos(), near = Math.random() < 0.45;
+        const c = near ? pp.clone().add(new THREE.Vector3(rand(-7, 7), 0, rand(-7, 7))) : W.randomPoint(0.9, true);
+        { const B = W.bunkerBox; if (B && Math.abs(c.x - B.x) < B.hx + 3 && Math.abs(c.z - B.z) < B.hz + 3) return; } // the bunker's legs stand on bedrock
+        const r = rand(4, 7) * Math.min(1.4, Math.sqrt(mult)), y = W.surfaceAt(c.x, c.z);
+        const crack = new THREE.Mesh(crackG, new THREE.MeshBasicMaterial({ color: '#1a2430', transparent: true, depthWrite: false })); crack.position.set(c.x, y + 0.05, c.z); crack.scale.setScalar(r);
+        const g = new THREE.Group(); g.position.set(c.x, y + 0.03, c.z); g.visible = false;
+        const wall = new THREE.Mesh(pitG, pitM); wall.scale.set(r, 14, r); const fl = new THREE.Mesh(floorG, darkM); fl.scale.setScalar(r * 0.98); g.add(wall, fl);
+        W.scene.add(crack, g); holes.push({ c, r, y, crack, g, tt: 2.4, open: 0 }); W.audio.sfx('crack', 0.6);
+      }
+      return {
+        update(dt, t, k) {
+          acc += dt * (0.22 + k * 0.25) * mult;
+          while (acc > 1 && holes.length < 7) { acc--; spawn(); }
+          for (const h of holes) {
+            if (h.tt > 0) { h.tt -= dt; h.crack.material.opacity = 0.4 + 0.6 * Math.abs(Math.sin(t * 10)); h.crack.scale.setScalar(h.r * (0.3 + 0.7 * (1 - h.tt / 2.4))); if (h.tt <= 0) { h.g.visible = true; W.shake(0.6); if (!W.audio.oneShot('sinkhole_collapse', 0.95, rand(0.95, 1.05))) W.audio.sfx('boom', 0.6); W.forBlocksNear(h.c.x, h.c.z, h.r, (b) => W.detach(b, 0, -2, 0)); } }
+            else { h.open = Math.min(1, h.open + dt * 2); h.g.scale.setScalar(h.open); h.crack.scale.setScalar(h.r * 1.05); }
+          }
+          W.audio.sampleLoop('sinkhole', holes.some(h => h.tt <= 0) ? 0.5 : 0.6, { name: 'rumble', freq: 110, type: 'lowpass', lfo: 0.4 });
+        },
+        hazard(e) {
+          const p = e.pos;
+          for (const h of holes) {
+            if (h.tt > 0 || p.y > h.y + 1.5) continue;
+            const dx = p.x - h.c.x, dz = p.z - h.c.z, d = Math.hypot(dx, dz);
+            if (d < h.r * h.open) return { dmg: 30 * mult, px: -dx / (d + 0.1) * 6, pz: -dz / (d + 0.1) * 6, fall: true }; // in the pit: pulled down
+            if (d < h.r * 1.4) return { dmg: 0, px: -dx / (d + 0.1) * 2.2, pz: -dz / (d + 0.1) * 2.2 }; // crumbling rim
+          }
+          return null;
+        },
+        end() { for (const h of holes) { W.scene.remove(h.crack, h.g); h.crack.material.dispose(); } [crackG, pitG, floorG].forEach(g => g.dispose()); pitM.dispose(); darkM.dispose(); W.audio.sampleLoop('sinkhole', 0); W.audio.loop('rumble', 0); },
       };
     },
   },

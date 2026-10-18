@@ -24,7 +24,7 @@ const FALLBACK = {
   meteor_pet: { name: 'Frozen Meteor Pet', icon: '☄️', earnIn: 'BIRG HQ', rarity: 'epic', defaultColor: '#7fe3ff', desc: 'A little frozen meteor that floats by your shoulder.' },
   blizzard_hat: { name: 'Blizzard Cloud', icon: '🌨️', earnIn: 'Frost Fields', rarity: 'rare', defaultColor: '#e9f2fa', desc: 'Your own personal snow cloud.' },
 };
-export const itemInfo = (id) => ({ ...FALLBACK[id], ...(COSMETIC_BY_ID?.[id] || {}), rarity: COSMETIC_BY_ID?.[id]?.rarity || FALLBACK[id]?.rarity });
+export const itemInfo = (id) => ({ ...FALLBACK[id], ...(COSMETIC_BY_ID?.[id] || {}), rarity: String(COSMETIC_BY_ID?.[id]?.rarity || FALLBACK[id]?.rarity || '').toLowerCase() });
 
 const CSS = `
 .hunt{position:fixed;inset:0;z-index:60;display:none;align-items:center;justify-content:center;background:rgba(4,14,30,.55);backdrop-filter:blur(3px);font-family:system-ui,sans-serif}
@@ -45,6 +45,7 @@ const CSS = `
 .hunt-grid{position:relative;display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px 18px 120px}
 .hunt-card{position:relative;display:flex;gap:12px;padding:12px;border-radius:16px;background:#ffffff12;border:1px solid #ffffff2a}
 .hunt-card.legendary{grid-column:1/-1;background:linear-gradient(120deg,#ffb34733,#7fd4ff22);border:2px solid #ffc860;box-shadow:0 0 18px #ffb34755}
+.hunt-card.epic{border:2px solid #b48cff;box-shadow:0 0 12px #b48cff44}.hunt-card.rare{border:2px solid #6fd8ff;box-shadow:0 0 10px #6fd8ff33}
 .hunt-thumb{flex:0 0 76px;height:76px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:44px;background:radial-gradient(circle at 50% 40%,var(--c),#0b2440 75%);animation:huntBob 2.4s ease-in-out infinite}
 @keyframes huntBob{50%{transform:translateY(-4px)}}
 .hunt-card .nm{font-weight:800;font-size:17px}.hunt-card .rar{font-size:11px;font-weight:800;letter-spacing:1px;text-transform:uppercase;padding:1px 7px;border-radius:6px;margin-left:6px;vertical-align:2px}
@@ -191,7 +192,7 @@ export class HuntMenu {
     const info = itemInfo(itemId);
     const conf = Array.from({ length: 40 }, (_, i) => `<s style="left:${(i * 37) % 100}%;background:${['#6fd8ff', '#ffc860', '#ffffff', '#7dffb0', '#b48cff'][i % 5]};animation-delay:${(i % 10) * 0.07}s"></s>`).join('');
     this.cele.innerHTML = `${conf}<div class="c"><div class="ic">${esc(info.icon || '🎁')}</div><b>${esc(info.name || itemId)}</b><small>Added to your inventory! Equip it in the Avatar shop.</small></div>`;
-    this.cele.classList.add('show'); this.sfx('collected');
+    this.cele.classList.add('show'); this.sfx('big'); this.sfx('collected');
     clearTimeout(this._cT); this._cT = setTimeout(() => this.cele.classList.remove('show'), 3200);
   }
   dispose() { this.close(); this._offDev?.(); this._offInv?.(); clearTimeout(this._cT); this.root.remove(); this.cele.remove(); this.style.remove(); }

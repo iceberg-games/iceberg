@@ -31,18 +31,23 @@ export function createQuestTracker(quest, { onChange = () => {}, onResult = () =
   const saved = load(quest.id);
   const st = { progress: Math.min(quest.goal, saved.progress || 0), goal: quest.goal, claimed: !!saved.claimed, pending: false, itemId: quest.rewardItemId, done: false };
   st.done = st.progress >= st.goal;
-  let queued = Math.max(0, saved.pending | 0), timer = null, completing = false, disposed = false;
+  // Pending = local progress the server hasn't confirmed yet. One request in flight at a time, spaced by flushMs;
+  // too_fast/network -> retry later (never spam). Survives leaving the game because progress is persisted locally.
+  let srv = Math.min(quest.goal, saved.srv || 0), timer = null, inflight = false, completing = false, disposed = false;
+  const pending = () => Math.max(0, st.progress - srv);
   const emit = () => { if (!disposed) onChange({ ...st }); };
-  const persist = () => store(quest.id, { progress: st.progress, claimed: st.claimed, pending: queued }); // unsent deltas survive leaving the game
+  const persist = () => store(quest.id, { progress: st.progress, claimed: st.claimed, srv });
+  const schedule = (ms) => { if (!timer && !disposed) timer = setTimeout(flush, ms); };
 
   // adopt server state when available
   Promise.resolve().then(() => questApi().status?.(quest.gameId)).then((list) => {
     const s = Array.isArray(list) && list.find(q => q.id === quest.id);
     if (!s || disposed) return;
-    st.progress = Math.max(st.progress, Math.min(st.goal, s.progress || 0));
+    srv = Math.min(st.goal, s.progress || 0);
+    st.progress = Math.max(st.progress, srv);
     st.claimed = !!s.claimed; st.done = st.progress >= st.goal || !!s.completed;
     persist(); emit();
-    if (st.done && !st.claimed) tryComplete();
+    if (pending() && !st.claimed) schedule(500); else if (s.completed && !st.claimed) tryComplete();
   }).catch(() => {});
 
   async function tryComplete() {
@@ -52,35 +57,38 @@ export function createQuestTracker(quest, { onChange = () => {}, onResult = () =
     try { res = await questApi().complete(quest.id); } catch (e) { res = { granted: false, reason: 'network' }; }
     st.pending = false;
     if (res?.granted || res?.alreadyClaimed) { st.claimed = true; st.itemId = res.itemId || quest.rewardItemId; persist(); }
-    else if (res?.reason === 'not_complete') completing = false; // server disagrees; allow one more try after more progress
+    else completing = false; // not_complete / network / event_ended: may retry after more progress
     emit(); onResult(res || {});
   }
   function flush() {
     clearTimeout(timer); timer = null;
-    if (!queued || disposed && !queued) return;
-    const d = Math.min(queued, maxPerCall); queued -= d; persist();
-    const retry = (ms) => { queued += d; persist(); if (!timer && !disposed) timer = setTimeout(flush, Math.max(flushMs, ms || 0)); };
+    if (inflight || st.claimed) return;
+    const need = pending();
+    if (!need) { if (st.done && !st.claimed && srv >= st.goal) tryComplete(); return; }
+    const d = Math.min(need, maxPerCall); inflight = true;
     Promise.resolve().then(() => questApi().progress(quest.id, d)).then((raw) => {
+      inflight = false;
       const r = unwrap(raw);
-      if (r && r.ok === false) { if (r.reason === 'too_fast' || r.reason === 'network') retry(r.retryAfterMs); return; }
-      if (r && r.progress != null) { st.progress = Math.max(st.progress, Math.min(st.goal, r.progress)); if (r.completed) st.done = true; persist(); emit(); }
-      if (queued && !timer && !disposed) timer = setTimeout(flush, flushMs);
-      else if (!queued && st.done && !st.claimed) tryComplete();
-    }).catch(() => retry());
+      if (r && r.ok === false) {
+        if (r.reason === 'too_fast' || r.reason === 'network') schedule(Math.max(flushMs, r.retryAfterMs || 0));
+        return; // event_ended / not_live / caps: stop quietly
+      }
+      if (r && r.progress != null) { srv = Math.min(st.goal, r.progress); st.progress = Math.max(st.progress, srv); if (r.completed) st.done = true; }
+      else srv = Math.min(st.goal, srv + d);
+      persist(); emit();
+      if (pending()) schedule(flushMs); else if (srv >= st.goal && !st.claimed) tryComplete();
+    }).catch(() => { inflight = false; schedule(flushMs); });
   }
   emit();
-  if (queued && !st.claimed) timer = setTimeout(flush, 500);
   return {
     quest,
     get state() { return { ...st }; },
     add(delta = 1) {
-      if (st.claimed || st.done && completing) return;
-      if (st.progress >= st.goal) { flush(); return; }
-      const d = Math.min(delta, st.goal - st.progress);
-      st.progress += d; queued += d; st.done = st.progress >= st.goal; persist(); emit();
-      if (!timer) timer = setTimeout(flush, st.done ? 0 : flushMs);
+      if (st.claimed || st.progress >= st.goal) return;
+      st.progress += Math.min(delta, st.goal - st.progress); st.done = st.progress >= st.goal; persist(); emit();
+      schedule(st.done ? 0 : flushMs);
     },
     flush,
-    dispose() { flush(); disposed = true; },
+    dispose() { if (!inflight) flush(); disposed = true; clearTimeout(timer); },
   };
 }

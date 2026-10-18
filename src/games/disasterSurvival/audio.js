@@ -6,9 +6,11 @@ const CALM = [[62, 65, 69, 76], [58, 62, 65, 69], [53, 57, 60, 64], [60, 64, 67,
 const STORM = [[50, 57, 62], [46, 53, 58], [48, 55, 60], [45, 52, 57]];
 
 export class DisasterAudio {
-  constructor(music, { dir = '', files = null, kit = null } = {}) { this.kit = kit; this.music = music; this.timer = null; this.step = 0; this.mode = 'calm'; this.loops = {}; this.setAssets(dir, files); }
+  constructor(music, { dir = '', files = null, kit = null, beds = [] } = {}) { this.kit = kit; this.beds = beds; this.music = music; this.timer = null; this.step = 0; this.mode = 'calm'; this.loops = {}; this.setAssets(dir, files); }
   get ctx() { return this.music?.ctx; }
   get out() { return this.music?.master; }
+  /** Site mute (window.iceberg.music.muted, persisted in iceberg:v1:settings). Nothing new starts while muted; running loops sit behind the muted master. */
+  get muted() { return !!(this.music?.muted ?? (typeof window !== 'undefined' && window.iceberg?.music?.muted)); }
   // ---------------- external samples (lazy, Web Audio buffers) ----------------
   setAssets(dir, files) { this.dir = dir; this.files = files; this.bank = {}; this.sl = {}; this.track = files?.music ? { state: 'idle', src: null, gain: null } : null; }
   _bufState(name) { return this.bank[name]?.state || 'idle'; }
@@ -43,6 +45,7 @@ export class DisasterAudio {
    *  Falls back to the procedural noise bed while the file loads or if it can't be decoded. Returns true if the sample is used. */
   sampleLoop(name, level, fallback) {
     const ctx = this.ctx; if (!ctx) return false;
+    if (level > 0.001 && this.beds?.includes(name) && Object.keys(this.sl).some(k => k !== name && this.beds.includes(k))) level = Math.min(level, 0.45); // overlap
     let L = this.sl[name];
     const rec = this.bank[name];
     if (level > 0.001 && !rec) this._load(name);
@@ -60,15 +63,18 @@ export class DisasterAudio {
       if (level <= 0.001) { // fade out ~2 s, then stop
         delete this.sl[name]; L.g.gain.cancelScheduledValues(t); L.g.gain.setValueAtTime(L.g.gain.value, t); const fo = this.files[name].fadeOut ?? 2; L.g.gain.linearRampToValueAtTime(0.0001, t + fo);
         setTimeout(() => { try { L.src.stop(); } catch { /* */ } L.src.disconnect(); L.g.disconnect(); }, fo * 1000 + 300);
-      } else if (t - L.born > (this.files[name].fadeIn ?? 1.8) && !this._ducking) L.g.gain.setTargetAtTime(level, t, 0.4);
+      } else if (t - L.born > (this.files[name].fadeIn ?? 1.8) && !this._ducking && !(L.duckUntil > t)) { L.level = level; L.g.gain.setTargetAtTime(level, t, 0.4); }
       return true;
     }
     if (fallback) this.loop(fallback.name, level, fallback);
     return false;
   }
+  /** Briefly duck one bed (e.g. lava under an eruption, storm under a strike), then let sampleLoop restore it. */
+  duckLoop(name, level, sec) { const L = this.sl?.[name], ctx = this.ctx; if (!L || !ctx) return; const t = ctx.currentTime; L.duckUntil = t + sec; L.g.gain.cancelScheduledValues(t); L.g.gain.setTargetAtTime(Math.min(level, L.level), t, 0.06); }
   stopSampleLoops() { for (const k of Object.keys(this.sl)) this.sampleLoop(k, 0); }
   /** One-shot stinger ('win' | 'lose'); ducks loops + music first. Procedural fallback if not loaded. */
   stinger(name, vol, fallbackSfx) {
+    if (this.muted) return false;
     const ctx = this.ctx; if (!ctx) return false;
     const rec = this.bank[name];
     if (rec?.state !== 'ready') { this._load(name); if (fallbackSfx) this.sfx(fallbackSfx); return false; }
@@ -109,6 +115,8 @@ export class DisasterAudio {
     }
   }
   _tone(freq, t, dur, { type = 'sine', vol = 0.05, attack = 0.01, slideTo = null, dest = null } = {}) {
+    if (this.muted) return;
+    this.started = (this.started || 0) + 1;
     const ctx = this.ctx; if (!ctx) return;
     const o = ctx.createOscillator(), g = ctx.createGain();
     o.type = type; o.frequency.setValueAtTime(freq, t);
@@ -121,6 +129,7 @@ export class DisasterAudio {
     return this._nb;
   }
   _noise(t, dur, vol, freq = 2000, type = 'lowpass', q = 1) {
+    if (this.muted) return;
     const ctx = this.ctx; if (!ctx) return;
     const s = ctx.createBufferSource(); s.buffer = this._buf();
     const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
@@ -189,22 +198,26 @@ export class DisasterAudio {
   /** One-shot from a loaded sample; false if not ready (then callers use the procedural sound). */
   oneShot(name, vol = 1, rate = 1) {
     const ctx = this.ctx, rec = this.bank?.[name]; if (!ctx || rec?.state !== 'ready') return false;
+    if (this.muted) return true; // handled: silent
+    this.started = (this.started || 0) + 1;
     const src = ctx.createBufferSource(); src.buffer = rec.buffer; src.playbackRate.value = rate; const g = ctx.createGain(); g.gain.value = vol * (this.files[name].gain ?? 1);
     src.connect(g).connect(this.out); src.start(); return true;
   }
   sfx(name, vol = 1) {
-    const ctx = this.ctx; if (!ctx) return; const t = ctx.currentTime;
+    const ctx = this.ctx; if (!ctx || this.muted) return; const t = ctx.currentTime;
     if (name === 'collected' && this.oneShot('collected', vol, 1 + Math.random() * 0.12)) return; // overlaps fine
     if (this.kit?.[name] && this.oneShot(this.kit[name], vol)) return;
     switch (name) {
       case 'click': case 'open': this._tone(1200, t, 0.05, { vol: 0.05 }); break;
       case 'collected': [0, 4, 7, 12].forEach((n, i) => this._tone(NOTE(76 + n), t + i * 0.09, 0.3, { vol: 0.06 })); break;
+      case 'tick': this._tone(880, t, 0.08, { type: 'square', vol: 0.04 }); break;
       case 'close': this._tone(700, t, 0.06, { vol: 0.05 }); break;
       case 'fall': this._tone(500, t, 0.6, { type: 'triangle', vol: 0.06, slideTo: 120 }); break;
       case 'siren': for (let k = 0; k < 3; k++) { this._tone(500, t + k * 0.9, 0.45, { type: 'sawtooth', vol: 0.05, slideTo: 900 }); this._tone(900, t + k * 0.9 + 0.45, 0.45, { type: 'sawtooth', vol: 0.05, slideTo: 500 }); } break;
       case 'boom': this._tone(90, t, 0.9, { type: 'sine', vol: 0.5 * vol, slideTo: 30 }); this._noise(t, 1.2, 0.35 * vol, 500, 'lowpass'); break;
       case 'whoosh': this._noise(t, 1.0, 0.08 * vol, 1800, 'bandpass', 2); break;
       case 'thunder': this._noise(t, 0.12, 0.5 * vol, 4000, 'highpass'); this._noise(t + 0.05, 2.2, 0.35 * vol, 300, 'lowpass'); break;
+      case 'sizzle': this._noise(t, 0.5, 0.05 * vol, 5000, 'highpass'); break;
       case 'crack': this._noise(t, 0.15, 0.12 * vol, 2500, 'bandpass', 1.5); this._tone(200, t, 0.12, { type: 'square', vol: 0.03 * vol, slideTo: 80 }); break;
       case 'splash': this._noise(t, 0.5, 0.12, 1200, 'bandpass', 0.7); break;
       case 'hurt': this._tone(330, t, 0.12, { type: 'square', vol: 0.05, slideTo: 200 }); break;
