@@ -3,14 +3,16 @@
 //   <out>/index.html          portal (sign in, games, Safe Chat room, friends, settings)
 //   <out>/play/index.html     the game (opened in a new tab: play/?game=<id>)
 //   <out>/manifest.webmanifest, sw.js, icons/   PWA
-// Each page is a single self-contained HTML file (vite-plugin-singlefile), base './'.
+// Each page is a single self-contained HTML file (vite-plugin-singlefile), base './', EXCEPT big media
+// (3D models, audio: BIG_MEDIA) which are emitted as files next to the page (<page dir>/<name>-<hash>.<ext>) and only
+// downloaded when a game actually uses them. The service worker never precaches them (shell = HTML only).
 //
 //   node scripts/build-site.mjs [--out dist-site] [--demo]
 // Env (baked in): VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_USERNAME_EMAIL_DOMAIN.
 // VITE_ICEBERG_SITE=1 is forced (no free demo bucks) unless --demo is passed (test builds only).
 import { build } from 'vite';
 import { viteSingleFile } from 'vite-plugin-singlefile';
-import { mkdir, cp, rm, readFile, writeFile, copyFile } from 'node:fs/promises';
+import { mkdir, cp, rm, readFile, writeFile, copyFile, readdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
@@ -20,6 +22,8 @@ const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? proces
 const OUT = resolve(ROOT, arg('--out', 'dist-site'));
 const DEMO = process.argv.includes('--demo');
 process.env.VITE_ICEBERG_SITE = DEMO ? '0' : '1';
+
+const BIG_MEDIA = /\.(glb|gltf|bin|mp3|ogg|wav|m4a)$/i;
 
 const pages = [
   { html: 'site/portal/index.html', dest: 'index.html' },
@@ -33,10 +37,14 @@ for (const p of pages) {
   const outDir = resolve(tmp, p.dest.replace(/\W+/g, '_'));
   await build({
     configFile: false, root: ROOT, base: './', publicDir: false, logLevel: 'warn',
-    plugins: [viteSingleFile()],
-    build: { outDir, emptyOutDir: true, chunkSizeWarningLimit: 4000, rollupOptions: { input: resolve(ROOT, p.html) } },
+    plugins: [viteSingleFile({ useRecommendedBuildConfig: false })],
+    build: { outDir, emptyOutDir: true, chunkSizeWarningLimit: 100000000, cssCodeSplit: false, assetsDir: '',
+      assetsInlineLimit: (file) => !BIG_MEDIA.test(file),                    // everything else inlined (single file)
+      rollupOptions: { input: resolve(ROOT, p.html), output: { inlineDynamicImports: true } } },
   });
   await copyFile(resolve(outDir, p.html), resolve(OUT, p.dest));
+  // Vite resolves inlined-script asset URLs against the page itself (import.meta.url), so media sits beside it.
+  for (const f of (await readdir(outDir)).filter(f => BIG_MEDIA.test(f))) await copyFile(resolve(outDir, f), resolve(OUT, dirname(p.dest), f));
 }
 await rm(tmp, { recursive: true, force: true });
 await cp(resolve(ROOT, 'site/public'), OUT, { recursive: true });
