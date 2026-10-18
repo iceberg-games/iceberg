@@ -3,7 +3,6 @@
 // and add it to BUILTIN_GAMES below. See README "Adding a game".
 import frostFields from './frostFields.js';
 import birgHQ from './birgHQ.js';
-import rainbowObby from './rainbowObby.js';
 import giantRainbowObby from './giantObby/index.js';
 import { creatorDef, customGameDef } from './customGame.js';
 import { backend } from '../backend/LocalBackend.js';
@@ -11,7 +10,6 @@ import { backend } from '../backend/LocalBackend.js';
 export const BUILTIN_GAMES = [
   frostFields,
   birgHQ,
-  rainbowObby,
   giantRainbowObby,
 ];
 export const CREATOR = creatorDef;
