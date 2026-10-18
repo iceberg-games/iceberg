@@ -23,7 +23,7 @@ This API is for **shared game state**: rounds, disasters, survivor lists, finish
 | `mp.sendEvent(name, payload)` | `{ ok, reason? }` | anyone |
 | `mp.onEvent(name, cb)` | `unsubscribe()` | anyone |
 | `mp.players()` | `[{ id, name, ... }]` (includes you) | anyone |
-| `mp.nearby(radius)` | `[{ id, name, position: { x, y, z } }]`, other players within `radius` of you, nearest first (empty when solo) | anyone |
+| `mp.nearby(radius)` | `[{ id, name, position: { x, y, z }, hat }]` (`hat`: equipped hat id such as `'tornado_hat'`, or `null`), other players within `radius` of you, nearest first (empty when solo) | anyone |
 | `mp.localId()` | `string` | anyone |
 | `mp.now()` | `number` (ms since epoch, server-synced) | anyone |
 
