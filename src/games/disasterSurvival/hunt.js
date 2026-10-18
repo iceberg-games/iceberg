@@ -138,7 +138,7 @@ export class HuntMenu {
       if (!this.open) return;
       this._raf = requestAnimationFrame(f);
       if (ms - last < 33) return; // ~30 fps is plenty for the decoration
-      last = ms; this._tick();
+      last = ms; this._tick(); this.ambience(true); // lets the sample take over from the placeholder once decoded
       const w = cv.clientWidth, h = cv.clientHeight; if (!w || !h) return;
       if (cv.width !== w) { cv.width = w; cv.height = h; }
       const t = ms / 1000; g.clearRect(0, 0, w, h);
@@ -191,7 +191,7 @@ export class HuntMenu {
     const info = itemInfo(itemId);
     const conf = Array.from({ length: 40 }, (_, i) => `<s style="left:${(i * 37) % 100}%;background:${['#6fd8ff', '#ffc860', '#ffffff', '#7dffb0', '#b48cff'][i % 5]};animation-delay:${(i % 10) * 0.07}s"></s>`).join('');
     this.cele.innerHTML = `${conf}<div class="c"><div class="ic">${esc(info.icon || '🎁')}</div><b>${esc(info.name || itemId)}</b><small>Added to your inventory! Equip it in the Avatar shop.</small></div>`;
-    this.cele.classList.add('show'); this.sfx('coin');
+    this.cele.classList.add('show'); this.sfx('collected');
     clearTimeout(this._cT); this._cT = setTimeout(() => this.cele.classList.remove('show'), 3200);
   }
   dispose() { this.close(); this._offDev?.(); this._offInv?.(); clearTimeout(this._cT); this.root.remove(); this.cele.remove(); this.style.remove(); }

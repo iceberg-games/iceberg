@@ -31,9 +31,9 @@ export function createQuestTracker(quest, { onChange = () => {}, onResult = () =
   const saved = load(quest.id);
   const st = { progress: Math.min(quest.goal, saved.progress || 0), goal: quest.goal, claimed: !!saved.claimed, pending: false, itemId: quest.rewardItemId, done: false };
   st.done = st.progress >= st.goal;
-  let queued = 0, timer = null, completing = false, disposed = false;
+  let queued = Math.max(0, saved.pending | 0), timer = null, completing = false, disposed = false;
   const emit = () => { if (!disposed) onChange({ ...st }); };
-  const persist = () => store(quest.id, { progress: st.progress, claimed: st.claimed });
+  const persist = () => store(quest.id, { progress: st.progress, claimed: st.claimed, pending: queued }); // unsent deltas survive leaving the game
 
   // adopt server state when available
   Promise.resolve().then(() => questApi().status?.(quest.gameId)).then((list) => {
@@ -58,8 +58,8 @@ export function createQuestTracker(quest, { onChange = () => {}, onResult = () =
   function flush() {
     clearTimeout(timer); timer = null;
     if (!queued || disposed && !queued) return;
-    const d = Math.min(queued, maxPerCall); queued -= d;
-    const retry = (ms) => { queued += d; if (!timer && !disposed) timer = setTimeout(flush, Math.max(flushMs, ms || 0)); };
+    const d = Math.min(queued, maxPerCall); queued -= d; persist();
+    const retry = (ms) => { queued += d; persist(); if (!timer && !disposed) timer = setTimeout(flush, Math.max(flushMs, ms || 0)); };
     Promise.resolve().then(() => questApi().progress(quest.id, d)).then((raw) => {
       const r = unwrap(raw);
       if (r && r.ok === false) { if (r.reason === 'too_fast' || r.reason === 'network') retry(r.retryAfterMs); return; }
@@ -69,6 +69,7 @@ export function createQuestTracker(quest, { onChange = () => {}, onResult = () =
     }).catch(() => retry());
   }
   emit();
+  if (queued && !st.claimed) timer = setTimeout(flush, 500);
   return {
     quest,
     get state() { return { ...st }; },

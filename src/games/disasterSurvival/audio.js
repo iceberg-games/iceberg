@@ -50,7 +50,7 @@ export class DisasterAudio {
       const src = ctx.createBufferSource(); src.buffer = rec.buffer; src.loop = true;
       const ls = this._loopPoints(src, rec.buffer, this.files[name].loopSeconds);
       const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, ctx.currentTime);
-      g.gain.linearRampToValueAtTime(level, ctx.currentTime + 1.8);   // fade in ~1.8 s
+      g.gain.linearRampToValueAtTime(level, ctx.currentTime + (this.files[name].fadeIn ?? 1.8));   // fade in (default ~1.8 s)
       src.connect(g).connect(this.out); src.start(ctx.currentTime, ls);
       L = this.sl[name] = { src, g, born: ctx.currentTime, level };
       if (fallback) this.loop(fallback.name, 0);
@@ -58,9 +58,9 @@ export class DisasterAudio {
     if (L) {
       const t = ctx.currentTime;
       if (level <= 0.001) { // fade out ~2 s, then stop
-        delete this.sl[name]; L.g.gain.cancelScheduledValues(t); L.g.gain.setValueAtTime(L.g.gain.value, t); L.g.gain.linearRampToValueAtTime(0.0001, t + 2);
-        setTimeout(() => { try { L.src.stop(); } catch { /* */ } L.g.disconnect(); }, 2600);
-      } else if (t - L.born > 1.8 && !this._ducking) L.g.gain.setTargetAtTime(level, t, 0.4);
+        delete this.sl[name]; L.g.gain.cancelScheduledValues(t); L.g.gain.setValueAtTime(L.g.gain.value, t); const fo = this.files[name].fadeOut ?? 2; L.g.gain.linearRampToValueAtTime(0.0001, t + fo);
+        setTimeout(() => { try { L.src.stop(); } catch { /* */ } L.src.disconnect(); L.g.disconnect(); }, fo * 1000 + 300);
+      } else if (t - L.born > (this.files[name].fadeIn ?? 1.8) && !this._ducking) L.g.gain.setTargetAtTime(level, t, 0.4);
       return true;
     }
     if (fallback) this.loop(fallback.name, level, fallback);
@@ -187,16 +187,18 @@ export class DisasterAudio {
   }
 
   /** One-shot from a loaded sample; false if not ready (then callers use the procedural sound). */
-  oneShot(name, vol = 1) {
+  oneShot(name, vol = 1, rate = 1) {
     const ctx = this.ctx, rec = this.bank?.[name]; if (!ctx || rec?.state !== 'ready') return false;
-    const src = ctx.createBufferSource(); src.buffer = rec.buffer; const g = ctx.createGain(); g.gain.value = vol * (this.files[name].gain ?? 1);
+    const src = ctx.createBufferSource(); src.buffer = rec.buffer; src.playbackRate.value = rate; const g = ctx.createGain(); g.gain.value = vol * (this.files[name].gain ?? 1);
     src.connect(g).connect(this.out); src.start(); return true;
   }
   sfx(name, vol = 1) {
     const ctx = this.ctx; if (!ctx) return; const t = ctx.currentTime;
+    if (name === 'collected' && this.oneShot('collected', vol, 1 + Math.random() * 0.12)) return; // overlaps fine
     if (this.kit?.[name] && this.oneShot(this.kit[name], vol)) return;
     switch (name) {
       case 'click': case 'open': this._tone(1200, t, 0.05, { vol: 0.05 }); break;
+      case 'collected': [0, 4, 7, 12].forEach((n, i) => this._tone(NOTE(76 + n), t + i * 0.09, 0.3, { vol: 0.06 })); break;
       case 'close': this._tone(700, t, 0.06, { vol: 0.05 }); break;
       case 'fall': this._tone(500, t, 0.6, { type: 'triangle', vol: 0.06, slideTo: 120 }); break;
       case 'siren': for (let k = 0; k < 3; k++) { this._tone(500, t + k * 0.9, 0.45, { type: 'sawtooth', vol: 0.05, slideTo: 900 }); this._tone(900, t + k * 0.9 + 0.45, 0.45, { type: 'sawtooth', vol: 0.05, slideTo: 500 }); } break;

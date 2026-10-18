@@ -571,7 +571,7 @@ export default {
       godMode: false,
     });
     const ui = new DisasterUI({ prices: C.CONSUMABLE_PRICES_BB, disasters: DISASTERS, onBalloon: api.balloon, onApple: api.apple, onStorm: api.storm, onPick: api.pickStorm, onHunt: () => hunt.toggle() });
-    const hunt = new HuntMenu({ sfx: (n) => audio.sfx(n), ambience: (on) => audio.sampleLoop('hunt', on ? 0.35 : 0, { name: 'huntAmb', freq: 380, type: 'lowpass', lfo: 0.25 }) });
+    const hunt = new HuntMenu({ sfx: (n) => audio.sfx(n), ambience: (on) => audio.sampleLoop('hunt', on ? 0.75 : 0, { name: 'huntAmb', freq: 380, type: 'lowpass', lfo: 0.25 }) });
     api.hunt = hunt;
     W.ui = ui;
     ui.setHp(hp, C.MAX_HP); ui.setBalloon(owned(), false, C.GEAR_PRICES_BB.greenBalloon);

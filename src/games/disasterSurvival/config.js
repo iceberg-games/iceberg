@@ -66,7 +66,9 @@ export const AUDIO_FILES = {
   kit_ui_close: { files: ['kit/ui_close.ogg'], gain: 0.45 }, kit_ui_deny: { files: ['kit/ui_deny.ogg'], gain: 0.5 },
   kit_hurt: { files: ['kit/hurt.ogg'], gain: 0.8 }, kit_death_fall: { files: ['kit/death_fall.ogg'], gain: 0.6 },
   kit_powerup: { files: ['kit/powerup.ogg'], gain: 0.5 }, kit_coin_collect: { files: ['kit/coin_collect.ogg'], gain: 0.45 },
-  // Hunt menu ambience: placeholder (procedural) until the Sound Designer's file lands; add { files: [...], loopSeconds } here as 'hunt'.
+  // Hunt menu (Sound Designer): 24 s seamless ambience loop (fade in 1 s / out 0.5 s) + 0.95 s collect jingle
+  hunt: { files: ['hunt_menu_ambience_loop.ogg', 'hunt_menu_ambience_loop.mp3'], loopSeconds: 24, fadeIn: 1, fadeOut: 0.5 },
+  collected: { files: ['item_collected.ogg', 'item_collected.mp3'], gain: 0.8 },
 };
 /** Our sfx names -> kit sample (used when loaded, else the procedural sound plays). */
 export const KIT_SFX = { deny: 'kit_ui_deny', click: 'kit_ui_click', open: 'kit_ui_open', close: 'kit_ui_close', hurt: 'kit_hurt', fall: 'kit_death_fall',
