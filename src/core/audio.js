@@ -6,9 +6,11 @@
 //                                suspended and is resumed on the first user gesture, per browser autoplay rules)
 //   setAudioCamera(camera)    -> parent the listener to this camera (idempotent)
 //   audioUnlocked()           -> true once the AudioContext is running
+//   getAudioContext()         -> the ONE shared AudioContext (= the listener's; THREE.AudioContext singleton).
+//                                Use it for plain 2D sounds (UI clicks) without creating a listener/camera.
 import * as THREE from 'three';
 
-let listener = null, camera = null, hooked = false;
+let listener = null, camera = null, hooked = false, shared = null;
 
 function hookResume(ctx) {
   if (hooked || typeof addEventListener !== 'function') return;
@@ -32,4 +34,9 @@ export function setAudioCamera(cam) {
   camera = cam || null;
   if (listener && camera && listener.parent !== camera) camera.add(listener);
 }
-export const audioUnlocked = () => listener?.context.state === 'running';
+export function getAudioContext() {
+  const ctx = shared = listener ? listener.context : THREE.AudioContext.getContext();   // same singleton AudioListener uses
+  hookResume(ctx);
+  return ctx;
+}
+export const audioUnlocked = () => (listener?.context || shared)?.state === 'running';

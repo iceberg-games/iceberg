@@ -46,3 +46,4 @@ body.portal-page #portal { min-height: 100vh; position: relative; }
 .p-sort button { border: 0; cursor: pointer; padding: 7px 12px; border-radius: 999px; background: #fff; font: 800 13px inherit; font-family: inherit; color: var(--ice-800); box-shadow: 0 2px 6px rgba(14,42,69,.1); }
 .p-sort button.on { background: var(--ice-500); color: #fff; }
 .gc-stats { font-size: 12px; font-weight: 700; color: #4f7395; margin-top: 4px; }
+.p-sound { flex: none; }
