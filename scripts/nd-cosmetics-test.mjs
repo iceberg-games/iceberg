@@ -9,6 +9,10 @@ const p = await b.newPage({ viewport: { width: 1280, height: 800 } });
 const errs = []; p.on('pageerror', e => errs.push(e.message));
 await p.addInitScript(() => { try { localStorage.setItem('iceberg.device', 'computer'); } catch {} });
 await p.goto('file://' + process.cwd() + '/dist/index.html'); await p.waitForFunction(() => window.iceberg);
+// Release A hides/refuses event items until natural_disasters starts: move only the event window to "live".
+await p.evaluate(() => { const b = window.iceberg.economy.backend; if (!b?.eventStatus) return; const real = b.eventStatus.bind(b), H = 3600e3;
+  b.eventStatus = (id, now = Date.now()) => ({ ...real(id, now), startsAt: new Date(now - 24 * H).toISOString(), endsAt: new Date(now + 6 * 24 * H).toISOString(), active: true }); });
+
 const out = {};
 out.buy = await p.evaluate((ids) => { const e = window.iceberg.economy; e.demoGrant(5000); const before = e.coins; return { results: ids.map(id => e.buy(id)), coinsUnchanged: e.coins === before, ownedNone: ids.every(id => !e.owns(id)) }; }, IDS);
 await p.evaluate(() => window.iceberg.play('frost-fields')); await p.waitForTimeout(1500);

@@ -28,7 +28,7 @@ export class UI {
     this._buildHud();
     bus.on('coins:changed', (e) => this._onCoins(e));
     bus.on('toast', (t) => this.toast(t.text, t.icon));
-    bus.on('inventory:changed', () => { this.avatar.applyLoadout(this.economy.profile); this.refreshDrawer(); });
+    bus.on('inventory:changed', () => { this.avatar.applyLoadout(this.economy.profile); this._questStale = true; this.refreshDrawer(); });
     bus.on('rocket:colors', (c) => this.avatar.setRocketColors(c));
     bus.on('cosmetic:colors', (c) => this.avatar.setCosmeticColors(c));
     bus.on('models:changed', () => this.refreshDrawer());
@@ -182,6 +182,7 @@ export class UI {
   openDrawer(name) {
     if (this.drawerName === name && !this.drawer.classList.contains('hidden')) { this.closeDrawer(); return; }
     const wasOpen = !this.drawer.classList.contains('hidden');
+    if (name === 'shop' || name === 'locker') this._questStale = true;   // refetch quests once per open
     this.drawerName = name; this.drawer.classList.remove('hidden'); this.drawer.dataset.panel = name;
     if (!wasOpen) playUi('popup_open');
     this.refreshDrawer();
@@ -207,7 +208,12 @@ export class UI {
     const filter = (c) => this.shopCat === 'all' || c.slot === this.shopCat || (this.shopCat === 'acc' && ['neck', 'back', 'hand'].includes(c.slot)) || (this.shopCat === 'winter' && c.winter) || (this.shopCat === 'premium' && c.premium);
     const tabs = h('div.tabs', CATS.map(([id, label]) => h('button.tab' + (this.shopCat === id ? '.sel' : ''), { onclick: () => { this.shopCat = id; this.refreshDrawer(); } }, label)));
     // Release A (Colin): event items stay hidden until their event starts (economy.shopVisible; owned items always show).
-    const listed = (c) => typeof this.economy.shopVisible !== 'function' || this.economy.shopVisible(c.id);
+    const listed = (c) => {
+      if (typeof e.shopVisible === 'function') return e.shopVisible(c.id);
+      if (e.owns(c.id)) return true;
+      const av = this._availability(c);
+      return !(av && (av.hidden || av.state === 'event_not_started'));
+    };
     const cards = h('div.cards', COSMETICS.filter(filter).filter(listed).map(c => {
       const owned = e.owns(c.id), eq = e.isEquipped(c.id), afford = e.coins >= c.price;
       let action;
@@ -216,7 +222,6 @@ export class UI {
       if (owned) action = h('button.btn.equip' + (eq ? '.on' : ''), { onclick: () => { e.toggleEquip(c.id); this.toast(`${eq ? 'Unequipped' : 'Equipped'} ${c.name}`, c.icon); } }, eq ? 'Unequip' : 'Equip');
       else if (c.earnOnly) action = this._earnBadge(c);
       else if (av && av.state === 'event_ended') action = h('button.btn.disabled.event-ended', { disabled: true }, 'Event ended');
-      else if (av && av.state === 'event_not_started') action = h('button.btn.disabled.coming-soon', { disabled: true }, 'Coming soon');
       else action = h('button.btn.buy' + (afford ? '' : '.disabled'), { onclick: () => this._buy(c) }, afford ? 'Buy' : `Need ${(c.price - e.coins).toLocaleString()}`);
       if (av && av.limited && av.forSale && !owned) limitBadge = h('div.limited-badge', { style: 'display:inline-block;margin:2px auto 4px;padding:2px 8px;border-radius:999px;background:linear-gradient(90deg,#ff7a1a,#ff3d6e);color:#fff;font-size:11px;font-weight:700' }, `⏳ Limited time${av.msLeft > 0 ? ' · ' + this._fmtLeft(av.msLeft) + ' left' : ''}`);
       return h('div.card' + (c.premium ? '.premium' : '') + (owned ? '.owned' : '') + (av?.state === 'event_ended' && !owned ? '.ended' : ''), { 'data-id': c.id, style: av?.state === 'event_ended' && !owned ? 'opacity:0.6' : null },
@@ -230,17 +235,33 @@ export class UI {
   }
   // ---------- earn-only event items (Natural Disasters) ----------
   // Uses Publisher's economy.getQuests / claimQuestReward when present; never grants client-side.
-  _questFor(c) {
+  // Quests are fetched at most once per shop/locker open (or inventory change / claim), with an in-flight
+  // guard; the drawer only re-renders when the fetched data actually changed (signature compare).
+  _questList() {
     const e = this.economy;
-    if (!c.unlock || typeof e.getQuests !== 'function') return null;
-    try {
-      const r = e.getQuests();
-      if (r && typeof r.then === 'function') {
-        if (!this._questsPending) { this._questsPending = true; r.then(q => { this._questCache = q || []; this._questsPending = false; this.refreshDrawer(); }, () => { this._questsPending = false; }); }
-        return (this._questCache || []).find(q => q.id === c.unlock) || null;
-      }
-      return (r || []).find(q => q.id === c.unlock) || null;
-    } catch { return null; }
+    if (typeof e.getQuests !== 'function') return [];
+    if (this._questStale !== false && !this._questsPending) {
+      this._questStale = false;
+      const apply = (q, rerender) => {
+        const list = Array.isArray(q) ? q : [];
+        let sig; try { sig = JSON.stringify(list); } catch { sig = String(list.length); }
+        const changed = sig !== this._questSig;
+        this._questCache = list; this._questSig = sig;
+        if (changed && rerender) this.refreshDrawer();
+      };
+      try {
+        const r = e.getQuests();
+        if (r && typeof r.then === 'function') {
+          this._questsPending = true;
+          r.then(q => { this._questsPending = false; apply(q, true); }, () => { this._questsPending = false; });
+        } else apply(r, false);                 // synchronous result: we're mid-render, just use it
+      } catch { /* keep last cache */ }
+    }
+    return this._questCache || [];
+  }
+  _questFor(c) {
+    if (!c.unlock) return null;
+    return this._questList().find(q => q.id === c.unlock) || null;
   }
   _earnBadge(c) {
     const e = this.economy, q = this._questFor(c);
@@ -254,7 +275,7 @@ export class UI {
           if (r?.granted || r?.alreadyOwned) this.toast(`${r.alreadyOwned ? 'Already yours' : 'Unlocked'}: ${c.name}`, c.icon);
           else this.toast('Could not claim yet. Try again soon.', '⚠️');
         } catch { this.toast('Could not claim yet. Try again soon.', '⚠️'); }
-        this._questCache = null; this.refreshDrawer();
+        this._questStale = true; this.refreshDrawer();
       } }, `🎁 Claim ${c.name}`);
     }
     if (q) {
