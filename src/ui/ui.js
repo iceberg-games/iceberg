@@ -204,15 +204,54 @@ export class UI {
       const owned = e.owns(c.id), eq = e.isEquipped(c.id), afford = e.coins >= c.price;
       let action;
       if (owned) action = h('button.btn.equip' + (eq ? '.on' : ''), { onclick: () => { e.toggleEquip(c.id); this.toast(`${eq ? 'Unequipped' : 'Equipped'} ${c.name}`, c.icon); } }, eq ? 'Unequip' : 'Equip');
+      else if (c.earnOnly) action = this._earnBadge(c);
       else action = h('button.btn.buy' + (afford ? '' : '.disabled'), { onclick: () => this._buy(c) }, afford ? 'Buy' : `Need ${(c.price - e.coins).toLocaleString()}`);
       return h('div.card' + (c.premium ? '.premium' : '') + (owned ? '.owned' : ''), { 'data-id': c.id },
         h('div.card-icon', c.icon), h('div.card-name', c.name),
         c.desc ? h('div.card-desc', c.desc) : null,
-        h('div.price', owned ? (eq ? '✔ Equipped' : 'Owned') : `${CURRENCY.icon} ${c.price.toLocaleString()} BB`),
+        h('div.price', owned ? (eq ? '✔ Equipped' : 'Owned') : c.earnOnly ? '🎁 Free event reward' : `${CURRENCY.icon} ${c.price.toLocaleString()} BB`),
         action);
     }));
     return this._frame('🛍️ Cosmetics Shop', `You have ${fmt(e.coins)}`, tabs, cards);
   }
+  // ---------- earn-only event items (Natural Disasters) ----------
+  // Uses Publisher's economy.getQuests / claimQuestReward when present; never grants client-side.
+  _questFor(c) {
+    const e = this.economy;
+    if (!c.unlock || typeof e.getQuests !== 'function') return null;
+    try {
+      const r = e.getQuests();
+      if (r && typeof r.then === 'function') {
+        if (!this._questsPending) { this._questsPending = true; r.then(q => { this._questCache = q || []; this._questsPending = false; this.refreshDrawer(); }, () => { this._questsPending = false; }); }
+        return (this._questCache || []).find(q => q.id === c.unlock) || null;
+      }
+      return (r || []).find(q => q.id === c.unlock) || null;
+    } catch { return null; }
+  }
+  _earnBadge(c) {
+    const e = this.economy, q = this._questFor(c);
+    const style = { background: 'linear-gradient(90deg,#3f8fd0,#7a5cf0)', color: '#fff', borderRadius: '10px', padding: '6px 10px', fontWeight: 700, fontSize: '12px', textAlign: 'center' };
+    const sub = (t) => h('div', { style: { fontWeight: 500, fontSize: '11px', opacity: 0.9 } }, t);
+    if (q && q.completed && !q.claimed && typeof e.claimQuestReward === 'function') {
+      return h('button.btn.claim', { 'data-quest': q.id, onclick: async (ev) => {
+        ev.currentTarget.disabled = true;
+        try {
+          const r = await e.claimQuestReward(q.id);
+          if (r?.granted || r?.alreadyOwned) this.toast(`${r.alreadyOwned ? 'Already yours' : 'Unlocked'}: ${c.name}`, c.icon);
+          else this.toast('Could not claim yet. Try again soon.', '⚠️');
+        } catch { this.toast('Could not claim yet. Try again soon.', '⚠️'); }
+        this._questCache = null; this.refreshDrawer();
+      } }, `🎁 Claim ${c.name}`);
+    }
+    if (q) {
+      const goal = Number(q.goal) || 0, prog = Math.min(Number(q.progress) || 0, goal || Infinity);
+      return h('div.earn-badge', { style, 'data-quest': q.id }, `Complete ${q.title || 'the quest'} to unlock`,
+        goal ? sub(`${prog} / ${goal}${c.earnIn ? ' · ' + c.earnIn : ''}`) : (c.earnIn ? sub(c.earnIn) : null),
+        goal ? h('div', { style: { height: '5px', background: 'rgba(255,255,255,0.3)', borderRadius: '3px', marginTop: '4px' } }, h('div', { style: { width: `${Math.round(prog / goal * 100)}%`, height: '100%', background: '#fff', borderRadius: '3px' } })) : null);
+    }
+    return h('div.earn-badge', { style, title: c.earnIn ? `Complete the ${c.earnIn} quest to unlock` : 'Earned through event quests' }, '🌪️ Earn in Natural Disasters', c.earnIn ? sub(c.earnIn) : null);
+  }
+
   _buy(c) {
     const r = this.economy.buy(c.id);
     if (r.ok) { this.economy.equip(c.id); this.toast(`Bought & equipped ${c.name}!`, c.icon); }
@@ -239,11 +278,14 @@ export class UI {
         h('div.presets', presets.map(([n, c]) => h('button.btn.small', { onclick: () => { Object.entries(c).forEach(([k, v]) => e.setRocketColor(k, v)); this.refreshDrawer(); } }, n))),
         h('p.muted', e.isEquipped('icerocket') ? 'Hold F to fly!' : 'Equip it to fly with F.')));
     }
+    // Natural Disasters rewards still to earn (claim button / quest progress when available)
+    const toEarn = COSMETICS.filter(c => c.earnOnly && !e.owns(c.id));
+    if (toEarn.length) sections.push(h('h4', '🌪️ Natural Disasters rewards'), h('div.locker-row.earn-row', toEarn.map(c => h('div.locker-item.locked', { 'data-id': c.id, style: { opacity: 1 } }, h('span.card-icon', c.icon), h('span', c.name), this._earnBadge(c)))));
     // Single-color customizable cosmetics (earmuffs, snow globe pack, cocoa mug…)
     for (const c of owned.filter(c => c.colorPresets)) {
       const cur = (p.cosmeticColors || {})[c.id] || c.defaultColor;
       sections.push(h('div.rocket-custom.cosmetic-custom', { 'data-id': c.id }, h('h4', `${c.icon} ${c.name} colors`),
-        h('label.color-row', 'Color', h('input', { type: 'color', value: cur, 'data-id': c.id, oninput: (ev) => e.setCosmeticColor(c.id, ev.target.value) })),
+        !/^#[0-9a-f]{6}$/i.test(cur) ? null : h('label.color-row', 'Color', h('input', { type: 'color', value: cur, 'data-id': c.id, oninput: (ev) => e.setCosmeticColor(c.id, ev.target.value) })),
         h('div.presets', c.colorPresets.map(([n, hex]) => h('button.btn.small' + (hex.toLowerCase() === cur.toLowerCase() ? '.on' : ''), { 'data-color': hex, onclick: () => { e.setCosmeticColor(c.id, hex); this.refreshDrawer(); } }, n))),
         e.isEquipped(c.id) ? null : h('p.muted', 'Equip it to see the color on your avatar.')));
     }

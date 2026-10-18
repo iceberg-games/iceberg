@@ -196,6 +196,8 @@ export class Economy {
   buy(id) {
     const item = COSMETIC_BY_ID[id];
     if (!item) return { ok: false, reason: 'Unknown item' };
+    // Event cosmetics can only be earned (granted by quests/server), never bought.
+    if (item.earnOnly) return { ok: false, reason: 'Earn this in the Natural Disasters event' };
     if (!this.remote) {
       const res = this.backend.purchase(this.profile, item);
       if (res.ok) {

@@ -4,7 +4,7 @@ import { createServer } from 'vite';
 import { mkdirSync } from 'fs';
 import { COSMETIC_BY_ID } from '../src/data/cosmetics.js';
 const id = process.argv[2] || 'earmuffs';
-const angles = (process.argv[3] || (id === 'snowglobe_pack' ? 'back,side,backthreequarter' : 'front,side,threequarter')).split(',');
+const angles = (process.argv[3] || (COSMETIC_BY_ID[id].slot === 'back' ? 'back,side,backthreequarter' : 'front,side,threequarter')).split(',');
 const item = COSMETIC_BY_ID[id];
 const out = `screenshots/${id}`; mkdirSync(out, { recursive: true });
 const server = await createServer({ server: { port: 5199 }, logLevel: 'error' }); await server.listen();
@@ -20,7 +20,7 @@ for (const [name, hex] of (item.colorPresets || [['Default', '']])) for (const a
 // contact sheet: rows = colors, cols = angles
 const imgs = await Promise.all(files.map(async ([n, a, f]) => [n, a, (await import('fs')).readFileSync(f).toString('base64')]));
 await page.setViewportSize({ width: angles.length * 320, height: (item.colorPresets || [1]).length * 340 + 50 });
-await page.setContent(`<body style="margin:0;background:#fff;font:bold 15px sans-serif"><div style="padding:12px">${item.icon} ${item.name} — ${item.price} BB</div><div style="display:grid;grid-template-columns:repeat(${angles.length},320px)">${imgs.map(([n, a, b]) => `<div style="text-align:center"><img src="data:image/png;base64,${b}" width=320 height=320><div style="font-weight:normal;font-size:12px">${n} · ${a}</div></div>`).join('')}</div></body>`);
+await page.setContent(`<body style="margin:0;background:#fff;font:bold 15px sans-serif"><div style="padding:12px">${item.icon} ${item.name} — ${item.earnOnly ? "Free event reward" : item.price + " BB"}</div><div style="display:grid;grid-template-columns:repeat(${angles.length},320px)">${imgs.map(([n, a, b]) => `<div style="text-align:center"><img src="data:image/png;base64,${b}" width=320 height=320><div style="font-weight:normal;font-size:12px">${n} · ${a}</div></div>`).join('')}</div></body>`);
 await page.screenshot({ path: `${out}/contact-sheet.png`, fullPage: true });
 await browser.close(); await server.close();
 console.log(files.length + 1, 'images ->', out);
