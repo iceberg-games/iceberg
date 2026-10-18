@@ -1,0 +1,25 @@
+body.portal-page { overflow: auto; }
+body.portal-page #portal { min-height: 100vh; position: relative; }
+.p-wrap { position: relative; z-index: 1; max-width: 1080px; margin: 0 auto; padding: 14px 14px 40px; }
+.p-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.p-right { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.p-user { background: var(--glass); padding: 6px 12px; border-radius: 12px; }
+.p-nav { display: flex; gap: 6px; margin: 14px 0; flex-wrap: wrap; }
+.p-tab { border: 0; cursor: pointer; padding: 9px 14px; border-radius: 12px; background: var(--glass); font: 800 14px inherit; font-family: inherit; color: var(--ice-800); }
+.p-tab.on { background: var(--ice-600); color: #fff; }
+.p-view h2 { margin: 6px 0 4px; color: var(--ice-800); }
+.p-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; margin-top: 10px; }
+.p-grid a.btn { text-decoration: none; display: inline-block; }
+.p-card { background: var(--glass-strong); border-radius: 16px; padding: 14px 16px; box-shadow: var(--shadow); margin: 10px 0; }
+.p-card input { font: inherit; padding: 9px 12px; border-radius: 10px; border: 2px solid var(--ice-200); min-width: 0; }
+.p-auth { display: flex; flex-direction: column; gap: 8px; }
+.p-two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 640px) { .p-two { grid-template-columns: 1fr; } }
+.p-error { color: #b3243c; font-weight: 700; min-height: 1em; margin: 0; }
+.p-chat-holder { height: min(70vh, 560px); }
+.p-friend { display: flex; align-items: center; gap: 6px; padding: 8px 10px; background: #fff; border-radius: 12px; margin: 6px 0; }
+.p-friend .grow { flex: 1; }
+.dot { width: 10px; height: 10px; border-radius: 50%; background: #b8cad8; display: inline-block; }
+.dot.online { background: #2fbf71; }
+.p-toasts { position: fixed; right: 12px; bottom: 12px; z-index: 200; display: flex; flex-direction: column; gap: 6px; }
+.p-toast { background: #fff; padding: 10px 14px; border-radius: 12px; box-shadow: var(--shadow); font-weight: 700; }

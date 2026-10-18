@@ -1,0 +1,16 @@
+{
+  "name": "Iceberg",
+  "short_name": "Iceberg",
+  "description": "A frosty block platform: play games, build, dress up your avatar and chat safely.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#dff0fb",
+  "theme_color": "#2a7fc4",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

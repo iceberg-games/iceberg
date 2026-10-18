@@ -16,10 +16,21 @@ import { CREATOR, findGame } from './games/registry.js';
 import { customGameDef } from './games/customGame.js';
 import { showDevicePicker } from './ui/devicePicker.js';
 import { mountTouchControls } from './ui/touchControls.js';
+import { connectStoredSession } from './net/session.js';
+import { CONFIG } from './net/config.js';
+import { registerServiceWorker } from './net/pwa.js';
+import { mountGameChat } from './chat/gameChat.js';
+
+// Multi-page site: the game lives in play/ and the portal opens it with ?game=<id>.
+const params = new URLSearchParams(location.search);
+const GAME_PARAM = params.get('game');
+const SITE_ROOT = document.querySelector('meta[name="iceberg-root"]')?.content || null;   // set only in the site build
 
 async function boot() {
   const app = document.getElementById('app');
+  if (CONFIG.isSite) document.body.classList.add('iceberg-site');
   const economy = new Economy(backend);
+  const remote = await connectStoredSession(economy);   // null = guest (localStorage only)
   const settings = modelPrefs.loadSettings();
   const music = new Music(settings, (s) => modelPrefs.saveSettings({ ...modelPrefs.loadSettings(), ...s }));
   const models = new ModelLibrary(modelStore);
@@ -34,17 +45,28 @@ async function boot() {
   let testingDoc = null;
   const backToEditor = h('button.btn.floating.hidden#back-to-editor', { onclick: () => edit(testingDoc) }, '✏️ Back to editor');
 
-  const goHome = () => { engine.unloadGame(); testingDoc = null; backToEditor.classList.add('hidden'); menu.showGames(); music.play('winter'); };
-  const play = async (def) => { menu.hide(); testingDoc = null; backToEditor.classList.add('hidden'); await engine.loadGame(def); };
+  const goHome = () => { gameChat.leave(); engine.unloadGame(); testingDoc = null; backToEditor.classList.add('hidden'); menu.showGames(); music.play('winter'); };
+  const play = async (def) => {
+    menu.hide(); testingDoc = null; backToEditor.classList.add('hidden');
+    await engine.loadGame(def);
+    gameChat.show(true); gameChat.join(def.id).catch(() => {});
+  };
   const edit = async (doc) => { menu.hide(); testingDoc = null; backToEditor.classList.add('hidden'); await engine.loadGame(CREATOR, { doc }); };
 
   const ui = new UI(app, { engine, economy, avatar, models, music, onHome: goHome });
+  const me = remote ? { username: economy.profile.username, displayName: economy.profile.displayName } : null;
+  const gameChat = mountGameChat({ engine, avatar, remote, me, root: document.body });
+  bus.on('economy:rejected', (e) => ui.toast(e.action === 'buy' ? 'The server said no to that purchase; your Birg Bucks were refunded.' : 'Not enough Birg Bucks on the server.', '⚠️'));
+  bus.on('economy:capped', (e) => { if (e.source !== 'build') ui.toast('Daily Birg Bucks limit reached for that. Come back tomorrow!', '⏰'); });
+  addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') economy.resync().catch(() => {}); });
   const menu = new Menu(app, {
     economy, models, ui, onPlay: play, onEdit: edit,
     onStart: () => {
       music.unlock(); music.play('winter');
       const got = economy.claimDailyBonus();
       if (got) ui.toast(`Daily bonus! +${got} Birg Bucks`, '🎁');
+      const def = GAME_PARAM && findGame(GAME_PARAM);
+      if (def) setTimeout(() => play(def), 0);   // after the menu renders the games list
     },
   });
   new CreatorPanel(app, {
@@ -67,7 +89,8 @@ async function boot() {
   menu.showTitle();
 
   // Handy hooks for automated tests / debugging in the console.
-  window.iceberg = { engine, economy, avatar, models, music, ui, menu, backend, play: (id) => play(findGame(id)), edit, goHome };
+  window.iceberg = { engine, economy, avatar, models, music, ui, menu, backend, remote, gameChat, play: (id) => play(findGame(id)), edit, goHome };
+  if (SITE_ROOT) registerServiceWorker(SITE_ROOT);
 }
 
 boot().catch((e) => { console.error(e); document.body.append(Object.assign(document.createElement('pre'), { textContent: 'Failed to start: ' + e.message })); });
