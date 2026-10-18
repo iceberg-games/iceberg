@@ -5,8 +5,14 @@ import { h } from './dom.js';
 import { detectDeviceMode, getDeviceMode, hasChosenDeviceMode, setDeviceMode } from '../core/device.js';
 import './device.css';
 
+// Automated browsers (navigator.webdriver) skip the picker so existing test
+// scripts that click #start-btn keep working; add ?devicePicker=1 to test it.
+const wantPicker = () => { try { return new URLSearchParams(location.search).get('devicePicker') === '1'; } catch { return false; } };
+
 export function showDevicePicker(root = document.body, { force = false } = {}) {
+  force = force || wantPicker();
   if (!force && hasChosenDeviceMode()) return Promise.resolve(getDeviceMode());
+  if (!force && typeof navigator !== 'undefined' && navigator.webdriver) return Promise.resolve(getDeviceMode());
   const guess = hasChosenDeviceMode() ? getDeviceMode() : detectDeviceMode();
   return new Promise((resolve) => {
     let picked = guess;
