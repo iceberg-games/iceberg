@@ -1,7 +1,8 @@
 // In-game Safe Chat: a 💬 button + nested menu on the play page. The local player's
 // bubble floats over their avatar's head (projected from the game camera) and the
 // mouth animates via avatar.talk?.(ms). Messages from others in the same game room
-// appear in a small log (there is no multiplayer world yet, so no remote avatars).
+// appear in a small log, and (with multiplayer) as bubbles over the speaker's avatar via
+// opts.speak(username, text, ms). Text always comes from the server (phrase ids only).
 import { h } from '../ui/dom.js';
 import { BubbleLayer } from './bubbles.js';
 import { ChatChannel } from './channel.js';
@@ -9,7 +10,7 @@ import { createSafeChatMenu, bubbleMs, avatarTalk } from './safeChatMenu.js';
 import { bus } from '../core/events.js';
 import './chat.css';
 
-export function mountGameChat({ engine, avatar, remote, me, root = document.body }) {
+export function mountGameChat({ engine, avatar, remote, me, root = document.body, speak = null, onSent = null }) {
   const bubbles = new BubbleLayer(root);
   bubbles.track('me', avatar.bones?.head || avatar.root, { offsetY: 1.1 });
   const log = h('div.chat-log.hidden#game-chat-log');
@@ -19,13 +20,14 @@ export function mountGameChat({ engine, avatar, remote, me, root = document.body
   Object.assign(menu.el.style, { position: 'fixed' });
 
   let channel = null, gameId = null;
-  async function join(id) {
+  async function join(id, room = `game:${id}`) {
     if (!remote) return;
     if (channel) await channel.stop();
-    gameId = id; channel = new ChatChannel(remote, `game:${id}`, { pollMs: 2500, heartbeatMs: 10000 });
+    gameId = id; channel = new ChatChannel(remote, room, { pollMs: 2500, heartbeatMs: 10000 });
     channel.on('message', (m) => {
       const ms = bubbleMs(m.text);
       if (m.mine) { bubbles.say('me', m.text, ms); avatarTalk(avatar, ms); }
+      else speak?.(m.username, m.text, ms);
       log.classList.remove('hidden');
       log.append(h('div', h('b', `${m.displayName || m.username}: `), m.text));
       while (log.children.length > 12) log.firstChild.remove();
@@ -38,7 +40,9 @@ export function mountGameChat({ engine, avatar, remote, me, root = document.body
     if (!channel) { // guests: local-only bubble so the feature is still fun offline
       const ms = bubbleMs(p.text); bubbles.say('me', p.text, ms); avatarTalk(avatar, ms); return { ok: true, local: true };
     }
-    return channel.say(p, me);
+    const r = await channel.say(p, me);
+    if (r?.ok) onSent?.(r);
+    return r;
   }
   function show(on) { btn.classList.toggle('hidden', !on); if (!on) { menu.close(); log.classList.add('hidden'); } }
 
@@ -51,6 +55,8 @@ export function mountGameChat({ engine, avatar, remote, me, root = document.body
 
   return {
     join, say, show, menu, bubbles,
+    get room() { return channel?.room || null; },
+    pollNow() { return channel?.poll(); },
     async leave() { show(false); if (channel) { await channel.stop(); channel = null; } },
     destroy() { cancelAnimationFrame(raf); channel?.stop(); btn.remove(); log.remove(); menu.el.remove(); bubbles.el.remove(); },
   };

@@ -127,10 +127,17 @@ function friendsView() {
     h('span.dot' + (f.online ? '.online' : '')), h('b', f.displayName), h('span.muted', ` @${f.username}`), h('span.grow'), ...actions);
   async function refresh() {
     let data; try { data = await remote.listFriends(); } catch (e) { clear(lists).append(h('p.muted', e.message)); return; }
+    let playing = []; try { playing = await remote.friendsPlaying() || []; } catch { /* older backend: no multiplayer yet */ }
+    const where = Object.fromEntries(playing.map(p => [p.username, p]));
+    const gameName = (id) => BUILTIN_GAMES.find(d => d.id === id)?.name || id;
+    const joinBtn = (f) => { const p = where[f.username]; if (!p) return null;
+      return h('span.p-playing', h('span.muted', ` playing ${gameName(p.gameId)} `),
+        h('a.btn.small.join-friend' + (p.full ? '.secondary' : ''), { href: `${playUrl(p.gameId)}&join=${encodeURIComponent(f.username)}`, target: '_blank', rel: 'noopener', 'data-join': f.username,
+          title: p.full ? 'Their server is full: you will join another server of the same game' : `Join ${f.displayName} in ${gameName(p.gameId)}` }, p.full ? 'Full: play' : 'Join')); };
     const act = (label, fn, cls = '') => h('button.btn.small' + cls, { onclick: async () => { await fn(); refresh(); } }, label);
     clear(lists).append(h('div.p-friend-lists',   // h() flattens arrays + drops nulls (Element.append would not)
       h('h3', `Friends (${data.friends.length})`),
-      data.friends.length ? data.friends.map(f => row(f, [act('Remove', () => remote.removeFriend(f.username), '.secondary')])) : h('p.muted', 'No friends yet. Add someone by their exact username.'),
+      data.friends.length ? data.friends.map(f => row(f, [joinBtn(f), act('Remove', () => remote.removeFriend(f.username), '.secondary')])) : h('p.muted', 'No friends yet. Add someone by their exact username.'),
       data.incoming.length ? h('h3', 'Requests for you') : null,
       data.incoming.map(f => row(f, [act('Accept', () => remote.respondFriendRequest(f.username, true)), act('Decline', () => remote.respondFriendRequest(f.username, false), '.secondary')])),
       data.outgoing.length ? h('h3', 'Waiting for them') : null,

@@ -65,3 +65,18 @@ export async function rpc(db, uid, fn, args = {}) {
   const vals = names.map(n => (args[n] !== null && typeof args[n] === 'object') ? JSON.stringify(args[n]) : args[n]);
   return as(db, uid, async (tx) => (await tx.query(sql, vals)).rows[0].r);
 }
+
+/** Supabase Realtime Authorization, as Realtime does it on channel join: as the user, with
+ *  realtime.topic() = topic, try to insert + read a realtime.messages row under RLS (rolled back). */
+export async function canUseTopic(db, uid, topic, extension = 'broadcast') {
+  try {
+    return await db.transaction(async (tx) => {
+      await tx.query(`select set_config('request.jwt.claims', $1, true), set_config('realtime.topic', $2, true)`, [JSON.stringify(uid ? { sub: uid, role: 'authenticated' } : { role: 'anon' }), topic]);
+      await tx.exec(`set local role ${uid ? 'authenticated' : 'anon'}`);
+      await tx.query(`insert into realtime.messages (topic, extension, event) values ($1, $2, 'join-check')`, [topic, extension]);
+      const ok = (await tx.query(`select exists (select 1 from realtime.messages where topic = $1 and extension = $2) ok`, [topic, extension])).rows[0].ok;
+      await tx.rollback();
+      return ok;
+    });
+  } catch { return false; }
+}

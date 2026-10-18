@@ -14,6 +14,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { resolve, extname, join, normalize } from 'node:path';
 import { randomBytes, scryptSync, timingSafeEqual, randomUUID } from 'node:crypto';
 import { createDb } from './harness.mjs';
+import { attachRealtime } from './realtime-stub.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const PORT = Number(arg('--port', process.env.PORT || 54321));
@@ -119,12 +120,13 @@ export async function startDevServer({ port = PORT, dataDir = DATA, staticDir = 
       return send(res, 404, { message: 'not found (dev stub implements /auth/v1 and /rest/v1/rpc only)' });
     } catch (e) { return send(res, 500, { message: String(e.message || e) }); }
   });
+  const realtime = attachRealtime(server, { db, anonKey: ANON_KEY, uidForToken: (t) => { const a = access.get(t); return a && a.exp > Date.now() / 1000 ? a.uid : null; } });
   await new Promise(ok => server.listen(port, ok));
   let staticServer = null;
   if (staticDir) staticServer = await serveStatic(resolve(staticDir), staticPort);
   if (!quiet) console.log(`[dev-backend] API http://localhost:${port} (anon key "${ANON_KEY}", data ${dataDir || 'in-memory'})` +
     (staticServer ? `\n[dev-backend] site http://localhost:${staticPort}/` : ''));
-  return { db, server, staticServer, close: async () => { server.close(); staticServer?.close(); await db.close(); } };
+  return { db, server, staticServer, realtime, close: async () => { server.close(); staticServer?.close(); await db.close(); } };
 }
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',

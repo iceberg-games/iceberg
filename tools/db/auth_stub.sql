@@ -25,3 +25,16 @@ grant usage on schema public to anon, authenticated, service_role;
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
 alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
 alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
+
+-- Minimal stub of Supabase's realtime schema (Realtime Authorization reads realtime.messages under RLS,
+-- with realtime.topic() = the channel being joined). Real Supabase already has these.
+create schema if not exists realtime;
+create table if not exists realtime.messages (
+  id bigserial primary key, topic text not null, extension text not null, payload jsonb, event text,
+  private boolean default true, inserted_at timestamptz default now()
+);
+alter table realtime.messages enable row level security;
+create or replace function realtime.topic() returns text language sql stable as $$ select nullif(current_setting('realtime.topic', true), '') $$;
+grant usage on schema realtime to anon, authenticated;
+grant select, insert on realtime.messages to anon, authenticated;
+grant usage on all sequences in schema realtime to anon, authenticated;
