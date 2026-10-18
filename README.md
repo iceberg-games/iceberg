@@ -57,9 +57,15 @@ Put it in `src/games/` (a sub-folder is fine). Then import it in `src/games/regi
 ## Studio
 Open it from **Games → Create a Game → ✚ Create**. On a phone or tablet (device mode "mobile") the Studio is hidden.
 
-**Layout:** the ribbon is on top (tools, snap, insert, undo/redo, Animator, Test, Save, Publish, Export/Import). The left side has the **Explorer** and **Toolbox** tabs. The right side has **Properties**.
+**Layout:** the ribbon is on top (tools, snap, insert, undo/redo, Animator, Test, Save, Publish, Export/Import). The left side has the **Explorer**, **Toolbox** and **📖 Phrases** tabs. The right side has **Properties**.
 - **Camera:** hold the right mouse button and drag to look. Use WASD to fly, Q/E to go down/up, and Shift to go faster. **F** focuses on the selection.
 - **Tools:** 1 Select, 2 Move, 3 Scale, 4 Rotate. Snapping is optional (move 0/0.5/1/2/4 studs, rotate 0/15/45/90°). There is also a world/local space toggle.
+- **Selecting several things:**
+  - Shift- or Ctrl-click in the 3D view or the Explorer to add/remove items (Shift-click in the Explorer selects a range).
+  - Drag on empty space (or Shift+drag) to box-select. Ctrl+A selects everything, Esc clears.
+  - With several items selected, the Move/Rotate/Scale gizmo works around the centre of the selection, and the Properties panel edits the shared properties of all of them at once (blank = values differ).
+  - Duplicate, Delete, Copy (Ctrl+C), Cut (Ctrl+X) and Paste (Ctrl+V) work on the whole selection. The clipboard is also kept in localStorage (`iceberg:v1:studioClipboard`), so you can paste into another game.
+- **Models (groups):** Ctrl+G groups the selection into a Model; Ctrl+Shift+G ungroups. Models show as a collapsible tree in the Explorer and can be nested. Clicking a part in the 3D view selects its whole Model; pick single parts in the Explorer. Moving, rotating or scaling a Model moves everything inside. Every operation above is one undo step.
 - **Parts:** block, sphere, cylinder and wedge, placed freely.
   - Properties: name, position, rotation, size, shape, color, material (plastic, snow, ice, wood, metal, neon, glass, lava), transparency, Anchored, CanCollide and Kill.
   - Unanchored parts fall.
@@ -71,9 +77,10 @@ Open it from **Games → Create a Game → ✚ Create**. On a phone or tablet (d
   - Uploaded .glb/.gltf/.obj models.
   - R6 rigs.
 - **Gears (Toolbox):**
-  - Speed Coil, Gravity Coil and Magic Carpet (Space goes up, Q/C goes down).
+  - The Toolbox uses the same gear definitions as the Giant Rainbow Obby (`src/games/giantObby/gears.js`), so every gear there can be added to your own game. Studio games only check `canUseGear()` with the gears the creator placed (givers or starter gears), so creator-added gears have no purchase limits.
   - Gears come from givers in the world or as starter gears (Workspace settings). Keys 1–9 equip them.
-- **Shortcuts:** Ctrl+Z / Ctrl+Y undo/redo, Ctrl+D duplicate, Del delete, Ctrl+S save.
+- **Shortcuts:** Ctrl+Z / Ctrl+Y undo/redo, Ctrl+A select all, Ctrl+C / Ctrl+X / Ctrl+V copy/cut/paste, Ctrl+D duplicate, Ctrl+G group, Ctrl+Shift+G ungroup, Del delete, Esc deselect, Ctrl+S save.
+- **Names:** renaming (double-click in the Explorer) and naming new animations use a small in-studio dialog, not the browser's popup.
 - **Workspace settings:** click "Workspace" in the Explorer. You can set the name, description, sky, ground (baseplate/island/void), music, snow, the **mobile-playable** toggle (shows the joystick and jump button on touch devices) and starter gears.
 - **Save vs Publish:**
   - Save keeps a draft (localStorage `iceberg:v1:studioDrafts`).
@@ -82,24 +89,21 @@ Open it from **Games → Create a Game → ✚ Create**. On a phone or tablet (d
 - **Test:** plays the game with your classic R6 avatar. "Back to editor" returns to the Studio.
 
 ### Plain-words scripts
-Select a part, then go to **Properties → + Add script** and type normal sentences. For example:
-- "spin slowly"
-- "move up and down 4 studs every 3 seconds"
-- "when touched kill the player"
-- "when touched give 10 points and say \"Nice!\""
-- "every 2 seconds disappear for 1 second"
-- "when touched teleport to 0, 10, 0"
-- "when touched open like a door"
-- "bounce players high"
-- "change color to red when touched"
-- "play a sound"
+Select a part, then go to **Properties → + Add script** and type normal sentences. The **📖 Phrases** tab lists everything it understands; click a phrase to add it to the selected part. Examples:
+- Events: "when touched…", "when clicked…", "when the button is pressed…", "when a player enters/leaves this area…", "when the game starts…", "every 3 seconds…", "when the countdown ends…", "when the score reaches 50…", "when a player dies…".
+- Conditions and variables: "if the player has 10 points … otherwise …", "add 1 to the counter", "set the timer to 0", "show the leaderboard", "start a 60 second countdown", "start a timer".
+- Other parts by name: "open the door called Gate for 5 seconds", "teleport them to the part called Finish", "move to the part called Goal and back every 3 seconds".
+- Motion: "spin 2 times a second", "move up and down 5 studs every 2 seconds", "move between 0, 5, 0 and 20, 5, 0 every 4 seconds", "act as an elevator going up 20 studs", "when touched, wait 1 second then fall and come back after 3 seconds". Players ride moving and spinning parts.
+- Players: kill, take 25 damage, heal, bounce, 2 times faster / jump higher / low gravity for N seconds, save progress (checkpoint), win.
+- Looks and effects: colours, "fade to purple over 3 seconds", transparency, glow, lights on/off, sparkles/fire/smoke/confetti particles, sounds, messages.
+- Spawners and chance: "every 3 seconds drop a red ball", "spawn a copy of the part called Crate", "turn red or blue at random".
 
-The panel shows a plain-English preview of what it understood. If it doesn't understand something, it says so and shows examples. **Show code** reveals the generated behavior JSON.
+It understands synonyms, flexible word order, numbers written as words ("three"), units (studs, seconds, minutes) and several clauses joined with "and" / "then". The panel shows a plain-English preview of what it understood. If something isn't understood, it shows clickable suggestions of the closest phrases it does know. **Show code** reveals the generated behavior JSON.
 
 How it works:
-- `nlscript.js` is an offline rule/regex parser.
-- `behaviors.js` runs the result as data. There is no `eval`, and `validateProgram` whitelists every action.
-- The translator sits behind an **AI provider interface** in `src/studio/ai.js`: `getScriptTranslator()` / `setScriptTranslator({name, translate(text) → Promise<{program, preview, unknown}>})`. A commented `RemoteModelTranslator` skeleton shows how to plug in a model later. Always pass its output through `validateProgram`. No API keys are used or shipped.
+- `nlscript.js` is an offline rule/regex parser (`translate(text, {names})` → `{program, preview, unknown, suggestions}`).
+- `behaviors.js` + `runtime.js` run the result as data. There is no `eval`, and `validateProgram` whitelists every trigger and action.
+- The translator sits behind an **AI provider interface** in `src/studio/ai.js`: `getScriptTranslator()` / `setScriptTranslator({name, translate(text, context) → Promise<{program, preview, unknown}>})`. A commented `RemoteModelTranslator` skeleton shows how to plug in a model later. Always pass its output through `validateProgram`. No API keys are used or shipped.
 
 ### Animator
 1. Click **Animator**.
@@ -111,11 +115,16 @@ Embedded .glb animations play with the ▶ clip buttons. In a part's properties,
 Blender export: File → Export → glTF 2.0 (.glb) with "Animation" and "Skinning" enabled.
 
 ### Tests
-Build first with `npx vite build`, then run `node scripts/studio-e2e.mjs`. This headless test runs 42 checks: it builds a game with every part type, scripts, gears, models and an animation, then saves, publishes and plays it. `node scripts/make-fixtures.mjs` regenerates the test .glb files.
+- `node scripts/nlscript-tests.mjs`: 150+ phrase tests for the plain-words translator (no browser needed).
+- `node scripts/collision-tests.mjs`: exact collision for rotated/stretched spheres and cylinders (GJK), including a random fuzz test.
+- Build first with `npx vite build`, then run `node scripts/studio-e2e.mjs`. This headless test runs 73 checks: every part type, multi-select, box select, groups, copy/paste, the phrase panel, scripts, gears, models and an animation; then it saves, publishes and plays the game (clicks, doors, riding moving/spinning platforms, curved collision).
+- `node scripts/make-fixtures.mjs` regenerates the test .glb files.
+
+**Collision:** boxes and wedges use exact box/convex tests; spheres and cylinders (including rotated and stretched ones) use an exact GJK support-shape test in `src/engine/collision.js`.
 
 ## Roadmap
 - Multi-page portal (index / play.html?game= / studio.html in new tabs). The current build is a single page with a menu.
-- Studio: multi-select, a real AI model behind the plain-words translator, exact collision for rotated spheres/cylinders.
+- Studio: a real AI model behind the plain-words translator; physics for unanchored parts beyond simple falling.
 - Accounts and a server-authoritative wallet.
 - Multiplayer server (WebSocket rooms).
 - Real-money BB via Stripe.

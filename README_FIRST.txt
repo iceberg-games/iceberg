@@ -26,8 +26,12 @@ Make your own game (Studio)
     checkpoints, lava, coins and gears from the top bar or the Toolbox.
   - Click a part to select it. Use Move / Scale / Rotate (keys 2 3 4)
     and change its color and material on the right.
+  - Shift-click or drag a box to select several parts. Ctrl+A selects
+    everything. Ctrl+G groups them into a Model, Ctrl+C / Ctrl+V copy
+    and paste.
   - "+ Add script" lets you type what a part should do in plain words,
-    like "spin slowly" or "when touched give 10 points".
+    like "spin slowly" or "when touched give 10 points". The PHRASES
+    tab lists ideas you can click.
   - Ctrl+Z undoes a mistake. Press TEST to try your game.
   - SAVE keeps your work. PUBLISH puts it under "Your Games".
   - EXPORT saves it as a file you can share, and IMPORT loads one.

@@ -7,7 +7,7 @@ import { TYPE_INFO, MATERIALS, SHAPES } from '../studio/instances.js';
 import { SKIES, GROUNDS } from '../studio/world.js';
 import { GEAR_LIST, GEARS } from '../studio/gears.js';
 import { MUSIC_THEMES } from '../audio/music.js';
-import { EXAMPLES, HELP } from '../studio/nlscript.js';
+import { EXAMPLES, HELP, CHEATSHEET } from '../studio/nlscript.js';
 import { getScriptTranslator } from '../studio/ai.js';
 import { drafts, publish, isPublished } from '../studio/store.js';
 import { upgradeDoc } from '../studio/templates.js';
@@ -20,7 +20,7 @@ export class CreatorPanel {
     Object.assign(this, { root, engine, models, ui, onTest, onExit, onReload });
     this.el = h('div.studio.hidden#creator-panel');
     root.append(this.el);
-    this.leftTab = 'explorer'; this.scriptSel = null; this.showCode = false;
+    this.leftTab = 'explorer'; this.scriptSel = null; this.showCode = false; this.collapsed = new Set(); this.anchor = null;
     bus.on('game:loaded', ({ game }) => { if (game.editing) this.show(game); else this.hide(); });
     bus.on('game:unloaded', () => this.hide());
     bus.on('models:changed', () => this.ed && this.renderLeft());
@@ -39,13 +39,19 @@ export class CreatorPanel {
   }
   _onKey(e) {
     const ed = this.ed; if (!ed) return;
-    if (e.target.closest?.('input, textarea, select')) return;
+    if (e.target.closest?.('input, textarea, select') || document.querySelector('#name-dialog')) return;
     const ctrl = e.ctrlKey || e.metaKey, k = e.code;
     const stop = () => { e.preventDefault(); e.stopPropagation(); };
     if (['KeyT', 'KeyL', 'KeyM', 'KeyH', 'KeyB'].includes(k) && !ctrl) { e.stopPropagation(); return; } // don't open game drawers in Studio
     if (ctrl && k === 'KeyZ') { stop(); e.shiftKey ? ed.redo() : ed.undo(); }
     else if (ctrl && k === 'KeyY') { stop(); ed.redo(); }
     else if (ctrl && k === 'KeyD') { stop(); ed.duplicate(); }
+    else if (ctrl && k === 'KeyA') { stop(); this.scriptSel = null; ed.selectAll(); }
+    else if (ctrl && k === 'KeyC') { stop(); const n = ed.copy(); if (n) this.ui.toast(`Copied ${n} item${n > 1 ? 's' : ''}`, '📋'); }
+    else if (ctrl && k === 'KeyX') { stop(); ed.cut(); }
+    else if (ctrl && k === 'KeyV') { stop(); ed.paste(); }
+    else if (ctrl && k === 'KeyG') { stop(); e.shiftKey ? ed.ungroup() : ed.group(); }
+    else if (k === 'Escape' && !ed.animator.open) { ed.select(null); }
     else if (ctrl && k === 'KeyS') { stop(); this.save(); }
     else if (k === 'Delete' || k === 'Backspace') { stop(); ed.remove(); }
     else if (k === 'KeyF' && !ctrl) { ed.focus(); }
@@ -63,7 +69,7 @@ export class CreatorPanel {
       h('div.st-left', this.left = h('div.st-left-inner')),
       h('div.st-right', this.props = h('div.st-props')),
       this.anim = h('div.st-anim.hidden'),
-      h('div.st-status', 'Right-drag: look · W A S D + Q/E: fly (Shift = fast) · Click: select · 1–4: Select/Move/Scale/Rotate · Ctrl+Z / Ctrl+Y · Ctrl+D duplicate · Del delete · F focus · Ctrl+S save'),
+      h('div.st-status', 'Right-drag: look · W A S D + Q/E: fly · Click: select · Shift/Ctrl+click: add · Drag on empty space: box select · Ctrl+A all · 1–4: tools · Ctrl+Z/Y · Ctrl+C/X/V · Ctrl+D duplicate · Ctrl+G group (Shift: ungroup) · Del · F focus · Ctrl+S save'),
     );
     this.renderRibbon(); this.renderLeft(); this.renderProps(); this.renderAnimator();
   }
@@ -83,8 +89,12 @@ export class CreatorPanel {
       h('div.st-group', h('div.st-gl', 'Edit'), h('div.st-row',
         h('button.st-tool#undo-btn', { disabled: !ed.canUndo(), onclick: () => ed.undo(), title: 'Undo (Ctrl+Z)' }, h('span', '↶'), 'Undo'),
         h('button.st-tool#redo-btn', { disabled: !ed.canRedo(), onclick: () => ed.redo(), title: 'Redo (Ctrl+Y)' }, h('span', '↷'), 'Redo'),
-        h('button.st-tool#dup-btn', { disabled: !ed.selectedId, onclick: () => ed.duplicate() }, h('span', '⧉'), 'Duplicate'),
-        h('button.st-tool#del-btn', { disabled: !ed.selectedId, onclick: () => ed.remove() }, h('span', '🗑'), 'Delete'),
+        h('button.st-tool#dup-btn', { disabled: !ed.selectedId, onclick: () => ed.duplicate(), title: 'Duplicate (Ctrl+D)' }, h('span', '⧉'), 'Duplicate'),
+        h('button.st-tool#del-btn', { disabled: !ed.selectedId, onclick: () => ed.remove(), title: 'Delete (Del)' }, h('span', '🗑'), 'Delete'),
+        h('button.st-tool#copy-btn', { disabled: !ed.selectedId, onclick: () => ed.copy(), title: 'Copy (Ctrl+C)' }, h('span', '📋'), 'Copy'),
+        h('button.st-tool#paste-btn', { disabled: !ed.hasClipboard(), onclick: () => ed.paste(), title: 'Paste (Ctrl+V)' }, h('span', '📥'), 'Paste'),
+        h('button.st-tool#group-btn', { disabled: !ed.selectedId, onclick: () => ed.group(), title: 'Group into a Model (Ctrl+G)' }, h('span', '🗃️'), 'Group'),
+        h('button.st-tool#ungroup-btn', { disabled: !ed.selection.some(id => ed.doc.instances.find(i => i.id === id)?.type === 'group'), onclick: () => ed.ungroup(), title: 'Ungroup (Ctrl+Shift+G)' }, h('span', '📤'), 'Ungroup'),
         h('button.st-tool' + (ed.animator.open ? '.on' : '') + '#animator-btn', { onclick: () => ed.openAnimator(!ed.animator.open) }, h('span', '🎬'), 'Animator'))),
       h('div.st-group.st-game', h('div.st-gl', 'Game'), h('div.st-row',
         h('button.st-big.play#test-game', { onclick: () => this.onTest(this.save(true)) }, '▶ Test'),
@@ -100,21 +110,66 @@ export class CreatorPanel {
   // ---------- left: explorer / toolbox ----------
   renderLeft() {
     const ed = this.ed; if (!ed) return;
-    const tabs = h('div.st-tabs', ['explorer', 'toolbox'].map(t => h('button.st-tab' + (this.leftTab === t ? '.on' : ''), { 'data-tab': t, onclick: () => { this.leftTab = t; this.renderLeft(); } }, t === 'explorer' ? '🗂️ Explorer' : '🧰 Toolbox')));
-    clear(this.left).append(tabs, this.leftTab === 'explorer' ? this.explorer() : this.toolbox());
+    const label = { explorer: '🗂️ Explorer', toolbox: '🧰 Toolbox', phrases: '📖 Phrases' };
+    const tabs = h('div.st-tabs', Object.keys(label).map(t => h('button.st-tab' + (this.leftTab === t ? '.on' : ''), { 'data-tab': t, onclick: () => { this.leftTab = t; this.renderLeft(); } }, label[t])));
+    clear(this.left).append(tabs, this.leftTab === 'explorer' ? this.explorer() : this.leftTab === 'toolbox' ? this.toolbox() : this.phrases());
   }
   explorer() {
     const ed = this.ed, doc = ed.doc;
     const rows = [h('div.st-node.root' + (!ed.selectedId ? '.sel' : ''), { 'data-node': 'workspace', onclick: () => { this.scriptSel = null; ed.select(null); } }, '🌍 Workspace', h('small', ` (${doc.instances.length})`))];
-    for (const inst of doc.instances) {
-      const sel = ed.selectedId === inst.id && !this.scriptSel;
-      const badge = inst.kill || inst.material === 'lava' ? ' 🔥' : '';
-      rows.push(h('div.st-node' + (sel ? '.sel' : ''), { 'data-node': inst.id, title: 'Click to select · double-click to rename', onclick: () => { this.scriptSel = null; ed.select(inst.id); }, ondblclick: () => { const n = prompt('Rename', inst.name); if (n) ed.setProp(inst.id, 'name', n.slice(0, 40)); } },
-        h('span.ic', TYPE_INFO[inst.type]?.icon || '🧱'), inst.name + badge));
-      for (const s of inst.scripts || []) rows.push(h('div.st-node.child' + (this.scriptSel === s.id ? '.sel' : ''), { 'data-script': s.id, onclick: () => { this.scriptSel = s.id; ed.select(inst.id); } }, h('span.ic', '📜'), s.text ? `Script: ${s.text.slice(0, 24)}${s.text.length > 24 ? '…' : ''}` : 'Script (empty)'));
-      for (const a of (doc.animations || []).filter(a => a.rigId === inst.id)) rows.push(h('div.st-node.child', { onclick: () => { ed.select(inst.id); ed.openAnimator(true); ed.animator.animId = a.id; ed.poseAt(0); this.renderAnimator(); } }, h('span.ic', '🎞️'), `Animation: ${a.name}`));
-    }
+    const byId = new Map(doc.instances.map(i => [i.id, i]));
+    const kids = new Map(); for (const i of doc.instances) { const p = i.parent && byId.has(i.parent) ? i.parent : null; if (!kids.has(p)) kids.set(p, []); kids.get(p).push(i); }
+    const order = []; // visible rows in display order (for Shift range-select)
+    const clickNode = (e, id) => {
+      this.scriptSel = null;
+      if (e.shiftKey && this.anchor && order.includes(this.anchor)) { const a = order.indexOf(this.anchor), b = order.indexOf(id); ed.selectMany(order.slice(Math.min(a, b), Math.max(a, b) + 1), e.ctrlKey || e.metaKey); }
+      else if (e.ctrlKey || e.metaKey) { ed.toggleSelect(id); this.anchor = id; }
+      else { ed.select(id); this.anchor = id; }
+    };
+    const walk = (parent, depth) => {
+      for (const inst of kids.get(parent) || []) {
+        order.push(inst.id);
+        const sel = ed.isSelected(inst.id) && !this.scriptSel;
+        const badge = inst.kill || inst.material === 'lava' ? ' 🔥' : '';
+        const isGroup = inst.type === 'group', open = !this.collapsed.has(inst.id);
+        const pad = { paddingLeft: `${6 + depth * 14}px` };
+        rows.push(h('div.st-node' + (sel ? '.sel' : '') + (isGroup ? '.group' : ''), { 'data-node': inst.id, style: pad, title: 'Click to select · Shift/Ctrl+click to multi-select · double-click to rename', onclick: (e) => clickNode(e, inst.id), ondblclick: () => this.askName('Rename', inst.name).then(n => { if (n) ed.setProp(inst.id, 'name', n.slice(0, 40)); }) },
+          isGroup ? h('span.st-twisty', { 'data-twisty': inst.id, onclick: (e) => { e.stopPropagation(); open ? this.collapsed.add(inst.id) : this.collapsed.delete(inst.id); this.renderLeft(); } }, open ? '▾' : '▸') : null,
+          h('span.ic', TYPE_INFO[inst.type]?.icon || '🧱'), inst.name + badge, isGroup ? h('small', ` (${(kids.get(inst.id) || []).length})`) : null));
+        const cpad = { paddingLeft: `${20 + depth * 14}px` };
+        for (const sc of inst.scripts || []) rows.push(h('div.st-node.child' + (this.scriptSel === sc.id ? '.sel' : ''), { 'data-script': sc.id, style: cpad, onclick: () => { this.scriptSel = sc.id; ed.select(inst.id); } }, h('span.ic', '📜'), sc.text ? `Script: ${sc.text.slice(0, 24)}${sc.text.length > 24 ? '…' : ''}` : 'Script (empty)'));
+        for (const a of (doc.animations || []).filter(a => a.rigId === inst.id)) rows.push(h('div.st-node.child', { style: cpad, onclick: () => { ed.select(inst.id); ed.openAnimator(true); ed.animator.animId = a.id; ed.poseAt(0); this.renderAnimator(); } }, h('span.ic', '🎞️'), `Animation: ${a.name}`));
+        if (isGroup && open) walk(inst.id, depth + 1);
+      }
+    };
+    walk(null, 0);
     return h('div.st-explorer', rows);
+  }
+  /** 📖 Phrases: every sentence the offline translator understands, grouped; click to use */
+  phrases() {
+    const ed = this.ed;
+    const use = (text) => {
+      const inst = ed.doc.instances.find(i => i.id === ed.selectedId && i.type !== 'group');
+      if (!inst) { this.ui.toast('Select a part first, then click a phrase to give it that script.', '👆'); return; }
+      const cur = this.scriptSel && inst.scripts?.find(x => x.id === this.scriptSel);
+      if (cur) { const t = cur.text ? `${cur.text.replace(/[\s.]+$/, '')}. ${text}` : text; ed.updateScript(inst.id, cur.id, t); const ta = this.props.querySelector('#script-text'); if (ta) ta.value = t; }
+      else { this.scriptSel = ed.addScript(inst.id, text); this.renderLeft(); this.renderProps(); }
+    };
+    return h('div.st-phrases',
+      h('p.st-hint', 'Click a phrase to add it to the selected part\'s script (or start a new script). Change the words, numbers and names freely — e.g. "teleport them to the part called Castle". Join ideas with "and" / "then".'),
+      CHEATSHEET.map(cat => h('div.st-phrase-cat', h('h4', cat.title), cat.items.map(x => h('button.st-phrase', { 'data-phrase': x, onclick: () => use(x) }, x)))));
+  }
+  /** in-studio text prompt (replaces window.prompt) → Promise<string|null> */
+  askName(title, initial = '') {
+    document.querySelector('#name-dialog')?.remove();
+    return new Promise((resolve) => {
+      const done = (v) => { wrap.remove(); resolve(v); };
+      const input = h('input#name-dialog-input', { value: initial, maxLength: 40, onkeydown: (e) => { e.stopPropagation(); if (e.key === 'Enter') done(input.value.trim() || null); if (e.key === 'Escape') done(null); } });
+      const wrap = h('div.st-dialog-back#name-dialog', { onclick: (e) => { if (e.target === wrap) done(null); } },
+        h('div.st-dialog', h('b', title), input,
+          h('div.st-row', h('button.st-big#name-dialog-ok', { onclick: () => done(input.value.trim() || null) }, 'OK'), h('button.st-mini#name-dialog-cancel', { onclick: () => done(null) }, 'Cancel'))));
+      this.el.append(wrap); setTimeout(() => { input.focus(); input.select(); }, 0);
+    });
   }
   toolbox() {
     const ed = this.ed;
@@ -145,12 +200,50 @@ export class CreatorPanel {
   renderProps() {
     const ed = this.ed; if (!ed) return;
     const inst = ed.doc.instances.find(i => i.id === ed.selectedId);
+    if (ed.selection.length > 1) { this.scriptSel = null; clear(this.props).append(this.multiProps()); return; }
+    if (inst?.type === 'group') { clear(this.props).append(this.groupProps(inst)); return; }
     clear(this.props).append(inst ? (this.scriptSel && inst.scripts?.some(s => s.id === this.scriptSel) ? this.scriptEditor(inst) : this.instProps(inst)) : this.workspaceProps());
   }
   field(label, input) { return h('label.st-field', h('span', label), input); }
   vec(inst, key, step = 0.5) {
     const v = inst[key];
     return h('div.st-vec', ['X', 'Y', 'Z'].map((ax, i) => h('label', ax, h('input', { type: 'number', step, value: num(v[i]), 'data-prop': `${key}.${i}`, onchange: (e) => { const nv = [...inst[key]]; nv[i] = +e.target.value; this.ed.setProp(inst.id, key, nv); } }))));
+  }
+  /** properties shared by every selected item; editing one sets it on all of them (one undo step) */
+  multiProps() {
+    const ed = this.ed, list = ed.selection.map(id => ed.doc.instances.find(i => i.id === id)).filter(Boolean);
+    const same = (k) => { const v = JSON.stringify(list[0][k]); return list.every(i => JSON.stringify(i[k]) === v) ? list[0][k] : undefined; };
+    const has = (k, types) => list.every(i => !types || types.includes(i.type));
+    const parts = list.filter(i => i.type !== 'group');
+    const set = (k) => (e) => ed.setPropMany(null, k, e.target.type === 'checkbox' ? e.target.checked : (e.target.type === 'range' || e.target.type === 'number' ? +e.target.value : e.target.value));
+    const mvec = (key, step) => h('div.st-vec', ['X', 'Y', 'Z'].map((ax, i) => { const vals = parts.map(p => p[key]?.[i]); const one = vals.every(v => v === vals[0]); return h('label', ax, h('input', { type: 'number', step, value: one && vals.length ? num(vals[0]) : '', placeholder: '—', 'data-mprop': `${key}.${i}`, onchange: (e) => { if (e.target.value !== '') ed.setPropMany(parts.map(p => p.id), key, +e.target.value, i); } })); }));
+    const allPart = has(0, ['part']), colorable = has(0, ['part', 'spawn', 'checkpoint', 'gear']);
+    return h('div#multi-props',
+      h('h3', `🧩 ${list.length} items selected`),
+      h('p.st-hint', 'Changes apply to every selected item. Blank (—) means they differ. Drag the gizmo to move/rotate/scale them together around their centre.'),
+      parts.length ? [h('h4', 'Transform'), this.field('Position', mvec('pos', 0.5)), this.field('Rotation °', mvec('rot', 15)), this.field('Size', mvec('size', 0.5))] : null,
+      colorable ? h('h4', 'Appearance') : null,
+      allPart ? this.field('Shape', h('select#mprop-shape', { onchange: set('shape') }, same('shape') === undefined ? h('option', { value: '', selected: true, disabled: true }, '(mixed)') : null, SHAPES.map(sh => h('option', { value: sh, selected: same('shape') === sh }, sh[0].toUpperCase() + sh.slice(1))))) : null,
+      colorable ? this.field('Color', h('input#mprop-color', { type: 'color', value: same('color') || '#888888', onchange: set('color') })) : null,
+      colorable ? this.field('Material', h('select#mprop-material', { onchange: set('material') }, same('material') === undefined ? h('option', { value: '', selected: true, disabled: true }, '(mixed)') : null, Object.entries(MATERIALS).map(([k, m]) => h('option', { value: k, selected: same('material') === k }, m.name)))) : null,
+      allPart ? this.field('Transparency', h('input#mprop-transparency', { type: 'range', min: 0, max: 1, step: 0.05, value: same('transparency') || 0, onchange: set('transparency') })) : null,
+      h('h4', 'Behavior'),
+      this.field('Anchored', h('input#mprop-anchored', { type: 'checkbox', checked: list.every(i => i.anchored !== false), onchange: set('anchored') })),
+      this.field('CanCollide', h('input#mprop-collide', { type: 'checkbox', checked: list.every(i => i.collide !== false), onchange: set('collide') })),
+      allPart ? this.field('Kill brick', h('input#mprop-kill', { type: 'checkbox', checked: list.every(i => i.kill), onchange: set('kill') })) : null,
+      h('div.st-row.st-actions',
+        h('button.st-mini#multi-group', { onclick: () => ed.group() }, '🗃️ Group'), h('button.st-mini', { onclick: () => ed.focus() }, '🎯 Focus'),
+        h('button.st-mini', { onclick: () => ed.duplicate() }, '⧉ Duplicate'), h('button.st-mini', { onclick: () => ed.copy() }, '📋 Copy'), h('button.st-mini.danger', { onclick: () => ed.remove() }, '🗑 Delete')));
+  }
+  groupProps(g) {
+    const ed = this.ed, n = ed.descendants(g.id).length;
+    return h('div#group-props',
+      h('h3', '🗃️ Model (group)'),
+      this.field('Name', h('input#prop-name', { value: g.name, maxLength: 40, onchange: (e) => ed.setProp(g.id, 'name', e.target.value) })),
+      h('p.st-hint', `${n} item${n === 1 ? '' : 's'} inside. Clicking any of them in the 3D view selects the whole Model; pick single parts in the Explorer. Moving, rotating and scaling it moves everything inside.`),
+      h('h4', 'Transform'), this.field('Position', this.vec(g, 'pos')),
+      h('div.st-row.st-actions', h('button.st-mini#ungroup-model', { onclick: () => ed.ungroup() }, '📤 Ungroup'), h('button.st-mini', { onclick: () => ed.focus() }, '🎯 Focus'),
+        h('button.st-mini', { onclick: () => ed.duplicate() }, '⧉ Duplicate'), h('button.st-mini.danger', { onclick: () => ed.remove() }, '🗑 Delete')));
   }
   instProps(inst) {
     const ed = this.ed, set = (k) => (e) => ed.setProp(inst.id, k, e.target.type === 'checkbox' ? e.target.checked : (e.target.type === 'range' || e.target.type === 'number' ? +e.target.value : e.target.value));
@@ -200,10 +293,13 @@ export class CreatorPanel {
   renderScriptPreview() {
     const ed = this.ed; if (!ed || !this.preview) return;
     const inst = ed.doc.instances.find(i => i.id === ed.selectedId); const s = inst?.scripts?.find(x => x.id === this.scriptSel); if (!s) return;
-    const r = getScriptTranslator().translateSync ? getScriptTranslator().translateSync(s.text || '') : { preview: [], unknown: [] };
+    const names = ed.doc.instances.map(i => i.name).filter(Boolean);
+    const r = getScriptTranslator().translateSync ? getScriptTranslator().translateSync(s.text || '', { names }) : { preview: [], unknown: [], suggestions: [] };
+    const useSuggestion = (x) => { const t = (s.text || '').trim(); const base = r.unknown.length ? r.unknown.reduce((acc, u) => acc.replace(u, ''), t).replace(/(\s*(,|\.|\band\b|\bthen\b)\s*)+$/i, '').trim() : t; const nt = base ? `${base.replace(/[\s.]+$/, '')}. ${x}` : x; ed.updateScript(inst.id, s.id, nt); const ta = this.props.querySelector('#script-text'); if (ta) ta.value = nt; };
     clear(this.preview).append(
       h('div.st-understood', h('b', '🤖 I understood:'), r.preview.length ? h('ul#script-preview', r.preview.map(l => h('li', l))) : h('p.st-hint', s.text ? 'Nothing yet.' : 'Type something above.')),
-      r.unknown.length ? h('div.st-unknown#script-unknown', h('b', '🤔 I didn\'t understand: '), r.unknown.map(u => `"${u}"`).join(', '), h('p', HELP)) : null,
+      r.unknown.length ? h('div.st-unknown#script-unknown', h('b', '🤔 I didn\'t understand: '), r.unknown.map(u => `"${u}"`).join(', '),
+        (r.suggestions || []).length ? h('div', h('p', 'Did you mean one of these? (click to use)'), h('div.st-chips#script-suggestions', r.suggestions.map(x => h('button.st-chip.sugg', { onclick: () => useSuggestion(x) }, x)))) : h('p', HELP)) : null,
       this.showCode ? h('pre.st-code#script-code', JSON.stringify(s.program, null, 2)) : null);
   }
   workspaceProps() {
@@ -255,7 +351,7 @@ export class CreatorPanel {
         h('b', '🎬 Animator'),
         h('label', 'Rig ', h('select#anim-rig', { onchange: (e) => ed.selectRig(e.target.value) }, rigs.map(r => h('option', { value: r.id, selected: r.id === A.rigId }, `${TYPE_INFO[r.type].icon} ${r.name}`)))),
         h('label', 'Animation ', h('select#anim-pick', { onchange: (e) => { A.animId = e.target.value; ed.poseAt(0); this.renderAnimator(); } }, anims.length ? anims.map(x => h('option', { value: x.id, selected: x.id === A.animId }, x.name)) : h('option', '(none)'))),
-        h('button.st-mini#anim-new', { onclick: () => { const n = prompt('Animation name', 'Animation'); if (n) ed.newAnimation(n.slice(0, 30)); } }, '＋ New'),
+        h('button.st-mini#anim-new', { onclick: () => this.askName('New animation name', 'Animation').then(n => { if (n) ed.newAnimation(n.slice(0, 30)); }) }, '＋ New'),
         a ? h('label', 'Length ', h('input', { type: 'number', min: 0.2, max: 30, step: 0.1, value: a.length, onchange: (e) => ed.setAnimProp('length', Math.max(0.2, +e.target.value)) })) : null,
         a ? h('label.st-check', h('input', { type: 'checkbox', checked: a.loop, onchange: (e) => ed.setAnimProp('loop', e.target.checked) }), ' Loop') : null,
         a ? h('button.st-mini#anim-play', { onclick: () => ed.togglePlay() }, A.playing ? '⏸ Pause' : '▶ Play') : null,

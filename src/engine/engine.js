@@ -40,7 +40,9 @@ export class Engine {
   _setupPointer(el) {
     let down = null;
     el.addEventListener('contextmenu', e => e.preventDefault());
-    el.addEventListener('pointerdown', (e) => { this._setMouse(e); this.game?.onPointerDown?.(e, this._ray()); down = { x: e.clientX, y: e.clientY, lastX: e.clientX, lastY: e.clientY, button: e.button, moved: 0, shift: e.shiftKey }; el.setPointerCapture(e.pointerId); });
+    // A game may claim a drag (e.g. Studio box-select) by returning 'drag' from onPointerDown;
+    // claimed drags go to game.onPointerDrag / onPointerDragEnd instead of the camera.
+    el.addEventListener('pointerdown', (e) => { this._setMouse(e); const claim = this.game?.onPointerDown?.(e, this._ray()); down = { x: e.clientX, y: e.clientY, lastX: e.clientX, lastY: e.clientY, button: e.button, moved: 0, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, claim: claim === 'drag' }; el.setPointerCapture(e.pointerId); });
     el.addEventListener('pointermove', (e) => {
       this._setMouse(e);
       if (down) {
@@ -49,14 +51,18 @@ export class Engine {
         down.lastX = e.clientX; down.lastY = e.clientY;
         e = { clientX: e.clientX, clientY: e.clientY, movementX: mx, movementY: my, shiftKey: e.shiftKey };
         down.moved += Math.abs(e.movementX) + Math.abs(e.movementY);
-        if (down.moved > 4) { if (this.game?.cameraController) this.game.cameraController.drag(e.movementX, e.movementY, down.button); else this.player.orbit(e.movementX, e.movementY); }
+        if (down.moved > 4) {
+          if (down.claim) this.game?.onPointerDrag?.({ x0: down.x, y0: down.y, x: e.clientX, y: e.clientY, shift: down.shift, ctrl: down.ctrl });
+          else if (this.game?.cameraController) this.game.cameraController.drag(e.movementX, e.movementY, down.button); else this.player.orbit(e.movementX, e.movementY);
+        }
       }
       if (this.game?.onHover) this.game.onHover(this._ray());
     });
     el.addEventListener('pointerup', (e) => {
-      if (down && down.moved <= 4 && this.game?.onClick) {
+      if (down && down.claim && down.moved > 4) this.game?.onPointerDragEnd?.({ x0: down.x, y0: down.y, x: e.clientX, y: e.clientY, shift: down.shift, ctrl: down.ctrl });
+      else if (down && down.moved <= 4 && this.game?.onClick) {
         this._setMouse(e);
-        this.game.onClick({ ray: this._ray(), button: down.button, shift: down.shift || e.shiftKey });
+        this.game.onClick({ ray: this._ray(), button: down.button, shift: down.shift || e.shiftKey, ctrl: down.ctrl || e.ctrlKey || e.metaKey });
       }
       down = null;
     });

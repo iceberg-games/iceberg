@@ -5,7 +5,7 @@ const b = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftsha
 const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
 const p = await ctx.newPage();
 const errs = []; p.on('console', m => m.type() === 'error' && errs.push(m.text())); p.on('pageerror', e => errs.push(e.stack));
-p.on('dialog', d => d.accept(d.type() === 'prompt' ? 'Wave2' : undefined));
+const browserDialogs = []; p.on('dialog', d => { browserDialogs.push(d.type()); d.accept(d.type() === 'prompt' ? 'Wave2' : undefined); });
 const results = []; const ok = (name, cond, info = '') => { results.push([cond ? 'PASS' : 'FAIL', name, info]); };
 const ED = () => p.evaluate(() => !!window.iceberg.engine.game?.editing);
 const count = () => p.evaluate(() => window.iceberg.engine.game.doc.instances.length);
@@ -70,6 +70,107 @@ ok('undo/redo (buttons + Ctrl+Z)', cu === c1 && cr === c1 + 1 && ck === c1, `${c
 await selectByName('Floor'); const ck2 = await count(); await p.keyboard.press('Control+d'); const cd = await count(); await p.keyboard.press('Delete'); const cdel = await count();
 ok('duplicate (Ctrl+D) + delete (Del)', cd === ck2 + 1 && cdel === ck2, `${ck2} ${cd} ${cdel}`);
 
+// ---------- Multi-select, groups, clipboard ----------
+const EV = (fn, arg) => p.evaluate(fn, arg);
+const baseN = await count();
+const mids = await EV(() => { const g = window.iceberg.engine.game; return [['MA', [-30, 0.5, -30]], ['MB', [-26, 0.5, -30]], ['MC', [-22, 0.5, -30]]].map(([name, pos]) => g.insert('part', { name, pos, color: '#ff0000' })); });
+const selIds = () => EV(() => [...window.iceberg.engine.game.selection]);
+await p.click('[data-tab=explorer]');
+await p.click(`[data-node="${mids[0]}"]`); await p.click(`[data-node="${mids[1]}"]`, { modifiers: ['Control'] });
+const s2 = await selIds();
+await p.click(`[data-node="${mids[0]}"]`); await p.click(`[data-node="${mids[2]}"]`, { modifiers: ['Shift'] });
+const s3 = await selIds();
+ok('explorer Ctrl-click toggles + Shift-click range', s2.length === 2 && s3.length === 3 && mids.every(id => s3.includes(id)), `${s2.length} / ${s3.length}`);
+ok('multi-edit properties panel shown', await p.isVisible('#multi-props'));
+await setField('#mprop-color', '#22cc88'); await setField('[data-mprop="pos.1"]', 5);
+let ms = await EV((ids) => ids.map(id => window.iceberg.engine.game.doc.instances.find(i => i.id === id)), mids);
+ok('multi-edit color + position Y on all', ms.every(i => i.color === '#22cc88' && i.pos[1] === 5) && ms[0].pos[0] === -30 && ms[2].pos[0] === -22, JSON.stringify(ms.map(i => [i.color, i.pos])));
+await p.keyboard.press('Control+z');
+ms = await EV((ids) => ids.map(id => window.iceberg.engine.game.doc.instances.find(i => i.id === id)), mids);
+ok('undo multi-edit', ms.every(i => i.pos[1] === 0.5 && i.color === '#22cc88'), JSON.stringify(ms.map(i => i.pos[1])));
+// group gizmo: move then rotate around the selection centre
+await p.click('[data-tool=move]');
+const gm = await EV(() => { const g = window.iceberg.engine.game, tc = g.tc; const onPivot = tc.object === g.pivot; const c = g.pivot.position.toArray();
+  tc.dispatchEvent({ type: 'dragging-changed', value: true }); g.pivot.position.x += 4; g.pivot.updateMatrixWorld(true); tc.dispatchEvent({ type: 'objectChange' }); tc.dispatchEvent({ type: 'dragging-changed', value: false });
+  return { onPivot, c, pos: g.selection.map(id => g.doc.instances.find(i => i.id === id).pos) }; });
+ok('group move gizmo on selection centre', gm.onPivot && Math.abs(gm.c[0] + 26) < 0.01 && gm.pos.map(q => q[0]).join() === '-26,-22,-18', JSON.stringify(gm));
+await p.click('[data-tool=rotate]');
+const gr = await EV(() => { const g = window.iceberg.engine.game, tc = g.tc;
+  tc.dispatchEvent({ type: 'dragging-changed', value: true }); g.pivot.rotation.y = Math.PI / 2; g.pivot.updateMatrixWorld(true); tc.dispatchEvent({ type: 'objectChange' }); tc.dispatchEvent({ type: 'dragging-changed', value: false });
+  return g.selection.map(id => { const i = g.doc.instances.find(x => x.id === id); return [i.pos, i.rot]; }); });
+ok('group rotate around centre', Math.abs(gr[0][0][0] + 22) < 0.01 && Math.abs(gr[0][0][2] + 26) < 0.01 && Math.abs(gr[2][0][2] + 34) < 0.01 && Math.abs(gr[1][1][1] - 90) < 0.1, JSON.stringify(gr));
+await p.click('[data-tool=scale]');
+const gs = await EV(() => { const g = window.iceberg.engine.game, tc = g.tc;
+  tc.dispatchEvent({ type: 'dragging-changed', value: true }); g.pivot.scale.set(2, 2, 2); g.pivot.updateMatrixWorld(true); tc.dispatchEvent({ type: 'objectChange' }); tc.dispatchEvent({ type: 'dragging-changed', value: false });
+  return g.selection.map(id => { const i = g.doc.instances.find(x => x.id === id); return [i.pos, i.size]; }); });
+ok('group scale around centre', Math.abs(gs[0][1][0] - 8) < 0.01 && Math.abs(gs[0][0][2] + 22) < 0.01, JSON.stringify(gs));
+for (let i = 0; i < 3; i++) await p.keyboard.press('Control+z');
+ms = await EV((ids) => ids.map(id => window.iceberg.engine.game.doc.instances.find(i => i.id === id).pos), mids);
+ok('undo group transforms', ms.map(q => q[0]).join() === '-30,-26,-22', JSON.stringify(ms));
+// group into a Model
+await p.click('[data-tool=select]');
+await EV((ids) => window.iceberg.engine.game.selectMany(ids), mids);
+await p.keyboard.press('Control+g'); await p.waitForTimeout(100);
+const grp = await EV(() => { const g = window.iceberg.engine.game; const m = g.doc.instances.find(i => i.id === g.selectedId); return m && { type: m.type, id: m.id, kids: g.childrenOf(m.id).length, pos: m.pos }; });
+ok('Ctrl+G groups into a Model', grp?.type === 'group' && grp.kids === 3 && Math.abs(grp.pos[0] + 26) < 0.01, JSON.stringify(grp));
+ok('explorer shows Model tree', await p.isVisible(`[data-node="${grp.id}"].group`) && await p.isVisible(`[data-twisty="${grp.id}"]`));
+await EV(() => window.iceberg.engine.game.focus()); await p.waitForTimeout(300);
+const scrC = await EV((id) => { const g = window.iceberg.engine.game; const v = g.world.entries.get(id).root.position.clone().project(window.iceberg.engine.camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; }, mids[2]);
+await EV(() => window.iceberg.engine.game.select(null));
+await p.mouse.click(scrC[0], scrC[1]); await p.waitForTimeout(100);
+ok('viewport click on a part inside a Model selects the Model', (await selIds()).join() === grp.id, JSON.stringify(await selIds()));
+await p.keyboard.down('Shift'); await p.mouse.click(scrC[0], scrC[1]); await p.keyboard.up('Shift'); await p.waitForTimeout(100);
+const afterShift = await selIds();
+await p.keyboard.down('Control'); await p.mouse.click(scrC[0], scrC[1]); await p.keyboard.up('Control'); await p.waitForTimeout(100);
+ok('viewport Shift/Ctrl-click toggles selection', afterShift.length === 0 && (await selIds()).join() === grp.id, `${afterShift.length} then ${(await selIds()).length}`);
+// moving the Model moves its parts
+await p.click('[data-tool=move]');
+await EV(() => { const g = window.iceberg.engine.game, tc = g.tc; tc.dispatchEvent({ type: 'dragging-changed', value: true }); g.pivot.position.z += 2; g.pivot.updateMatrixWorld(true); tc.dispatchEvent({ type: 'objectChange' }); tc.dispatchEvent({ type: 'dragging-changed', value: false }); });
+ms = await EV((ids) => ids.map(id => window.iceberg.engine.game.doc.instances.find(i => i.id === id).pos[2]), mids);
+ok('gizmo on a Model moves everything inside', ms.every(z => z === -28), JSON.stringify(ms));
+await p.keyboard.press('Control+z');
+// duplicate the Model → new Model with new children
+const nBeforeDup = await count();
+await p.keyboard.press('Control+d'); await p.waitForTimeout(100);
+const dupG = await EV(() => { const g = window.iceberg.engine.game; const m = g.doc.instances.find(i => i.id === g.selectedId); return { type: m.type, kids: g.childrenOf(m.id).map(c => c.name) }; });
+ok('duplicate a Model (with children, ids remapped)', (await count()) === nBeforeDup + 4 && dupG.type === 'group' && dupG.kids.length === 3, JSON.stringify(dupG));
+await p.keyboard.press('Delete'); await p.waitForTimeout(100);
+ok('delete a Model deletes its children', (await count()) === nBeforeDup, `${await count()} vs ${nBeforeDup}`);
+// rename via in-studio dialog
+await p.dblclick(`[data-node="${grp.id}"]`); await p.waitForSelector('#name-dialog-input'); await p.fill('#name-dialog-input', 'Stairs'); await p.press('#name-dialog-input', 'Enter'); await p.waitForTimeout(100);
+ok('rename via in-studio dialog', await EV((id) => window.iceberg.engine.game.doc.instances.find(i => i.id === id).name === 'Stairs', grp.id) && !browserDialogs.length);
+await EV((id) => window.iceberg.engine.game.select(id), grp.id);
+await p.keyboard.press('Control+Shift+g'); await p.waitForTimeout(100);
+const ung = await EV((ids) => { const g = window.iceberg.engine.game; return { groups: g.doc.instances.filter(i => i.type === 'group').length, parents: ids.map(id => g.doc.instances.find(i => i.id === id).parent || null), sel: g.selection.length }; }, mids);
+ok('Ctrl+Shift+G ungroups', ung.groups === 0 && ung.parents.every(x => x === null) && ung.sel === 3, JSON.stringify(ung));
+await p.keyboard.press('Control+z'); const regrouped = await EV(() => window.iceberg.engine.game.doc.instances.filter(i => i.type === 'group').length);
+await p.keyboard.press('Control+y'); const reung = await EV(() => window.iceberg.engine.game.doc.instances.filter(i => i.type === 'group').length);
+ok('undo/redo group ops', regrouped === 1 && reung === 0, `${regrouped} ${reung}`);
+// Ctrl+A, box select, copy/paste multiple
+await EV(() => window.iceberg.engine.game.select(null));
+await p.keyboard.press('Control+a');
+ok('Ctrl+A selects everything', (await selIds()).length === await count(), `${(await selIds()).length} / ${await count()}`);
+await EV(() => window.iceberg.engine.game.select(null));
+await p.click('[data-tool=select]');
+const rectPts = await EV((ids) => { const g = window.iceberg.engine.game; return ids.map(id => { const v = g.world.entries.get(id).root.position.clone().project(window.iceberg.engine.camera); return [(v.x + 1) / 2 * innerWidth, (1 - v.y) / 2 * innerHeight]; }); }, mids);
+const xs = rectPts.map(q => q[0]), ys = rectPts.map(q => q[1]);
+const x0 = Math.min(...xs) - 40, y0 = Math.max(...ys) + 60, x1 = Math.max(...xs) + 40, y1 = Math.min(...ys) - 40;
+await p.mouse.move(x0, y0); await p.mouse.down(); for (let i = 1; i <= 8; i++) { await p.mouse.move(x0 + (x1 - x0) * i / 8, y0 + (y1 - y0) * i / 8); await p.waitForTimeout(20); } await p.mouse.up(); await p.waitForTimeout(100);
+const boxSel = await selIds();
+ok('box/marquee select by dragging', mids.every(id => boxSel.includes(id)) && await p.evaluate(() => document.querySelector('.st-marquee').classList.contains('hidden')), `${boxSel.length} selected`);
+await EV((ids) => window.iceberg.engine.game.selectMany(ids), mids);
+const nc = await count();
+await p.keyboard.press('Control+c'); await p.keyboard.press('Control+v'); await p.waitForTimeout(100);
+const pasted = await selIds();
+ok('copy/paste multiple', (await count()) === nc + 3 && pasted.length === 3 && !pasted.some(id => mids.includes(id)) && await EV(() => !!localStorage.getItem('iceberg:v1:studioClipboard')), `${nc} -> ${await count()}`);
+await p.keyboard.press('Control+d'); const nd = await count();
+await p.keyboard.press('Delete'); const ndel = await count();
+await p.keyboard.press('Control+z'); const nun = await count();
+ok('duplicate/delete multiple + undo', nd === nc + 6 && ndel === nc + 3 && nun === nc + 6, `${nd} ${ndel} ${nun}`);
+await EV((n) => { const g = window.iceberg.engine.game; g.selectMany(g.doc.instances.slice(n).map(i => i.id)); g.remove(); }, baseN);
+ok('cleanup multi-select parts', (await count()) === baseN, `${await count()} vs ${baseN}`);
+await p.click('[data-tool=move]');
+
 // Arrange the course
 await selectByName('KillBrick'); await setVec('pos', [0, 0.5, 30]);
 await selectByName('Checkpoint'); await setVec('pos', [0, 0.2, 20]);
@@ -85,11 +186,28 @@ ok('plain-words script preview (spin)', /Spins slowly forever/.test(prev), prev)
 await p.check('#show-code'); ok('show code toggle', /"spin"/.test(await p.textContent('#script-code')));
 await p.fill('#script-text', 'make it fly to the moon'); await p.click('#script-apply'); await p.waitForTimeout(150);
 ok('unknown phrase gives helpful message', await p.isVisible('#script-unknown'), (await p.textContent('#script-unknown')).slice(0, 80));
+ok('suggestion chips for unknown phrase', (await p.$$('#script-suggestions .st-chip')).length > 0);
 await p.fill('#script-text', 'Spin slowly forever'); await p.click('#script-apply');
 // second script on wedge: touch → give points + message
 await selectByName('Wedge'); await p.waitForTimeout(100); await p.click('#add-script');
 await p.fill('#script-text', 'When touched give 10 points and say "Nice!"'); await p.click('#script-apply'); await p.waitForTimeout(100);
 ok('touch script preview', /give the player 10 points/.test(await p.textContent('#script-preview')));
+
+// Phrases cheat-sheet panel: clicking a phrase gives the selected part a script
+await selectByName('Sphere'); await p.click('[data-tab=phrases]'); await p.waitForTimeout(100);
+const nPhr = await p.$$eval('[data-phrase]', e => e.length);
+await p.click('[data-phrase="When clicked, turn green"]'); await p.waitForTimeout(150);
+const sphScripts = await p.evaluate(() => window.iceberg.engine.game.doc.instances.find(i => i.name === 'Sphere').scripts.map(s => s.text));
+ok('📖 Phrases panel (click example → script)', nPhr >= 40 && sphScripts.includes('When clicked, turn green'), `${nPhr} phrases; ${JSON.stringify(sphScripts)}`);
+await p.click('[data-tab=explorer]');
+// scenery for runtime checks: a moving platform, a lying (rotated) cylinder, a door + button by name
+await EV(() => { const g = window.iceberg.engine.game;
+  const lift = g.insert('part', { name: 'Lift', pos: [20, 0.5, -20], size: [6, 1, 6], color: '#3388ff' }); g.addScript(lift, 'Move between 20, 0.5, -20 and 32, 0.5, -20 every 4 seconds');
+  g.insert('part', { name: 'Log', shape: 'cylinder', pos: [20, 1, 20], size: [2, 8, 2], rot: [0, 0, 90], color: '#8a5a34' });
+  g.insert('part', { name: 'Gate', pos: [-20, 3.5, 20], size: [6, 7, 1], color: '#aa7744' });
+  const btn = g.insert('part', { name: 'GateButton', pos: [-20, 0.3, 14], size: [2, 0.6, 2], color: '#ff3355' }); g.addScript(btn, 'When the button is clicked, open the door called Gate for 5 seconds');
+});
+
 
 // Gear from Toolbox
 await p.click('[data-tab=toolbox]'); await p.click('[data-gear=speedCoil]'); await p.waitForTimeout(100);
@@ -112,7 +230,8 @@ await p.click('[data-tab=toolbox]'); await p.click('text=R6 Rig'); await p.waitF
 await selectByName('R6 Rig'); await setVec('pos', [-3, 0, 8]);
 await p.click('#animator-btn'); await p.waitForTimeout(200);
 await p.selectOption('#anim-rig', await p.evaluate(() => window.iceberg.engine.game.doc.instances.find(x => x.name === 'R6 Rig').id));
-await p.click('#anim-new'); await p.waitForTimeout(150);
+await p.click('#anim-new'); await p.waitForSelector('#name-dialog-input'); await p.fill('#name-dialog-input', 'Wave2'); await p.click('#name-dialog-ok'); await p.waitForTimeout(150);
+ok('in-studio name dialog for new animation (no browser popup)', await p.evaluate(() => window.iceberg.engine.game.currentAnim()?.name === 'Wave2') && !browserDialogs.includes('prompt'), JSON.stringify(browserDialogs));
 await p.click('[data-bone="Right Arm"]');
 await setField('[data-rot=Z]', 120); await p.waitForTimeout(100);
 await p.evaluate(() => { window.iceberg.engine.game.poseAt(1.0); }); await p.click('[data-bone="Right Arm"]'); await setField('[data-rot=Z]', 30);
@@ -190,7 +309,38 @@ await tp(6, 2.2, 4); await p.waitForFunction(() => /10 points/.test(document.que
 await tp(0, 1.1, 15); const bp = await G(() => window.iceberg.engine.game.backpack.items);
 ok('gear giver gives Speed Coil', bp.includes('speedCoil'), JSON.stringify(bp));
 await p.keyboard.press('Digit1'); await p.waitForTimeout(100);
-ok('equip gear (key 1) → speed boost', await G(() => window.iceberg.engine.player.mods.speed === 1.8));
+ok('equip gear (key 1) → speed boost', await G(() => window.iceberg.engine.player.mods.speed > 1));
+
+// clicking a part with a "when clicked" script; button opens the door called Gate
+const clickAt = (name) => G(`(() => { const e = window.iceberg.engine, g = e.game; const ent = [...g.world.entries.values()].find(x => x.inst.name === '${name}'); const v = ent.root.position.clone().project(e.camera); const r = e.renderer.domElement.getBoundingClientRect(); e._setMouse({ clientX: r.left + (v.x + 1) / 2 * r.width, clientY: r.top + (1 - v.y) / 2 * r.height }); g.onClick({ ray: e._ray(), button: 0 }); return [v.x, v.y, v.z]; })()`);
+const sphColor = () => G(() => { const ent = [...window.iceberg.engine.game.world.entries.values()].find(x => x.inst.name === 'Sphere'); let c = null; ent.root.traverse(o => { if (!c && o.material?.color) c = o.material.color.getHexString(); }); return c; });
+await tp(-6, 1, 10); await p.waitForTimeout(300);
+const sc0 = await sphColor(); await clickAt('Sphere'); await p.waitForTimeout(700); const sc1 = await sphColor();
+ok('runtime: "when clicked, turn green" works', sc0 !== sc1, `${sc0} -> ${sc1}`);
+await tp(-20, 1, 8); await p.waitForTimeout(300);
+const gateState = () => G(() => { const e = [...window.iceberg.engine.game.world.entries.values()].find(x => x.inst.name === 'Gate'); return { open: !!e.doorOpen, solid: e.solid !== false }; });
+const gate0 = await gateState();
+await clickAt('GateButton'); await p.waitForTimeout(1500);
+const gate1 = await gateState();
+ok('runtime: button click opens the door called Gate', !gate0.open && gate0.solid && gate1.open && !gate1.solid, `${JSON.stringify(gate0)} -> ${JSON.stringify(gate1)}`);
+// riding a moving platform
+const liftX = () => G(() => [...window.iceberg.engine.game.world.entries.values()].find(x => x.inst.name === 'Lift').root.position.x);
+const lx0 = await liftX(); await tp(lx0, 1.6, -20); await p.waitForTimeout(300);
+const ride = []; for (let i = 0; i < 18; i++) { ride.push(await G(() => { const g = window.iceberg.engine.game; const l = [...g.world.entries.values()].find(x => x.inst.name === 'Lift').root.position.x; const pl = window.iceberg.engine.player.pos; return [l, pl.x, pl.y]; })); await p.waitForTimeout(300); }
+const offs = ride.map(r => r[1] - r[0]), lxs = ride.map(r => r[0]);
+ok('player rides a moving platform', Math.max(...lxs) - Math.min(...lxs) > 0.3 && Math.max(...offs) - Math.min(...offs) < 0.35 && ride.every(r => r[2] > 0.9), `platform moved ${(Math.max(...lxs) - Math.min(...lxs)).toFixed(2)}, offset drift ${(Math.max(...offs) - Math.min(...offs)).toFixed(3)}`);
+// riding a spinning platform (the Cylinder spins slowly at 0,0.5,40)
+await tp(2, 1.4, 40); await p.waitForTimeout(400);
+const q0 = await G(() => window.iceberg.engine.player.pos.toArray()); await p.waitForTimeout(1200);
+const q1 = await G(() => window.iceberg.engine.player.pos.toArray());
+const a0 = Math.atan2(q0[2] - 40, q0[0]), a1 = Math.atan2(q1[2] - 40, q1[0]);
+ok('player rides a rotating platform', Math.abs(a1 - a0) > 0.05 && Math.abs(Math.hypot(q1[0], q1[2] - 40) - Math.hypot(q0[0], q0[2] - 40)) < 0.3 && q1[1] > 0.9, `angle ${a0.toFixed(2)} -> ${a1.toFixed(2)}, r ${Math.hypot(q1[0], q1[2] - 40).toFixed(2)}`);
+// curved collision: standing on a lying (rotated) cylinder off-centre lands on the curve, not on its bounding box
+await tp(20, 4, 21.2); await p.waitForTimeout(900);
+const onLog = await G(() => window.iceberg.engine.player.pos.toArray());
+await tp(20, 4, 20); await p.waitForTimeout(900);
+const onLogTop = await G(() => window.iceberg.engine.player.pos.toArray());
+ok('accurate collision on a rotated cylinder', onLogTop[1] > 1.9 && onLogTop[1] < 2.1 && onLog[1] > 1.3 && onLog[1] < 1.85, `top y=${onLogTop[1].toFixed(2)}, off-centre y=${onLog[1].toFixed(2)} (box would be 2.00)`);
 // checkpoint then kill brick
 await tp(0, 0.45, 20); const rp = await G(() => window.iceberg.engine.player.pos.toArray());
 await tp(0, 1.05, 30); const afterKill = await G(() => window.iceberg.engine.player.pos.toArray());
