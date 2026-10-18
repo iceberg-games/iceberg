@@ -39,6 +39,24 @@ if (args.includes('--local')) {
     console.log('applied', f);
   }
   execFileSync('node', [resolve(ROOT, 'scripts/sync-catalog.mjs'), '--apply'], { stdio: 'inherit', env: process.env });
+} else if (args.includes('--mgmt-api')) {
+  // Same as --remote, but over HTTPS via the Supabase Management API (for networks that block
+  // Postgres ports). Needs SUPABASE_ACCESS_TOKEN (personal access token) + SUPABASE_PROJECT_REF.
+  const { mgmtQuery } = await import('./supabase-mgmt.mjs');
+  await mgmtQuery('create table if not exists public._migrations (name text primary key, applied_at timestamptz default now()); alter table public._migrations enable row level security;');
+  const done = new Set((await mgmtQuery('select name from public._migrations')).map(r => r.name));
+  const todo = files.filter(f => !done.has(f));
+  console.log(todo.length ? `pending: ${todo.join(', ')}` : 'migrations up to date');
+  if (args.includes('--dry-run')) process.exit(0);
+  for (const f of todo) {
+    await mgmtQuery(`begin;\n${readFileSync(resolve(dir, f), 'utf8')}\ninsert into public._migrations (name) values ('${f}');\ncommit;`);
+    console.log('applied', f);
+  }
+  const { loadSources, validate, toSQL } = await import('./sync-catalog.mjs');
+  const src = await loadSources(); const errs = validate(src);
+  if (errs.length) { console.error(errs.join('\n')); process.exit(1); }
+  await mgmtQuery(toSQL(src));
+  console.log(`synced ${src.items.length} items, ${src.gears.length} gears, ${src.phrases.length} phrases, ${src.games.length} games, ${src.featured.length} featured`);
 } else {
-  console.log('usage: migrate.mjs --local <dataDir> | --remote [--dry-run]'); process.exit(1);
+  console.log('usage: migrate.mjs --local <dataDir> | --remote [--dry-run] | --mgmt-api [--dry-run]'); process.exit(1);
 }

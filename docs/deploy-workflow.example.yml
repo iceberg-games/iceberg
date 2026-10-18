@@ -1,5 +1,6 @@
 # EXAMPLE ONLY (inert here). Copy to .github/workflows/deploy.yml to deploy to GitHub Pages.
-# Secrets: SUPABASE_URL, SUPABASE_ANON_KEY, optional SUPABASE_DB_URL (runs migrations + price sync).
+# Repo secrets: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (public anon key ONLY).
+# Optional SUPABASE_DB_URL runs migrations + price sync from CI (needs Postgres port egress).
 name: Deploy Iceberg
 on:
   push: { branches: [main] }
@@ -15,14 +16,15 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
       - run: npm ci && (cd tools/db && npm ci)
+      - run: node scripts/sync-catalog.mjs --check
       - run: npx playwright install --with-deps chromium && npm test
       - name: Migrate + sync prices/phrases/games
         if: ${{ env.SUPABASE_DB_URL != '' }}
         run: sudo apt-get install -y postgresql-client && node scripts/migrate.mjs --remote
       - run: node scripts/build-site.mjs --out dist-site
         env:
-          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_USERNAME_EMAIL_DOMAIN: users.iceberg.invalid
       - uses: actions/upload-pages-artifact@v3
         with: { path: dist-site }

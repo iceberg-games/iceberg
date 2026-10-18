@@ -48,11 +48,16 @@ Without the two Supabase variables the site still works fully offline as a guest
 
 - **GitHub Pages:** push the repo, Settings → Pages → Source: GitHub Actions, and copy
   `docs/deploy-workflow.example.yml` to `.github/workflows/deploy.yml`. Add repository secrets
-  `SUPABASE_URL`, `SUPABASE_ANON_KEY` and (optional, for automatic migrations) `SUPABASE_DB_URL`.
+  `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (anon key only) and (optional, for automatic migrations) `SUPABASE_DB_URL`.
 - **Cloudflare Pages:** build command `npm ci && node scripts/build-site.mjs`, output `dist-site`,
   same variables as environment variables.
 
 Then add the site URL under Supabase → Auth → URL Configuration (Site URL).
+
+### Networks that block Postgres ports
+Use HTTPS instead: `SUPABASE_ACCESS_TOKEN=<personal access token> SUPABASE_PROJECT_REF=<ref> node scripts/migrate.mjs --mgmt-api`
+(and `scripts/backup-db.sh`, `node scripts/live-smoke.mjs` with the same env), or paste the generated
+one-file setup SQL into the dashboard SQL editor.
 
 ## 4. Editing the featured banner (Colin / admins)
 
