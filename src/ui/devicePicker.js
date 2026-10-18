@@ -31,8 +31,8 @@ export function showDevicePicker(root = document.body, { force = false } = {}) {
         h('div.title-logo', '🧊'),
         h('h2', 'How are you playing?'),
         h('div.device-opts',
-          opt('computer', '🖥️', 'Computer', 'Keyboard + mouse. Create & Studio included.'),
-          opt('mobile', '📱', 'Mobile', 'Touch joystick, jump button, drag to look.')),
+          opt('computer', '🖥️', 'Computer', 'Keyboard + mouse. Full Studio included.'),
+          opt('mobile', '📱', 'Mobile', 'Touch joystick, jump button, simple Mobile Studio.')),
         h('button.btn.big#device-go', { type: 'button', onclick: go }, 'Continue'),
         h('p.muted.small', 'You can change this later in Help (H).')));
     root.append(el);

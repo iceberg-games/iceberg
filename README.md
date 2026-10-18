@@ -55,7 +55,14 @@ Put it in `src/games/` (a sub-folder is fine). Then import it in `src/games/regi
 3. Have the client refresh its profile from the backend. Clients must never credit themselves.
 
 ## Studio
-Open it from **Games → Create a Game → ✚ Create**. On a phone or tablet (device mode "mobile") the Studio is hidden.
+Open it from **Games → Create a Game → ✚ Create**. On a phone or tablet (device mode "mobile") the same button opens the **Mobile Studio** (below).
+
+### Mobile Studio (phones and tablets)
+A simple, touch-first studio like the first Iceberg creator (`src/ui/mobileStudio.js`). It edits the same game documents and saves/publishes through the same path as the desktop Studio, so a game made on a phone opens in the full Studio on a computer.
+- **Bottom bar:** 🧱 Place, 🎨 Paint, 🗑 Remove and 📍 Spawn tools, ↶ Undo, ▶ Test, 💾 Save and ☰ More (game name, 📱 Mobile-playable, 🚀 Publish, ✕ Exit). A color palette sits above the tools (beside them in landscape). Buttons are at least 40 px. The 3D view is resized to the space above the bar, so the bar never covers it.
+- **Building:** tap a surface to place a 2-stud cube in the chosen color, snapped to a grid. Tap a block to paint or remove it. With 📍 Spawn, tap where players should start. The spawn point can be moved but not removed.
+- **Camera:** drag one finger to orbit, pinch to zoom, drag two fingers to pan. A mouse wheel also zooms.
+- Games made on mobile are mobile-playable by default.
 
 **Layout:** the ribbon is on top (tools, snap, insert, undo/redo, Animator, Test, Save, Publish, Export/Import). The left side has the **Explorer**, **Toolbox** and **📖 Phrases** tabs. The right side has **Properties**.
 - **Camera:** hold the right mouse button and drag to look. Use WASD to fly, Q/E to go down/up, and Shift to go faster. **F** focuses on the selection.

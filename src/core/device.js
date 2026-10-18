@@ -1,5 +1,5 @@
 // Device mode: 'computer' (keyboard + mouse, Create/Studio available) or
-// 'mobile' (on-screen touch controls, Create/Studio hidden).
+// 'mobile' (on-screen touch controls, simple Mobile Studio instead of the full one).
 //
 //   import { getDeviceMode, setDeviceMode, onDeviceChange } from '../core/device.js';
 //   getDeviceMode()            -> 'computer' | 'mobile'
@@ -59,7 +59,7 @@ export function setDeviceMode(mode) {
 
 export function onDeviceChange(fn) { return bus.on('device:changed', fn); }
 
-/** Adds body.device-computer / body.device-mobile so CSS can hide Create/Studio etc. */
+/** Adds body.device-computer / body.device-mobile so CSS can adapt per device. */
 export function applyBodyClass() {
   if (typeof document === 'undefined' || !document.body) return;
   document.body.classList.toggle('device-mobile', current === 'mobile');

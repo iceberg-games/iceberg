@@ -1,6 +1,5 @@
 /* Iceberg Studio — Roblox Studio-like dark layout with icy accents */
 body.studio-active #hud, body.studio-active .help, body.studio-active #back-to-editor { display: none !important; }
-body.device-mobile .game-card[data-game="creator"], body.device-mobile .studio-entry { display: none !important; }
 .studio { position: absolute; inset: 0; z-index: 15; pointer-events: none; font: 13px/1.35 'Segoe UI', system-ui, sans-serif; color: #e4edf5; }
 .studio > * { pointer-events: auto; }
 .st-ribbon { position: absolute; top: 0; left: 0; right: 0; height: 96px; display: flex; gap: 6px; align-items: stretch; padding: 6px 8px; background: #23272e; border-bottom: 1px solid #3a414b; overflow-x: auto; }

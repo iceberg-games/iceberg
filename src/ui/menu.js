@@ -16,7 +16,7 @@ export class Menu {
     root.append(this.el);
     bus.on('coins:changed', () => { const b = this.el.querySelector('.bucks-amount'); if (b) b.textContent = fmt(this.economy.coins); });
     bus.on('games:changed', () => { if (this.mode === 'games') this.showGames(); });
-    // Studio is desktop-only: body.device-mobile (set by core/device.js) hides it via CSS; re-render on change.
+    // Re-render on device change (mobile opens the simple Mobile Studio, computer the full Studio).
     onDeviceChange(() => { if (this.mode === 'games') this.showGames(); });
   }
   hide() { this.el.classList.add('hidden'); this.mode = null; }
@@ -44,7 +44,8 @@ export class Menu {
       h('div.gc-actions', extra || h('button.btn.play', { onclick: () => this.onPlay(def) }, '▶ Play')));
 
     const featured = [...BUILTIN_GAMES.map(d => card(d)),
-      ...(isMobile() ? [] : [card(CREATOR, h('button.btn.play.create.studio-entry#create-btn', { onclick: () => this.showCreateDialog() }, '✚ Create'))])];
+      card(isMobile() ? { ...CREATOR, tagline: 'Mobile Studio: place blocks, pick colors, set a spawn', description: 'Simple touch building. Open the same game on a computer for the full Studio.' } : CREATOR,
+        h('button.btn.play.create.studio-entry#create-btn', { onclick: () => this.showCreateDialog() }, '✚ Create'))];
     const yours = custom.map(doc => {
       const def = customGameDef(doc);
       return card(def, h('div.row',
