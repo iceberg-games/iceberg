@@ -44,6 +44,8 @@ export class Economy {
     this._pending = 0;
     this._loadoutTimer = null;
     this._gameDataTimers = {};
+    this._serverGears = {};           // gameId -> gear ids the SERVER says we own (authoritative when signed in)
+    this._lastSpend = null;           // { op, amount } of a spend() in the current task (gear-purchase shim)
   }
   get coins() { return this.profile.coins; }
   get signedIn() { return !!this.remote; }
@@ -58,9 +60,11 @@ export class Economy {
 
   // ---------- server plumbing ----------
   _enqueue(localDelta, call, { onResult, onFail } = {}) {
-    if (!this.remote) return;
+    if (!this.remote) return null;
+    const op = { cancelled: false, localDelta };
     this._unconfirmed += localDelta; this._pending++;
     this._queue = this._queue.then(async () => {
+      if (op.cancelled) { this._unconfirmed -= op.localDelta; this._pending--; return; }   // replaced by another op (see _adoptSpendForGear)
       let res = null, err = null;
       try { res = await call(this.remote); } catch (e) { err = e; }
       this._unconfirmed -= localDelta; this._pending--;
@@ -74,6 +78,7 @@ export class Economy {
       onResult?.(res);
       if (res && typeof res.coins === 'number') this._setCoins(res.coins + this._unconfirmed, 'Server');
     });
+    return op;
   }
   _setCoins(value, reason) {
     const v = Math.max(0, Math.floor(value));
@@ -125,7 +130,7 @@ export class Economy {
       ...this.backend.loadProfile(), ...p, ...keep,
       owned: [...(p.owned || [])], equipped: { ...(p.equipped || {}) },
       rocketColors: { ...(this.profile.rocketColors || {}), ...(p.rocketColors || {}) },
-      cosmeticColors: { ...(p.cosmeticColors || {}) }, gameData: { ...(p.gameData || {}) },
+      cosmeticColors: { ...(p.cosmeticColors || {}) }, gameData: local ? { ...(p.gameData || {}) } : this._withServerGears(p.gameData || {}),
       lastDailyBonus: p.lastDailyBonus ? String(p.lastDailyBonus).slice(0, 10) : null,
     };
     this._save();
@@ -152,9 +157,10 @@ export class Economy {
     if (!(amount > 0) || this.profile.coins < amount) return false;
     this.profile.coins -= amount;
     this._save(); bus.emit('coins:changed', { coins: this.profile.coins, delta: -amount, reason });
-    this._enqueue(-amount, (r) => r.spend(amount, reason, newRef()), {
+    const op = this._enqueue(-amount, (r) => r.spend(amount, reason, newRef()), {
       onResult: (res) => { if (res && !res.ok) bus.emit('economy:rejected', { action: 'spend', amount, reason: res.reason }); },
     });
+    if (op) { this._lastSpend = { op, amount }; queueMicrotask(() => { if (this._lastSpend?.op === op) this._lastSpend = null; }); }
     return true;
   }
 
@@ -267,13 +273,109 @@ export class Economy {
 
   toggleEquip(id) { return this.isEquipped(id) ? this.unequip(id) : this.equip(id); }
 
-  /** Per-game save blob (used by games such as Giant Rainbow Obby). Never money. */
+  // ---------- per-game save data + gears ----------
+  // Server rule: save blobs are never trusted for Birg Bucks or gear ownership. When
+  // signed in, gameData[gameId].gears always mirrors the server's game_gears rows.
+  _withServerGears(gameData) {
+    this._serverGears = {};
+    const out = {};
+    for (const [id, data] of Object.entries(gameData)) {
+      const gears = Array.isArray(data?.gears) ? data.gears : [];
+      this._serverGears[id] = [...gears];
+      out[id] = { ...(data || {}), gears: [...gears] };
+    }
+    return out;
+  }
+
+  /** Cached (synchronous) save data for a game, or null. */
+  cachedGameData(gameId) { return this.profile.gameData?.[gameId] ?? null; }
+
+  /** Load a game's save data. Returns a Promise; `promise.cached` holds the local value right away. */
+  loadGameData(gameId) {
+    const cached = this.cachedGameData(gameId);
+    let p;
+    if (!this.remote) p = Promise.resolve(this.backend.loadGameData?.(gameId) ?? cached);
+    else {
+      p = this._queue.then(() => this.remote.loadGameData(gameId)).then((data) => {
+        const gears = Array.isArray(data?.gears) ? data.gears : [];
+        this._serverGears[gameId] = [...gears];
+        this.profile.gameData = { ...(this.profile.gameData || {}), [gameId]: { ...(data || {}), gears } };
+        this._save();
+        return this.profile.gameData[gameId];
+      }).catch(() => cached);
+    }
+    p.cached = cached;
+    return p;
+  }
+
+  /** Save a game's data (never money / gear ownership). Returns a Promise. */
   saveGameData(gameId, data) {
+    const prev = this.profile.gameData?.[gameId];
     this.profile.gameData = { ...(this.profile.gameData || {}), [gameId]: data };
     this._save();
-    if (!this.remote) return;
-    clearTimeout(this._gameDataTimers[gameId]);
-    this._gameDataTimers[gameId] = setTimeout(() => this._enqueue(0, (r) => r.saveGameData(gameId, this.profile.gameData[gameId])), LOADOUT_DEBOUNCE_MS);
+    if (!this.remote) { this.backend.saveGameData?.(gameId, data); return Promise.resolve({ ok: true, local: true }); }
+    this._adoptSpendForGear(gameId, data);
+    clearTimeout(this._gameDataTimers[gameId]?.t);
+    return new Promise((resolveSave) => {
+      const t = setTimeout(() => {
+        const { gears, ...blob } = this.profile.gameData[gameId] || {};
+        this._enqueue(0, (r) => r.saveGameData(gameId, blob), { onResult: resolveSave, onFail: (e) => resolveSave({ ok: false, reason: e.message }) });
+      }, LOADOUT_DEBOUNCE_MS);
+      this._gameDataTimers[gameId] = { t };
+    });
+  }
+
+  /** Gears bought in a game work only in that game (server: owns_gear(game_id, gear_id)). */
+  ownsGear(gameId, gearId) {
+    if (this.remote) return (this._serverGears[gameId] || []).includes(gearId);
+    return (this.cachedGameData(gameId)?.gears || []).includes(gearId);
+  }
+
+  /** Buy a gear for one game. The server prices it from its gear table (synced from the game's config). */
+  buyGear(gameId, gearId, price) {
+    if (this.ownsGear(gameId, gearId)) return { ok: false, reason: 'Already owned' };
+    if (!(price >= 0) || this.profile.coins < price) return { ok: false, reason: 'Not enough coins' };
+    const data = { ...(this.cachedGameData(gameId) || {}) };
+    data.gears = [...(data.gears || []), gearId];
+    this.profile.coins -= price;
+    this.profile.gameData = { ...(this.profile.gameData || {}), [gameId]: data };
+    this._changed(-price, `Gear ${gearId}`);
+    if (!this.remote) { this.backend.saveGameData?.(gameId, data); return { ok: true }; }
+    this._queueGearBuy(gameId, gearId, -price);
+    return { ok: true, pending: true };
+  }
+
+  _queueGearBuy(gameId, gearId, localDelta) {
+    const pending = (this._pendingGears ||= new Set()); pending.add(gameId + '/' + gearId);
+    const drop = (why) => {
+      const d = this.profile.gameData?.[gameId];
+      if (d?.gears) { this.profile.gameData[gameId] = { ...d, gears: d.gears.filter(g => this._serverGears[gameId]?.includes(g)) }; this._save(); }
+      bus.emit('economy:rejected', { action: 'gear', gameId, gearId, reason: why });
+    };
+    this._enqueue(localDelta, (r) => r.buyGear(gameId, gearId), {
+      onResult: (res) => {
+        pending.delete(gameId + '/' + gearId);
+        if (Array.isArray(res?.gears)) this._serverGears[gameId] = [...res.gears];
+        if (!res?.ok && res?.reason !== 'already_owned') drop(res?.reason || 'rejected');
+      },
+      onFail: (e) => { pending.delete(gameId + '/' + gearId); drop('network'); },
+    });
+  }
+
+  // Compatibility shim for games that buy gear as `spend(price)` + saveGameData({gears:[...new]})
+  // in the same task (Giant Rainbow Obby today): the plain spend is cancelled before it is
+  // sent and replaced by buy_gear, so the server records ownership and charges its own price.
+  // A gear that shows up in save data WITHOUT a matching purchase is simply not owned server-side.
+  _adoptSpendForGear(gameId, data) {
+    const known = this._serverGears[gameId] || [];
+    const pending = this._pendingGears || new Set();
+    const fresh = (Array.isArray(data?.gears) ? data.gears : []).filter(g => !known.includes(g) && !pending.has(gameId + '/' + g));
+    for (const gearId of fresh) {
+      const last = this._lastSpend;
+      if (!last || last.op.cancelled) break;
+      last.op.cancelled = true; this._unconfirmed -= last.op.localDelta; last.op.localDelta = 0; this._lastSpend = null;
+      this._queueGearBuy(gameId, gearId, -last.amount);
+    }
   }
 
   // equipped + rocketColors + cosmeticColors -> server (debounced; server re-validates ownership/colors)

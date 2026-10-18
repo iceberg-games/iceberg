@@ -139,25 +139,51 @@ await t('save_loadout: only owned items in the right slot; colors validated; cos
   assert.deepEqual(p.cosmeticColors, { earmuffs: '#b3243c', cocoa_mug: '#2f6f4a' });
 });
 
-await t('save_game_data: size and key limits', async () => {
-  assert.equal((await rpc(db, A, 'save_game_data', { p_game_id: 'giant-rainbow-obby', p_data: { stage: 7 } })).ok, true);
-  assert.equal((await rpc(db, A, 'save_game_data', { p_game_id: 'x', p_data: { blob: 'a'.repeat(9000) } })).reason, 'too_large');
+await t('game_data: own table, 16 KB cap, owner-only RLS, gears key stripped', async () => {
+  assert.equal((await rpc(db, A, 'save_game_data', { p_game_id: 'giant-rainbow-obby', p_data: { checkpoint: 7, gears: ['magicCarpet'] } })).ok, true);
+  assert.equal((await rpc(db, A, 'save_game_data', { p_game_id: 'x', p_data: { blob: 'a'.repeat(17000) } })).reason, 'too_large');
   assert.equal((await rpc(db, A, 'save_game_data', { p_game_id: '../evil', p_data: {} })).reason, 'invalid_game');
-  assert.deepEqual((await rpc(db, A, 'get_my_profile')).gameData, { 'giant-rainbow-obby': { stage: 7 } });
+  assert.equal((await rpc(db, A, 'save_game_data', { p_game_id: 'x', p_data: [1, 2] })).reason, 'not_an_object');
+  const loaded = await rpc(db, A, 'load_game_data', { p_game_id: 'giant-rainbow-obby' });
+  assert.deepEqual(loaded, { checkpoint: 7, gears: [] });              // gear in the blob was NOT trusted
+  assert.deepEqual((await rpc(db, A, 'get_my_profile')).gameData, { 'giant-rainbow-obby': { checkpoint: 7, gears: [] } });
+  const mineOnly = await as(db, B, tx => tx.query('select * from public.game_data').then(r => r.rows));
+  assert.equal(mineOnly.length, 0);
+  await denied(as(db, A, tx => tx.query(`insert into public.game_data (user_id, game_id, data) values ($1, 'y', '{}')`, [A])));
+  await denied(as(db, A, tx => tx.query(`insert into public.game_gears (user_id, game_id, gear_id) values ($1, 'giant-rainbow-obby', 'magicCarpet')`, [A])));
+});
+
+await t('gears: server price from game config, per-game ownership, funds, idempotent', async () => {
+  const { GEAR_PRICES_BB, GAME_ID } = await import(resolve(ROOT, 'src/games/giantObby/config.js'));
+  const prices = Object.fromEntries((await as(db, null, tx => tx.query('select gear_id, price from public.game_gear_prices where game_id = $1', [GAME_ID]))).rows.map(r => [r.gear_id, r.price]));
+  assert.deepEqual(prices, GEAR_PRICES_BB);
+  assert.equal((await rpc(db, A, 'buy_gear', { p_game_id: GAME_ID, p_gear_id: 'nope' })).reason, 'unknown_gear');
+  assert.equal((await rpc(db, C, 'buy_gear', { p_game_id: GAME_ID, p_gear_id: 'speedCoil' })).reason, 'insufficient_funds');
+  const before = (await rpc(db, A, 'get_my_profile')).coins;
+  const r = await rpc(db, A, 'buy_gear', { p_game_id: GAME_ID, p_gear_id: 'speedCoil' });
+  assert.equal(r.ok, true); assert.equal(r.coins, before - GEAR_PRICES_BB.speedCoil); assert.deepEqual(r.gears, ['speedCoil']);
+  assert.equal((await rpc(db, A, 'buy_gear', { p_game_id: GAME_ID, p_gear_id: 'speedCoil' })).reason, 'already_owned');
+  assert.equal(await rpc(db, A, 'owns_gear', { p_game_id: GAME_ID, p_gear_id: 'speedCoil' }), true);
+  assert.equal(await rpc(db, A, 'owns_gear', { p_game_id: 'rainbow-obby', p_gear_id: 'speedCoil' }), false);   // other game
+  assert.equal(await rpc(db, B, 'owns_gear', { p_game_id: GAME_ID, p_gear_id: 'speedCoil' }), false);           // other player
+  assert.equal((await rpc(db, A, 'buy_gear', { p_game_id: 'rainbow-obby', p_gear_id: 'speedCoil' })).reason, 'unknown_gear');
+  assert.deepEqual((await rpc(db, A, 'load_game_data', { p_game_id: GAME_ID })).gears, ['speedCoil']);
+  await rpc(db, A, 'save_game_data', { p_game_id: GAME_ID, p_data: { checkpoint: 9, gears: [] } });   // blob can't remove ownership either
+  assert.deepEqual(await rpc(db, A, 'load_game_data', { p_game_id: GAME_ID }), { checkpoint: 9, gears: ['speedCoil'] });
 });
 
 await t('first-login migration: demo grants removed, capped, premium excluded, colors kept, runs once', async () => {
   const D = await createUser(db, { username: 'dana_4' });
   const local = { coins: 150000, demoGranted: 100000, owned: ['icerocket', 'earmuffs', 'crown', 'fake_item', 'scarf'],
     equipped: { hat: 'earmuffs', back: 'icerocket', neck: 'scarf' }, rocketColors: { body: '#ff0000' },
-    cosmeticColors: { earmuffs: '#2f6f4a', bogus: '#ffffff' }, gameData: { 'giant-rainbow-obby': { stage: 3 } } };
+    cosmeticColors: { earmuffs: '#2f6f4a', bogus: '#ffffff' }, gameData: { 'giant-rainbow-obby': { checkpoint: 3, gears: ['magicCarpet'] } } };
   const r = await rpc(db, D, 'migrate_local_profile', { p_local: local });
   assert.equal(r.ok, true); assert.equal(r.coins, 2000);         // (150000-100000) capped at 2000
   assert.deepEqual([...r.items].sort(), ['crown', 'earmuffs', 'scarf']);
   assert.deepEqual(r.profile.equipped, { hat: 'earmuffs', neck: 'scarf' });
   assert.deepEqual(r.profile.cosmeticColors, { earmuffs: '#2f6f4a' });
   assert.equal(r.profile.rocketColors.body, '#ff0000');
-  assert.deepEqual(r.profile.gameData, { 'giant-rainbow-obby': { stage: 3 } });
+  assert.deepEqual(r.profile.gameData, { 'giant-rainbow-obby': { checkpoint: 3, gears: [] } });   // guest gears never carry over
   const again = await rpc(db, D, 'migrate_local_profile', { p_local: local });
   assert.equal(again.reason, 'already_migrated'); assert.equal(again.profile.coins, 2000);
   const E = await createUser(db, { username: 'eve_5' });

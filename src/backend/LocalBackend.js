@@ -41,6 +41,13 @@ export class LocalBackend {
   loadProfile() { return { ...DEFAULT_PROFILE, ...read(this.profileKey, {}) }; }
   saveProfile(profile) { write(this.profileKey, profile); }
   useProfileKey(key) { this.profileKey = key || 'profile'; }
+  // ---- per-game save data (profile.gameData[gameId]) ----
+  loadGameData(gameId) { return (this.loadProfile().gameData || {})[gameId] ?? null; }
+  saveGameData(gameId, data) {
+    const p = this.loadProfile();
+    p.gameData = { ...(p.gameData || {}), [gameId]: data };
+    this.saveProfile(p);
+  }
   loadGuestProfile() { return { ...DEFAULT_PROFILE, ...read('profile', {}) }; }
   saveGuestProfile(profile) { write('profile', profile); }
 

@@ -24,6 +24,9 @@ export class SupabaseBackend {
     return this.client.rpc('save_loadout', { p_equipped: equipped, p_rocket_colors: rocketColors, p_cosmetic_colors: cosmeticColors });
   }
   saveGameData(gameId, data)       { return this.client.rpc('save_game_data', { p_game_id: gameId, p_data: data }); }
+  loadGameData(gameId)             { return this.client.rpc('load_game_data', { p_game_id: gameId }); }
+  buyGear(gameId, gearId)          { return this.client.rpc('buy_gear', { p_game_id: gameId, p_gear_id: gearId }); }
+  ownsGear(gameId, gearId)         { return this.client.rpc('owns_gear', { p_game_id: gameId, p_gear_id: gearId }); }
   migrateLocalProfile(local)       { return this.client.rpc('migrate_local_profile', { p_local: local || {} }); }
 
   // ---- safe chat ----
