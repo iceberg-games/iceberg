@@ -4,7 +4,7 @@ const toB64 = (buf) => { let s = ''; const b = new Uint8Array(buf); for (let i =
 const fromB64 = (str) => { const s = atob(str), b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b.buffer; };
 
 export function exportGameJSON(doc, library) {
-  const ids = [...new Set((doc.models || []).map(m => m.modelId))];
+  const ids = [...new Set([...(doc.models || []), ...(doc.instances || [])].map(m => m.modelId).filter(Boolean))];
   const models = ids.map(id => library.items.get(id)?.record).filter(Boolean).map(r => ({
     id: r.id, name: r.name, format: r.format,
     encoding: typeof r.data === 'string' ? 'text' : 'base64',
