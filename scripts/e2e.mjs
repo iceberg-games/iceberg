@@ -8,6 +8,9 @@
 //      sign-up, guest migration, Play-in-new-tab, server-synced economy + colors,
 //      Safe Chat room with 2 players (bubbles, talking, dispose on leave, rate limit), friends,
 //      demo bucks disabled, SW scope/caching.
+//   5. multiplayer (local Realtime stub, real RLS): 3-4 browser clients see each other move + chat,
+//      cosmetics from the server roster, cap + overflow instance, Join friend from the portal,
+//      Realtime Authorization, junk/spoofed broadcasts dropped, message budget.
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -338,6 +341,192 @@ if (want('site')) {
     await p.screenshot({ path: resolve(SHOTS, 'portal-offline.png') });
   } catch (e) { check('offline site: unexpected error', false, e.stack); }
   finally { await b2.close(); web2.close(); }
+}
+
+
+// ---------------- 5. multiplayer ----------------
+if (want('mp')) {
+  const { startDevServer, serveStatic, ANON_KEY } = await import(resolve(ROOT, 'tools/db/dev-server.mjs'));
+  const { PHRASES } = await import(pathToFileURL(resolve(ROOT, 'src/data/safeChat.js')).href);
+  const API = 54430, WEB = 8430, BASE = `http://localhost:${WEB}/iceberg/`;
+  const out = resolve(TMP, 'site-mp');
+  run('build: site for multiplayer (local backend + realtime stub)', 'node', ['scripts/build-site.mjs', '--out', out],
+    { env: { VITE_SUPABASE_URL: `http://localhost:${API}`, VITE_SUPABASE_ANON_KEY: ANON_KEY, VITE_USERNAME_EMAIL_DOMAIN: 'users.iceberg.test' } });
+  const dev = await startDevServer({ port: API, quiet: true });
+  const web = await serveStatic(out, WEB, { prefix: '/iceberg/' });
+  const b = await launch();
+  const authed = async (path, body) => (await fetch(`http://localhost:${API}${path}`, { method: 'POST', headers: { apikey: ANON_KEY, 'content-type': 'application/json' }, body: JSON.stringify(body) })).json();
+  const api = async (token, fn, args = {}) => (await fetch(`http://localhost:${API}/rest/v1/rpc/${fn}`, { method: 'POST',
+    headers: { apikey: ANON_KEY, 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify(args) })).json();
+  const users = {};
+  for (const n of ['mp_ana', 'mp_ben', 'mp_cat', 'mp_dov']) {
+    const r = await authed('/auth/v1/signup', { email: `${n}@users.iceberg.test`, password: 'icecream9', data: { username: n, display_name: n.slice(3).toUpperCase() } });
+    users[n] = { token: r.access_token, session: { access_token: r.access_token, refresh_token: r.refresh_token, expires_at: r.expires_at, user: { id: r.user.id, username: n } } };
+  }
+  const friends = async (a, z) => { await api(users[a].token, 'send_friend_request', { p_username: z }); await api(users[z].token, 'respond_friend_request', { p_username: a, p_accept: true }); };
+  await friends('mp_ana', 'mp_ben'); await friends('mp_ana', 'mp_dov'); await friends('mp_cat', 'mp_dov');
+  await dev.db.query(`insert into public.inventory (user_id, item_id, source) select id, 'earmuffs', 'admin' from public.profiles where username = 'mp_ana'`);   // test fixture (local db only)
+  const pages = {}; const errs = {};
+  const open = async (n, url) => {
+    const c = pages[n]?.context() || await b.newContext({ viewport: { width: 560, height: 380 } });
+    const p = await c.newPage(); errs[n] = errs[n] || []; watch(p, errs[n]);
+    await p.goto(BASE); await p.evaluate((s) => localStorage.setItem('iceberg:v1:session', JSON.stringify(s)), users[n].session);
+    await p.goto(BASE + url);
+    try { await p.waitForSelector('#start-btn'); } catch (e) {
+      await p.screenshot({ path: resolve(SHOTS, `mp-open-fail-${n}.png`) }).catch(() => {});
+      throw new Error(`${n}: no start button. errors: ${errs[n].join(' | ')} | text: ${(await p.evaluate(() => document.body.innerText).catch(() => '?')).slice(0, 300)}`);
+    }
+    await p.click('#start-btn');
+    await p.waitForFunction(() => window.iceberg?.mp?.info?.instance, null, { timeout: 20000 });
+    pages[n] = p; return p;
+  };
+  const info = (n) => pages[n].evaluate(() => window.iceberg.mp.info);
+  const waitOthers = (n, names, ms = 15000) => pages[n].waitForFunction((names) => { const i = window.iceberg.mp.info; const vis = (i?.others || []).filter(o => o.visible).map(o => o.username).sort(); return JSON.stringify(vis) === JSON.stringify(names); }, names.slice().sort(), { timeout: ms });
+  try {
+    const t0 = Date.now();
+    await open('mp_ana', 'play/?game=frost-fields');
+    // ANA equips her earmuffs through the normal client path (save_loadout) before the others arrive
+    await pages.mp_ana.evaluate(async () => { const e = window.iceberg.economy; await e.flush(); if (!e.isEquipped('earmuffs')) e.equip('earmuffs'); await e.syncLoadoutNow(); });
+    await open('mp_ben', 'play/?game=frost-fields'); await open('mp_cat', 'play/?game=frost-fields');
+    const ia = await info('mp_ana'), ib = await info('mp_ben'), ic = await info('mp_cat');
+    check('mp: 3 players auto-placed in the same instance', ia.instance === 1 && ib.instance === 1 && ic.instance === 1 && ia.topic === 'game:frost-fields:1', JSON.stringify([ia.instance, ib.instance, ic.instance]));
+    let seen = true; try { await waitOthers('mp_ana', ['mp_ben', 'mp_cat']); await waitOthers('mp_ben', ['mp_ana', 'mp_cat']); await waitOthers('mp_cat', ['mp_ana', 'mp_ben']); } catch { seen = false; }
+    check('mp: every client sees the other two avatars', seen, JSON.stringify((await info('mp_ana')).others));
+    check('mp: cosmetics come from the server roster (ANA wears her earmuffs for others)', (await info('mp_ben')).others.find(o => o.username === 'mp_ana')?.equipped.includes('earmuffs'), JSON.stringify((await info('mp_ben')).others));
+    check('mp: chat room is per instance', (await pages.mp_ana.evaluate(() => window.iceberg.gameChat.room)) === 'game:frost-fields:1');
+    // movement + interpolation
+    const startB = (await info('mp_ben')).others.find(o => o.username === 'mp_ana').pos;
+    const s0 = (await info('mp_ana')).stats.sent, tm0 = Date.now();
+    // walk 9 units/s along +x for 1.5 s (driven by a timer, so it doesn't depend on swiftshader frame rate)
+    await pages.mp_ana.evaluate(() => new Promise((ok) => { const pl = window.iceberg.engine.player; let n = 0; const id = setInterval(() => { pl.pos.x += 0.45; if (++n >= 30) { clearInterval(id); ok(); } }, 50); }));
+    const sentHz = ((await info('mp_ana')).stats.sent - s0) / ((Date.now() - tm0) / 1000);
+    await pages.mp_ben.waitForTimeout(1500);
+    const realA = await pages.mp_ana.evaluate(() => window.iceberg.engine.player.pos.toArray());
+    const seenA = (await info('mp_ben')).others.find(o => o.username === 'mp_ana').pos;
+    const moved = Math.hypot(seenA[0] - startB[0], seenA[2] - startB[2]), err = Math.hypot(seenA[0] - realA[0], seenA[2] - realA[2]);
+    check('mp: others see ANA walk (interpolated, settles on her real position)', moved > 3 && err < 0.3, JSON.stringify({ moved, err, seenA, realA }));
+    check('mp: sender rate limited to <= 10 Hz while moving', sentHz > 3 && sentHz <= 10.5, sentHz.toFixed(1));
+    // chat: phrase -> server -> bubble over ANA's avatar + her mouth moves on BEN's and CAT's screens
+    const phrase = PHRASES.find(p => /hello/i.test(p.text)) || PHRASES[0];
+    const said = await pages.mp_ana.evaluate((p) => window.iceberg.gameChat.say(p), { id: phrase.id, text: phrase.text });
+    check('mp: chat post accepted by the server (phrase id)', said?.ok === true, JSON.stringify(said));
+    let bubble = true;
+    try { for (const n of ['mp_ben', 'mp_cat']) await pages[n].waitForFunction(() => window.iceberg.gameChat.bubbles.isShowing('mp_ana') && window.iceberg.mp.info.others.find(o => o.username === 'mp_ana')?.talking, null, { timeout: 6000 }); } catch { bubble = false; }
+    check('mp: bubble above ANA + avatar.talk() on the other clients (< 6 s, via hint + re-poll)', bubble);
+    check('mp: bubble text is the catalog phrase', (await pages.mp_ben.evaluate(() => [...document.querySelectorAll('.speech-bubble')].map(e => e.textContent))).includes(phrase.text));
+    await pages.mp_ben.screenshot({ path: resolve(SHOTS, 'mp-ben-sees-ana.png') });
+    // junk / spoofed / free-text broadcasts and an outsider socket (raw Phoenix frames from CAT's page)
+    const dropped0 = (await info('mp_ana')).stats.dropped;
+    const raw = await pages.mp_cat.evaluate(async ({ api, key, tok, outsider }) => {
+      const sock = (t) => new Promise((ok) => { const ws = new WebSocket(`${api.replace('http', 'ws')}/realtime/v1/websocket?apikey=${key}&vsn=1.0.0`); ws.onopen = () => ok(ws); });
+      const join = (ws, t) => new Promise((ok) => { ws.onmessage = (e) => { const m = JSON.parse(e.data); if (m.event === 'phx_reply' && m.ref === '1') ok(m.payload.status); }; ws.send(JSON.stringify({ topic: 'realtime:game:frost-fields:1', event: 'phx_join', ref: '1', join_ref: '1', payload: { config: { private: true, broadcast: { self: false }, presence: { key: 'x' } }, access_token: t } })); });
+      const ws = await sock(); const st = await join(ws, tok);
+      const send = (event, payload) => ws.send(JSON.stringify({ topic: 'realtime:game:frost-fields:1', event: 'broadcast', ref: null, join_ref: '1', payload: { type: 'broadcast', event, payload } }));
+      send('s', { u: 'ghost_player', s: 1, p: [0, 0, 0], r: 0, a: 0 });          // not in roster
+      send('s', { u: 'mp_cat', s: 1, p: [1e9, 0, 0], r: 0, a: 0 });             // absurd coords
+      send('s', { u: 'mp_cat', s: 2, p: ['x', 0, 0], r: 0, a: 99 });            // junk types
+      send('c', { u: 'mp_cat', text: 'free text should never show' });         // chat hint carries no text
+      const ws2 = await sock(); const st2 = await join(ws2, outsider);
+      ws.close(); ws2.close();
+      return { member: st, outsider: st2 };
+    }, { api: `http://localhost:${API}`, key: ANON_KEY, tok: users.mp_cat.token, outsider: users.mp_dov.token });
+    await pages.mp_ana.waitForTimeout(800);
+    check('mp: Realtime Authorization: non-member socket refused, member allowed', raw.member === 'ok' && raw.outsider === 'error', JSON.stringify(raw));
+    check('mp: junk / unknown-sender broadcasts dropped', (await info('mp_ana')).stats.dropped - dropped0 >= 3);
+    check('mp: no free text ever rendered', !(await pages.mp_ana.evaluate(() => document.body.innerText.includes('free text should never show'))));
+    // leave: CAT goes home -> others drop + dispose her avatar
+    await pages.mp_cat.evaluate(() => window.iceberg.goHome());
+    let left = true; try { await waitOthers('mp_ana', ['mp_ben'], 8000); await waitOthers('mp_ben', ['mp_ana'], 8000); } catch { left = false; }
+    check('mp: leaving removes the avatar for everyone', left, JSON.stringify((await info('mp_ana')).others));
+    const catCtx = pages.mp_cat.context(); await pages.mp_cat.close();   // free the GPU (swiftshader) before the next tabs
+    // cap: 2 per instance -> DOV (ANA's friend) asks to join ANA, server is full -> overflow instance 2
+    await dev.db.query(`update public.app_config set value = '2' where key = 'mp_instance_cap'`);
+    await open('mp_dov', 'play/?game=frost-fields&join=mp_ana');
+    const idv = await info('mp_dov');
+    check('mp: cap: full friend server -> placed in a new instance (with a toast)', idv.instance === 2 && idv.note === 'friend_full' && /full/i.test(await pages.mp_dov.evaluate(() => document.body.innerText)), JSON.stringify(idv));
+    await pages.mp_dov.waitForTimeout(1500);
+    check('mp: cap: instance 2 player sees nobody from instance 1', (await info('mp_dov')).others.length === 0 && (await info('mp_ana')).others.every(o => o.username !== 'mp_dov'));
+    // Join friend from the portal: CAT (DOV's friend) clicks Join -> lands in DOV's instance 2, not the fuller instance 1
+    await dev.db.query(`update public.app_config set value = '12' where key = 'mp_instance_cap'`);
+    const pc = await catCtx.newPage(); watch(pc, errs.mp_cat);
+    await pc.goto(BASE + '?view=friends').catch(() => {}); await pc.goto(BASE);
+    await pc.click('.p-tab[data-view="friends"]');
+    await pc.waitForSelector('#friends-lists a.join-friend[data-join="mp_dov"]', { timeout: 10000 });
+    const [tab] = await Promise.all([pc.context().waitForEvent('page'), pc.click('#friends-lists a.join-friend[data-join="mp_dov"]')]);
+    await tab.waitForLoadState(); watch(tab, errs.mp_cat);
+    await tab.waitForSelector('#start-btn'); await tab.click('#start-btn');
+    await tab.waitForFunction(() => window.iceberg?.mp?.info?.instance, null, { timeout: 20000 });
+    const jc = await tab.evaluate(() => window.iceberg.mp.info);
+    let together = true; try { await tab.waitForFunction(() => window.iceberg.mp.info.others.some(o => o.username === 'mp_dov' && o.visible), null, { timeout: 10000 }); } catch { together = false; }
+    check('mp: portal "Join" puts CAT in her friend DOV\'s instance and they see each other', tab.url().endsWith('&join=mp_dov') && jc.instance === 2 && !jc.note && together, JSON.stringify({ url: tab.url(), jc }));
+    await tab.screenshot({ path: resolve(SHOTS, 'mp-join-friend.png') });
+    // budget: whole run stays well under the free plan's 100 events/s
+    const peak = dev.realtime.maxPerSecond(t0);
+    check('mp: realtime peak events/s within free-plan budget (< 100)', peak < 100, `peak ${peak}/s, total ${dev.realtime.stats.events}`);
+    console.log(`  mp: realtime peak ${peak} events/s; ANA sent ${sentHz.toFixed(1)} Hz while moving`);
+    const allErrs = Object.values(errs).flat().filter(e => !/401|403|Unauthorized/.test(e));
+    check('mp: no page errors', allErrs.length === 0, allErrs.join(' | ').slice(0, 500));
+  } catch (e) { check('mp: unexpected error', false, e.stack); }
+  finally { await b.close(); web.close(); await dev.close(); }
+}
+
+if (want('quests')) {
+  run('quests: local/offline (LocalBackend + facade)', 'node', ['tools/test-quests-local.mjs']);
+  const { startDevServer, serveStatic, ANON_KEY } = await import(resolve(ROOT, 'tools/db/dev-server.mjs'));
+  const { loadSources, toSQL } = await import(pathToFileURL(resolve(ROOT, 'scripts/sync-catalog.mjs')).href);
+  const { withEvent, ND_GAME_ID } = await import(pathToFileURL(resolve(ROOT, 'tools/db/fixtures/event-fixture.mjs')).href);
+  const API = 54431, WEB = 8431, BASE = `http://localhost:${WEB}/iceberg/`;
+  const out = resolve(TMP, 'site-quests');
+  run('build: site for quests (local backend)', 'node', ['scripts/build-site.mjs', '--out', out],
+    { env: { VITE_SUPABASE_URL: `http://localhost:${API}`, VITE_SUPABASE_ANON_KEY: ANON_KEY, VITE_USERNAME_EMAIL_DOMAIN: 'users.iceberg.test' } });
+  const dev = await startDevServer({ port: API, quiet: true });
+  await dev.db.exec(toSQL(withEvent(await loadSources(ROOT))));   // event fixture rows (local db only) until Game Maker/Cosmetics land
+  const web = await serveStatic(out, WEB, { prefix: '/iceberg/' });
+  const b = await launch();
+  const r = await (await fetch(`http://localhost:${API}/auth/v1/signup`, { method: 'POST', headers: { apikey: ANON_KEY, 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'q_eve@users.iceberg.test', password: 'icecream9', data: { username: 'q_eve', display_name: 'Eve' } }) })).json();
+  const session = { access_token: r.access_token, refresh_token: r.refresh_token, expires_at: r.expires_at, user: { id: r.user.id, username: 'q_eve' } };
+  await dev.db.query(`update public.profiles set coins = 200 where username = 'q_eve'`);
+  const errs = [];
+  try {
+    const c = await b.newContext({ viewport: { width: 560, height: 380 } }); const p = await c.newPage(); watch(p, errs);
+    await p.goto(BASE); await p.evaluate((s) => localStorage.setItem('iceberg:v1:session', JSON.stringify(s)), session);
+    await p.goto(BASE + 'play/?game=frost-fields'); await p.waitForSelector('#start-btn'); await p.click('#start-btn');
+    await p.waitForFunction(() => window.iceberg?.economy?.signedIn, null, { timeout: 20000 });
+    const res = await p.evaluate(async (nd) => {
+      const q = window.iceberg.quests, e = window.iceberg.economy, o = {};
+      o.status = await q.status(nd);
+      o.early = await q.complete('nd_quest_disaster_survival');
+      o.p1 = await q.progress('nd_quest_disaster_survival');
+      o.fast = await q.progress('nd_quest_disaster_survival');
+      o.bad = await e.questProgress('nd_quest_disaster_survival', 50);
+      o.buyEvent = e.buy('tornado_hat');
+      o.balloon = await new Promise(ok => { const r = e.buyGear(nd, 'greenBalloon', 150); e.flush().then(() => ok({ r, coins: e.coins, owns: e.ownsGear(nd, 'greenBalloon') })); });
+      o.before = e.coins;
+      o.apple = await e.buyConsumable(nd, 'apple', 10, 'e2e:apple:1');
+      o.appleAgain = await e.buyConsumable(nd, 'apple', 10, 'e2e:apple:1');
+      await e.resync(); o.coins = e.coins;
+      return o;
+    }, ND_GAME_ID);
+    check('quests: status via server (anon-safe RPC, one ND quest)', res.status.length === 1 && res.status[0].itemId === 'tornado_hat' && res.status[0].progress === 0, JSON.stringify(res.status));
+    check('quests: complete() before goal -> not_complete', res.early.granted === false && res.early.reason === 'not_complete');
+    check('quests: progress counted, spam -> too_fast, oversized delta refused', res.p1.ok && res.p1.added === 1 && res.fast.reason === 'too_fast' && res.bad.reason === 'invalid_delta', JSON.stringify([res.p1, res.fast, res.bad]));
+    check('quests: event cosmetic not buyable from the client', res.buyEvent.ok === false || res.buyEvent.reason, JSON.stringify(res.buyEvent));
+    check('disaster game: Green Balloon via buyGear (server price 150)', res.balloon.owns === true, JSON.stringify(res.balloon));
+    check('disaster game: Apple via buyConsumable, same ref charged once', res.apple.ok && res.appleAgain.ok && res.appleAgain.coins === res.before - 10 && res.coins === res.before - 10, JSON.stringify([res.apple, res.appleAgain, res.coins]));
+    // finish the quest server-side time-wise (fixture: pretend 4 more disasters over time), then claim twice
+    for (let i = 0; i < 4; i++) {
+      await dev.db.query(`update public.quest_progress set last_at = last_at - interval '5 seconds' where quest_id = 'nd_quest_disaster_survival'`);
+      await p.evaluate(() => window.iceberg.quests.progress('nd_quest_disaster_survival'));
+    }
+    const claim = await p.evaluate(async () => { const q = window.iceberg.quests; const c1 = await q.complete('nd_quest_disaster_survival'); const c2 = await q.complete('nd_quest_disaster_survival');
+      const st = await q.status('natural-disaster-survival'); await window.iceberg.economy.resync(); return { c1, c2, st, owns: window.iceberg.economy.owns('tornado_hat'), coins: window.iceberg.economy.coins }; });
+    check('quests: complete() grants tornado_hat once, second call alreadyClaimed, no Birg Bucks', claim.c1.granted && claim.c1.itemId === 'tornado_hat' && claim.c2.alreadyClaimed && !claim.c2.granted && claim.owns && claim.coins === res.coins && claim.st[0].claimed, JSON.stringify(claim));
+    const inv = await dev.db.query(`select count(*)::int n from public.inventory i join public.profiles p on p.id = i.user_id where p.username = 'q_eve' and item_id = 'tornado_hat'`);
+    check('quests: exactly one inventory row for the reward', inv.rows[0].n === 1);
+    check('quests: no page errors', errs.filter(e => !/401|403|Unauthorized/.test(e)).length === 0, errs.join(' | ').slice(0, 500));
+  } catch (e) { check('quests: unexpected error', false, e.stack); }
+  finally { await b.close(); web.close(); await dev.close(); }
 }
 
 console.log('\n' + results.map(r => `${r[0]}  ${r[1]}${r[0] === 'FAIL' && r[2] ? '\n      ' + String(r[2]).replace(/\n/g, '\n      ') : ''}`).join('\n'));

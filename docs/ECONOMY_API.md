@@ -110,3 +110,86 @@ Tabs: **Newest** = `publishedAt` (from `src/data/gameMeta.js`, else first git co
 old buckets are kept); **Most Active Players** = live heartbeats. Offline/guest: local dates, this
 device's plays in the last 7 days (`src/net/gameStats.js`), and "not available offline".
 Featured banner offline: `site/public/featured.json`.
+
+## Quests and event cosmetics (Natural Disasters event)
+
+Migration `20261018000008_quests_event.sql`. Quest rewards are **cosmetics only**: claiming a quest
+never moves Birg Bucks.
+
+### Game API: `quests` (`import { quests } from '../core/quests.js'` or `window.iceberg.quests`)
+
+| Call | Result |
+|---|---|
+| `quests.progress(questId, delta = 1)` | `Promise<{ ok, added, quest }>` or `{ ok:false, reason }`. Reasons are `unknown_quest`, `not_live` (outside the event window), `invalid_delta` (more than `maxPerCall`), `too_fast` (with `retryAfterMs`), `hourly_cap`, and `network`. Progress stops at the goal. |
+| `quests.complete(questId)` | `Promise<{ granted, itemId, alreadyClaimed, reason? }>`. You get `reason:'not_complete'` until the goal is reached. The server owns the questId→itemId mapping and the once-per-account rule, so calling it again is safe and returns `{granted:false, alreadyClaimed:true}`. |
+| `quests.status(gameId?)` | `Promise<[{ id, gameId, title, goal, progress, completed, claimed, itemId }]>`. Lists live quests, plus quests that are completed but not yet claimed after their event ended. |
+
+- The same calls also exist on economy: `economy.questProgress`, `economy.getQuests`, and `economy.claimQuestReward`.
+- The bus emits `quest:progress` and `quest:reward`.
+- **Guests and offline players** use a local-only copy (LocalBackend) with the same limits, read from the bundled quest files. Local rewards stay on the device. The first-login migration does **not** import grant-only items.
+
+Example: the disaster game reports a survived round.
+
+```js
+const r = await quests.progress('nd_quest_disaster_survival');
+if (r.ok && r.quest.completed) { const c = await quests.complete('nd_quest_disaster_survival'); if (c.granted) toast('Tornado Hat unlocked!'); }
+```
+
+### Quest file format (Game Maker)
+
+Write `src/games/<dir>/quests.js`. Its `gameId` defaults to `GAME_ID` in `<dir>/config.js`. Alternatively write `src/games/<name>.quests.js` with `export const GAME_ID`.
+
+```js
+export const QUESTS = [
+  { id: 'nd_quest_disaster_survival',      // ^[a-z0-9_]{3,64}$, unique
+    gameId: 'natural-disaster-survival',    // optional; per-quest override (event quests in other games)
+    title: 'Survive 5 disasters', goal: 5,
+    rewardItemId: 'tornado_hat',            // must be a grant-only cosmetic (earnOnly: true)
+    eventId: 'natural-disasters',
+    startsAt: '2026-10-18T00:00:00Z', endsAt: '2026-11-15T00:00:00Z',   // optional live window
+    maxPerCall: 1, minIntervalMs: 2000, maxPerHour: 60 },             // anti-farm limits (these are the defaults)
+];
+```
+
+- `npm run catalog:check` validates the files.
+- `scripts/sync-catalog.mjs` upserts them into `public.quest_defs`. A quest removed from the code is deactivated, not deleted, so existing progress is kept.
+- Pick limits that a real player can't exceed. For example, one disaster takes at least about 30 s, so `minIntervalMs: 20000` is safe.
+
+### Grant-only cosmetics (Cosmetics)
+
+- In `src/data/cosmetics.js`, set **`earnOnly: true`** (as the Cosmetics branch does; `eventOnly` and `unlock: 'quest'` are also accepted). `price` may be 0 or omitted. If `unlock` names a quest id, the sync checks that it matches that quest's `rewardItemId`.
+- The sync stores these items as `catalog_items.grant_only = true`, and the server then refuses them in `buy_cosmetic` (`not_for_sale`) and in `migrate_local_profile`.
+- `economy.buy()` refuses them on the client too.
+- They can only enter an inventory through `claim_quest_reward` (or an admin).
+
+### Paid items in a game: gears and consumables
+
+- **Permanent** items (e.g. the Green Balloon) are gears. Put them in `GEAR_PRICES_BB` in config.js and sell them with `economy.buyGear(gameId, gearId, price)` (the existing `buy_gear` RPC).
+- **One-use** items (Apple heal, Bigger Storm boost) go in `CONSUMABLE_PRICES_BB = { apple: 10, biggerStorm: 25 }` in config.js. The sync writes them to `public.game_consumable_prices`.
+  - Buy with `await economy.buyConsumable(gameId, itemId, price, ref?)` → `{ ok, coins }` or `{ ok:false, reason }`.
+  - **Apply the effect only when `ok`.**
+  - The server charges its own price. `ref` (`^[a-zA-Z0-9_:.-]{4,64}$`, e.g. `round12:apple:1`) makes retries free: the same ref is charged once (`duplicate:true`).
+  - Reasons are `unknown_item`, `insufficient_funds`, `invalid_ref`, and `network`.
+
+### RPCs
+
+| RPC | Role | Notes |
+|---|---|---|
+| `quest_progress(p_quest_id, p_delta)` | authenticated | Applies the limits above. The progress table can only be written through this RPC. |
+| `get_quests(p_game_id)` | anon or authenticated | Anon gets progress 0. |
+| `claim_quest_reward(p_quest_id)` | authenticated | Idempotent. Uses the inventory PK plus `quest_progress.claimed_at`. Writes no wallet ledger row. |
+| `buy_consumable(p_game_id, p_item_id, p_ref)` | authenticated | Idempotent per ref. Ledger reason `consumable:<ref>`. |
+
+## Multiplayer RPCs (migration `20261018000007_multiplayer.sql`)
+
+| RPC | Notes |
+|---|---|
+| `mp_join(p_game_id, p_friend)` | Places you in an instance (`game:<gameId>:<n>`, cap `app_config.mp_instance_cap`, default 12). It keeps your current instance, otherwise picks the fullest one with room, otherwise creates a new one. With `p_friend` (an accepted friend) it joins the friend's instance, and returns `note:'friend_full'` and overflows if that instance is full. Returns `{ok, instance, topic, cap, sendHz, roster}`. |
+| `mp_heartbeat(p_game_id, p_instance)` | Call every 20 s. Members expire after `mp_member_ttl_s` (45). Returns the fresh roster and `sendHz`, or `reason:'rejoin'`. |
+| `mp_leave()` | Leave your instance. |
+| `friends_playing()` | Lists friends who are in a game: `[{username, displayName, gameId, instance, full}]`. Used by the portal Join button. |
+
+- The roster (names, cosmetics, colors) comes only from the server.
+- Realtime broadcasts carry positions and a "new chat" hint and are only used for drawing.
+- Chat itself stays `post_chat` / `get_chat`, with phrase ids only and the room `game:<gameId>:<n>`.
+- Economy actions never travel over Realtime.

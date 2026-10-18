@@ -7,6 +7,8 @@
 // would return Promises and the callers (Economy, Building) already funnel
 // all mutations through a handful of calls, so the change is contained.
 
+import { questDefs, questLive } from '../core/questDefs.js';
+
 const NS = 'iceberg:v1:';
 
 function read(key, fallback) {
@@ -62,6 +64,49 @@ export class LocalBackend {
     profile.owned.push(item.id);
     this.saveProfile(profile);
     return { ok: true, profile };
+  }
+
+  // ---- quests (guest / offline only: a local mirror of the server rules, nothing leaves the device) ----
+  _questRow(id) { const all = read('quests', {}); return [all, all[id] || { count: 0 }]; }
+  _questView(q, r = {}) {
+    const progress = Math.min(r.count || 0, q.goal);
+    return { id: q.id, gameId: q.gameId, title: q.title, goal: q.goal, progress, completed: progress >= q.goal,
+      claimed: !!r.claimedAt, itemId: q.itemId, eventId: q.eventId, startsAt: q.startsAt, endsAt: q.endsAt, live: questLive(q), local: true };
+  }
+  questProgress(questId, delta = 1, now = Date.now()) {
+    const q = questDefs().find(x => x.id === questId);
+    if (!q) return { ok: false, reason: 'unknown_quest' };
+    if (!questLive(q, now)) return { ok: false, reason: 'not_live' };
+    delta = Math.trunc(delta);
+    if (!(delta >= 1) || delta > q.maxPerCall) return { ok: false, reason: 'invalid_delta' };
+    const [all, r] = this._questRow(questId);
+    if (r.count >= q.goal) return { ok: true, added: 0, quest: this._questView(q, r) };
+    if (r.lastAt && now - r.lastAt < q.minIntervalMs) return { ok: false, reason: 'too_fast', retryAfterMs: q.minIntervalMs - (now - r.lastAt) };
+    if (!r.hourStart || now - r.hourStart >= 3600e3) { r.hourStart = now; r.hourCount = 0; }
+    const added = Math.min(delta, q.goal - r.count, q.maxPerHour - (r.hourCount || 0));
+    if (added <= 0) return { ok: false, reason: 'hourly_cap' };
+    r.count += added; r.hourCount = (r.hourCount || 0) + added; r.lastAt = now;
+    if (r.count >= q.goal) r.completedAt = now;
+    all[questId] = r; write('quests', all);
+    return { ok: true, added, quest: this._questView(q, r) };
+  }
+  getQuests(gameId = null) {
+    const all = read('quests', {});
+    return questDefs().filter(q => (!gameId || q.gameId === gameId))
+      .map(q => this._questView(q, all[q.id]))
+      .filter(v => v.live || (v.completed && !v.claimed));
+  }
+  claimQuestReward(questId) {
+    const q = questDefs().find(x => x.id === questId);
+    if (!q) return { granted: false, reason: 'unknown_quest' };
+    const [all, r] = this._questRow(questId);
+    if ((r.count || 0) < q.goal) return { granted: false, reason: 'not_complete', itemId: q.itemId, progress: r.count || 0, goal: q.goal };
+    if (r.claimedAt) return { granted: false, alreadyClaimed: true, itemId: q.itemId };
+    const p = this.loadProfile();
+    if (q.itemId && !p.owned.includes(q.itemId)) p.owned.push(q.itemId);
+    this.saveProfile(p);
+    r.claimedAt = Date.now(); all[questId] = r; write('quests', all);
+    return { granted: true, alreadyClaimed: false, itemId: q.itemId };
   }
 
   // ---- world / builds ----

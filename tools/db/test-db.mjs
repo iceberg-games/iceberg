@@ -1,7 +1,7 @@
 // Real-Postgres tests (PGlite) for the Supabase migrations, RLS and RPCs.
 //   node tools/db/test-db.mjs
 import assert from 'node:assert/strict';
-import { createDb, createUser, rpc, as, ROOT } from './harness.mjs';
+import { createDb, createUser, rpc, as, ROOT, canUseTopic } from './harness.mjs';
 import { resolve } from 'node:path';
 
 const results = [];
@@ -336,6 +336,184 @@ await t('every safe-chat phrase in src/data/safeChat.js exists on the server', a
   const ids = new Set((await su(db, `select id from public.chat_phrases where active`)).map(r => r.id));
   assert.ok(PHRASES.length >= 150, 'need 150+ phrases');
   assert.deepEqual(PHRASES.filter(p => !ids.has(p.id)).map(p => p.id), []);
+});
+
+
+await t('multiplayer: instance pick/create with cap, reload keeps instance, stale members ignored', async () => {
+  await su(db, `update public.app_config set value = '3' where key = 'mp_instance_cap'`);
+  const us = [];
+  for (let i = 0; i < 4; i++) us.push(await createUser(db, { username: `mp_user_${i}` }));
+  const j = [];
+  for (const u of us) j.push(await rpc(db, u, 'mp_join', { p_game_id: 'frost-fields' }));
+  assert.deepEqual(j.map(r => r.instance), [1, 1, 1, 2]);                       // 4th player overflows into a new instance
+  assert.equal(j[0].topic, 'game:frost-fields:1'); assert.equal(j[3].cap, 3);
+  assert.deepEqual(j[2].roster.map(p => p.username), ['mp_user_0', 'mp_user_1', 'mp_user_2']);
+  assert.equal(Object.keys(j[2].roster[0]).sort().join(), 'cosmeticColors,displayName,equipped,rocketColors,username');   // public info only
+  assert.equal((await rpc(db, us[1], 'mp_join', { p_game_id: 'frost-fields' })).instance, 1);      // reload: same instance
+  await su(db, `update public.mp_members set last_seen = now() - interval '2 minutes' where user_id = $1`, [us[0]]);
+  const x = await createUser(db, { username: 'mp_user_x' });
+  assert.equal((await rpc(db, x, 'mp_join', { p_game_id: 'frost-fields' })).instance, 1);          // stale seat is free again
+  assert.equal((await rpc(db, us[0], 'mp_heartbeat', { p_game_id: 'frost-fields', p_instance: 1 })).ok, true);   // (row still matches)
+  const other = await rpc(db, us[3], 'mp_join', { p_game_id: 'birg-hq' });
+  assert.equal(other.instance, 1);                                                                  // per game; one row per player
+  assert.equal((await su(db, `select count(*)::int n from public.mp_members where user_id = $1`, [us[3]]))[0].n, 1);
+  for (const u of [...us, x]) await rpc(db, u, 'mp_leave');
+  assert.equal((await su(db, `select count(*)::int n from public.mp_members`))[0].n, 0);
+});
+
+await t('multiplayer: 12-player cap holds; 13th gets a new instance', async () => {
+  await su(db, `update public.app_config set value = '12' where key = 'mp_instance_cap'`);
+  const us = []; for (let i = 0; i < 13; i++) us.push(await createUser(db, { username: `cap_user_${i}` }));
+  const inst = []; for (const u of us) inst.push((await rpc(db, u, 'mp_join', { p_game_id: 'giant-rainbow-obby' })).instance);
+  assert.equal(inst.filter(i => i === 1).length, 12); assert.equal(inst[12], 2);
+  const hz = (await rpc(db, us[0], 'mp_heartbeat', { p_game_id: 'giant-rainbow-obby', p_instance: 1 })).sendHz;
+  assert.ok(Number(hz) >= 1 && Number(hz) < 10, `budget should throttle a full server (got ${hz})`);   // 60 / (144 + 1) -> 1 Hz floor
+  for (const u of us) await rpc(db, u, 'mp_leave');
+  const solo = await rpc(db, us[0], 'mp_join', { p_game_id: 'giant-rainbow-obby' });
+  assert.equal(Number(solo.sendHz), 10);                                                            // quiet project: full 10 Hz
+  await rpc(db, us[0], 'mp_leave');
+});
+
+await t('multiplayer: join friend (accepted friends only), full friend server falls back', async () => {
+  await su(db, `update public.app_config set value = '2' where key = 'mp_instance_cap'`);
+  const f1 = await createUser(db, { username: 'fr_one' }), f2 = await createUser(db, { username: 'fr_two' });
+  const s1 = await createUser(db, { username: 'fr_stranger' }), f3 = await createUser(db, { username: 'fr_three' });
+  await rpc(db, f1, 'send_friend_request', { p_username: 'fr_two' }); await rpc(db, f2, 'respond_friend_request', { p_username: 'fr_one', p_accept: true });
+  await rpc(db, f1, 'send_friend_request', { p_username: 'fr_three' }); await rpc(db, f3, 'respond_friend_request', { p_username: 'fr_one', p_accept: true });
+  // fr_one is alone in instance 2 (instance 1 is full of others)
+  const filler = []; for (let i = 0; i < 2; i++) { filler.push(await createUser(db, { username: `fr_fill_${i}` })); await rpc(db, filler[i], 'mp_join', { p_game_id: 'birg-hq' }); }
+  assert.equal((await rpc(db, f1, 'mp_join', { p_game_id: 'birg-hq' })).instance, 2);
+  assert.deepEqual((await rpc(db, f2, 'friends_playing')).map(f => [f.username, f.gameId, f.instance, f.full]), [['fr_one', 'birg-hq', 2, false]]);
+  assert.deepEqual(await rpc(db, s1, 'friends_playing'), []);
+  const s = await rpc(db, s1, 'mp_join', { p_game_id: 'birg-hq', p_friend: 'fr_one' });
+  assert.equal(s.note, 'not_friends');                                                              // strangers can't target players
+  await rpc(db, s1, 'mp_leave');
+  const j2 = await rpc(db, f2, 'mp_join', { p_game_id: 'birg-hq', p_friend: 'FR_ONE' });
+  assert.equal(j2.instance, 2); assert.equal(j2.note, null);
+  const j3 = await rpc(db, f3, 'mp_join', { p_game_id: 'birg-hq', p_friend: 'fr_one' });
+  assert.equal(j3.note, 'friend_full'); assert.equal(j3.instance, 3);                                // full -> next free instance
+  assert.equal((await rpc(db, f2, 'mp_join', { p_game_id: 'frost-fields', p_friend: 'fr_one' })).note, 'friend_not_here');
+  for (const u of [f1, f2, f3, ...filler]) await rpc(db, u, 'mp_leave');
+  await su(db, `update public.app_config set value = '12' where key = 'mp_instance_cap'`);
+});
+
+await t('multiplayer: tables RPC-only; Realtime Authorization only for current members of that topic', async () => {
+  const u = await createUser(db, { username: 'rt_member' }), o = await createUser(db, { username: 'rt_outsider' });
+  await denied(as(db, u, tx => tx.query(`select * from public.mp_members`)));
+  await denied(as(db, u, tx => tx.query(`insert into public.mp_members (user_id, game_id, instance_id) values ($1, 'x', 1)`, [u])));
+  await denied(rpc(db, null, 'mp_join', { p_game_id: 'birg-hq' }));
+  const j = await rpc(db, u, 'mp_join', { p_game_id: 'birg-hq' });
+  assert.equal(await canUseTopic(db, u, j.topic), true);
+  assert.equal(await canUseTopic(db, u, j.topic, 'presence'), true);
+  assert.equal(await canUseTopic(db, o, j.topic), false);                       // not a member
+  assert.equal(await canUseTopic(db, null, j.topic), false);                    // anon
+  assert.equal(await canUseTopic(db, u, 'game:birg-hq:99'), false);             // another instance
+  assert.equal(await canUseTopic(db, u, 'lobby'), false);
+  await rpc(db, u, 'mp_leave');
+  assert.equal(await canUseTopic(db, u, j.topic), false);                       // left -> no access
+  assert.equal((await rpc(db, u, 'post_chat', { p_room: 'game:birg-hq:1', p_phrase_id: (await su(db, `select id from public.chat_phrases limit 1`))[0].id })).ok, true);   // per-instance chat rooms
+  assert.equal((await rpc(db, u, 'post_chat', { p_room: 'game:birg-hq:1:2', p_phrase_id: 'x' })).reason, 'invalid_room');
+});
+
+
+await t('event: fixture validates + syncs (grant-only cosmetics, ND gear + consumables, 4 quests); re-sync idempotent', async () => {
+  const { loadSources, validate, toSQL } = await import(resolve(ROOT, 'scripts/sync-catalog.mjs'));
+  const { withEvent } = await import(resolve(ROOT, 'tools/db/fixtures/event-fixture.mjs'));
+  const src = withEvent(await loadSources(ROOT));
+  assert.deepEqual(validate(src), []);
+  await db.exec(toSQL(src));
+  const fp = async () => JSON.stringify(await su(db, `select (select json_agg(q order by quest_id) from public.quest_defs q) q, (select json_agg(c order by item_id) from public.game_consumable_prices c) c, (select json_agg(i order by id) from public.catalog_items i) i`));
+  const a = await fp(); await db.exec(toSQL(src)); assert.equal(await fp(), a);
+  assert.deepEqual((await su(db, `select id from public.catalog_items where grant_only order by id`)).map(r => r.id), ['blizzard_hat', 'lightning_back', 'meteor_pet', 'tornado_hat']);
+  assert.equal((await su(db, `select count(*)::int n from public.quest_defs where active`))[0].n, 4);
+  // validation catches a buyable reward and an unknown game
+  const bad = { ...src, quests: [{ ...src.quests.at(-1), id: 'zz_bad', rewardItemId: 'earmuffs', gameId: 'nope' }] };
+  const errs = validate(bad).join('\n');
+  assert.match(errs, /must be grant-only/); assert.match(errs, /unknown gameId/);
+});
+
+await t('event: event cosmetics cannot be bought or imported from a guest save', async () => {
+  const u = await createUser(db, { username: 'ev_buyer' });
+  await su(db, `update public.profiles set coins = 5000 where id = $1`, [u]);
+  assert.equal((await rpc(db, u, 'buy_cosmetic', { p_item_id: 'tornado_hat' })).reason, 'not_for_sale');
+  assert.equal((await rpc(db, u, 'buy_cosmetic', { p_item_id: 'earmuffs' })).ok, true);   // normal items still work
+  const m = await rpc(db, u, 'migrate_local_profile', { p_local: { coins: 0, owned: ['tornado_hat', 'meteor_pet', 'cocoa_mug'] } });
+  assert.deepEqual(m.items, ['cocoa_mug']);
+  assert.equal((await su(db, `select count(*)::int n from public.inventory where user_id = $1 and item_id in ('tornado_hat','meteor_pet')`, [u]))[0].n, 0);
+});
+
+await t('quests: progress only via RPC, per-call max, min interval, hourly cap, goal cap, live window', async () => {
+  const u = await createUser(db, { username: 'ev_quester' });
+  await denied(as(db, u, tx => tx.query(`insert into public.quest_progress (user_id, quest_id, count) values ($1, 'nd_quest_birg_hq', 3)`, [u])));
+  await denied(as(db, u, tx => tx.query(`update public.quest_progress set count = 999`)));
+  await denied(rpc(db, null, 'quest_progress', { p_quest_id: 'nd_quest_birg_hq', p_delta: 1 }));
+  assert.equal((await rpc(db, u, 'quest_progress', { p_quest_id: 'nd_quest_disaster_survival', p_delta: 2 })).reason, 'invalid_delta');   // maxPerCall 1
+  assert.equal((await rpc(db, u, 'quest_progress', { p_quest_id: 'nope', p_delta: 1 })).reason, 'unknown_quest');
+  let r = await rpc(db, u, 'quest_progress', { p_quest_id: 'nd_quest_disaster_survival', p_delta: 1 });
+  assert.equal(r.ok, true); assert.equal(r.quest.progress, 1);
+  r = await rpc(db, u, 'quest_progress', { p_quest_id: 'nd_quest_disaster_survival', p_delta: 1 });
+  assert.equal(r.reason, 'too_fast'); assert.ok(r.retryAfterMs > 0 && r.retryAfterMs <= 2000);       // can't farm instantly
+  const back = (s) => su(db, `update public.quest_progress set last_at = last_at - interval '${s} seconds' where user_id = $1`, [u]);
+  for (let i = 0; i < 10; i++) { await back(3); await rpc(db, u, 'quest_progress', { p_quest_id: 'nd_quest_disaster_survival', p_delta: 1 }); }
+  r = (await rpc(db, u, 'get_quests', { p_game_id: 'natural-disaster-survival' }))[0];
+  assert.deepEqual([r.progress, r.completed, r.claimed, r.itemId], [5, true, false, 'tornado_hat']);   // capped at goal
+  // hourly cap: frost quest maxPerHour 40, maxPerCall 5, goal 20 -> set goal high to hit the cap
+  await su(db, `update public.quest_defs set goal = 1000 where quest_id = 'nd_quest_frost_fields'`);
+  let added = 0;
+  for (let i = 0; i < 12; i++) { await back(2); const x = await rpc(db, u, 'quest_progress', { p_quest_id: 'nd_quest_frost_fields', p_delta: 5 }); if (x.ok) added += x.added; else assert.equal(x.reason, 'hourly_cap'); }
+  assert.equal(added, 40);
+  await su(db, `update public.quest_progress set hour_start = hour_start - interval '61 minutes' where user_id = $1 and quest_id = 'nd_quest_frost_fields'`, [u]);
+  await back(2); assert.equal((await rpc(db, u, 'quest_progress', { p_quest_id: 'nd_quest_frost_fields', p_delta: 5 })).added, 5);   // next hour
+  await su(db, `update public.quest_defs set goal = 20 where quest_id = 'nd_quest_frost_fields'`);
+  // outside the window: no progress
+  await su(db, `update public.quest_defs set ends_at = now() - interval '1 minute' where quest_id = 'nd_quest_birg_hq'`);
+  assert.equal((await rpc(db, u, 'quest_progress', { p_quest_id: 'nd_quest_birg_hq', p_delta: 1 })).reason, 'not_live');
+  assert.ok(!(await rpc(db, null, 'get_quests', {})).some(q => q.id === 'nd_quest_birg_hq'));        // ended quests hidden
+  await su(db, `update public.quest_defs set ends_at = '2099-01-01' where quest_id = 'nd_quest_birg_hq'`);
+  assert.equal((await rpc(db, null, 'get_quests', {})).find(q => q.id === 'nd_quest_birg_hq').progress, 0);   // anon read
+});
+
+await t('quests: claim_quest_reward grants the cosmetic once (no BB), not before completion', async () => {
+  const u = (await su(db, `select id from public.profiles where username = 'ev_quester'`))[0].id;
+  const coins = (await su(db, `select coins from public.profiles where id = $1`, [u]))[0].coins;
+  assert.deepEqual(await rpc(db, u, 'claim_quest_reward', { p_quest_id: 'nd_quest_giant_obby' }), { granted: false, reason: 'not_complete', itemId: 'lightning_back', progress: 0, goal: 50 });
+  const c1 = await rpc(db, u, 'claim_quest_reward', { p_quest_id: 'nd_quest_disaster_survival' });
+  assert.equal(c1.granted, true); assert.equal(c1.itemId, 'tornado_hat'); assert.ok(c1.profile.owned.includes('tornado_hat'));
+  const c2 = await rpc(db, u, 'claim_quest_reward', { p_quest_id: 'nd_quest_disaster_survival' });
+  assert.deepEqual([c2.granted, c2.alreadyClaimed], [false, true]);
+  assert.equal((await su(db, `select count(*)::int n from public.inventory where user_id = $1 and item_id = 'tornado_hat'`, [u]))[0].n, 1);
+  assert.equal((await su(db, `select coins from public.profiles where id = $1`, [u]))[0].coins, coins);          // no Birg Bucks moved
+  assert.equal((await su(db, `select count(*)::int n from public.wallet_ledger where user_id = $1 and source like 'quest%'`, [u]))[0].n, 0);
+  // equipping the event cosmetic works once granted
+  const lo = await rpc(db, u, 'save_loadout', { p_equipped: { hat: 'tornado_hat' }, p_rocket_colors: null, p_cosmetic_colors: null });
+  assert.equal((lo.profile || lo).equipped?.hat ?? (await su(db, `select equipped->>'hat' h from public.profiles where id = $1`, [u]))[0].h, 'tornado_hat');
+  // claim still works after the event ends (completed in time)
+  await su(db, `update public.quest_defs set ends_at = now() - interval '1 day', starts_at = now() - interval '9 days' where quest_id = 'nd_quest_frost_fields'`);
+  const fr = (await rpc(db, u, 'get_quests', {})).find(q => q.id === 'nd_quest_frost_fields');
+  assert.ok(fr && fr.completed && !fr.claimed && fr.live === false);
+  assert.equal((await rpc(db, u, 'claim_quest_reward', { p_quest_id: 'nd_quest_frost_fields' })).granted, true);
+  await su(db, `update public.quest_defs set ends_at = '2099-01-01', starts_at = '2026-10-01' where quest_id = 'nd_quest_frost_fields'`);
+});
+
+await t('disaster game: Green Balloon via buy_gear, Apple/Bigger Storm via buy_consumable (server price, idempotent ref, funds)', async () => {
+  const u = await createUser(db, { username: 'nd_player' });
+  await su(db, `update public.profiles set coins = 200 where id = $1`, [u]);
+  const g = await rpc(db, u, 'buy_gear', { p_game_id: 'natural-disaster-survival', p_gear_id: 'greenBalloon' });
+  assert.deepEqual([g.ok, g.price, g.coins], [true, 150, 50]);
+  assert.equal(await rpc(db, u, 'owns_gear', { p_game_id: 'natural-disaster-survival', p_gear_id: 'greenBalloon' }), true);
+  const a1 = await rpc(db, u, 'buy_consumable', { p_game_id: 'natural-disaster-survival', p_item_id: 'apple', p_ref: 'round7:apple:1' });
+  assert.deepEqual([a1.ok, a1.price, a1.coins], [true, 10, 40]);
+  const a2 = await rpc(db, u, 'buy_consumable', { p_game_id: 'natural-disaster-survival', p_item_id: 'apple', p_ref: 'round7:apple:1' });
+  assert.deepEqual([a2.ok, a2.duplicate, a2.coins], [true, true, 40]);                                   // retry is free
+  assert.equal((await rpc(db, u, 'buy_consumable', { p_game_id: 'natural-disaster-survival', p_item_id: 'biggerStorm', p_ref: 'round7:storm' })).coins, 15);
+  assert.equal((await rpc(db, u, 'buy_consumable', { p_game_id: 'natural-disaster-survival', p_item_id: 'biggerStorm', p_ref: 'round8:storm' })).reason, 'insufficient_funds');
+  assert.equal((await rpc(db, u, 'buy_consumable', { p_game_id: 'natural-disaster-survival', p_item_id: 'goldenApple', p_ref: 'round8:x' })).reason, 'unknown_item');
+  assert.equal((await rpc(db, u, 'buy_consumable', { p_game_id: 'frost-fields', p_item_id: 'apple', p_ref: 'round8:y' })).reason, 'unknown_item');   // per game
+  assert.equal((await rpc(db, u, 'buy_consumable', { p_game_id: 'natural-disaster-survival', p_item_id: 'apple', p_ref: 'x' })).reason, 'invalid_ref');
+  await denied(as(db, u, tx => tx.query(`insert into public.game_consumable_purchases (user_id, game_id, item_id, price, ref) values ($1, 'a', 'b', 0, 'zzzz')`, [u])));
+  await denied(as(db, u, tx => tx.query(`update public.game_consumable_prices set price = 0`)));
+  const led = await su(db, `select sum(delta)::int s from public.wallet_ledger where user_id = $1`, [u]);
+  assert.equal(led[0].s, -185);                                                                          // 150 + 10 + 25
 });
 
 await db.close();

@@ -36,6 +36,18 @@ export class SupabaseBackend {
   chatLeave(room)                  { return this.client.rpc('chat_leave', { p_room: room }); }
 
   // ---- game stats (portal tabs) ----
+  // quests + consumables (see supabase/migrations/20261018000008_quests_event.sql)
+  questProgress(questId, delta = 1) { return this.client.rpc('quest_progress', { p_quest_id: questId, p_delta: delta }); }
+  getQuests(gameId = null)         { return this.client.rpc('get_quests', { p_game_id: gameId }, { anon: !this.client.signedIn }); }
+  claimQuestReward(questId)        { return this.client.rpc('claim_quest_reward', { p_quest_id: questId }); }
+  buyConsumable(gameId, itemId, ref) { return this.client.rpc('buy_consumable', { p_game_id: gameId, p_item_id: itemId, p_ref: ref }); }
+  // multiplayer (game server instances); see src/mp/multiplayer.js
+  mpJoin(gameId, friend = null)    { return this.client.rpc('mp_join', { p_game_id: gameId, p_friend: friend || null }); }
+  mpHeartbeat(gameId, instance)    { return this.client.rpc('mp_heartbeat', { p_game_id: gameId, p_instance: instance }); }
+  mpLeave()                        { return this.client.rpc('mp_leave', {}); }
+  friendsPlaying()                 { return this.client.rpc('friends_playing', {}); }
+  get accessToken()                { return this.client.session?.access_token || null; }
+  get realtimeConfig()             { return { url: this.client.url, anonKey: this.client.anonKey }; }
   listFeatured()                   { return this.client.rpc('list_featured', {}, { anon: !this.client.signedIn }); }
   listGameStats()                  { return this.client.rpc('list_game_stats', {}, { anon: !this.client.signedIn }); }
   recordVisit(gameId)              { return this.client.rpc('record_visit', { p_game_id: gameId }); }

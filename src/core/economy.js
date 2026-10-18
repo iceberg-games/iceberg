@@ -33,6 +33,8 @@ export function earnSource(reason = '') {
 }
 
 const LOADOUT_DEBOUNCE_MS = 600;
+/** Event cosmetics (earnOnly / eventOnly / unlock: 'quest') are granted by quests and never sold. Same rule as the server sync. */
+export const isGrantOnly = (item) => !!(item && (item.earnOnly || item.eventOnly || item.grantOnly || item.unlock === 'quest'));
 
 export class Economy {
   constructor(backend) {
@@ -196,6 +198,7 @@ export class Economy {
   buy(id) {
     const item = COSMETIC_BY_ID[id];
     if (!item) return { ok: false, reason: 'Unknown item' };
+    if (isGrantOnly(item)) return { ok: false, reason: 'Earn this in the Natural Disasters event' };
     if (!this.remote) {
       const res = this.backend.purchase(this.profile, item);
       if (res.ok) {
@@ -376,6 +379,56 @@ export class Economy {
       last.op.cancelled = true; this._unconfirmed -= last.op.localDelta; last.op.localDelta = 0; this._lastSpend = null;
       this._queueGearBuy(gameId, gearId, -last.amount);
     }
+  }
+
+  // ---------- quests (event cosmetics) + consumables ----------
+  // Signed in: the server owns quest definitions, progress limits and the one-time reward grant.
+  // Guest: a local-only equivalent (LocalBackend) using the same quest files; local event rewards
+  // are NOT carried into an account by the first-login migration (the server refuses grant-only items).
+
+  /** Add progress to a quest. Resolves { ok, added?, reason?, retryAfterMs?, quest }. */
+  async questProgress(questId, delta = 1) {
+    if (this.remote) {
+      try { return await this.remote.questProgress(questId, delta); }
+      catch (e) { return { ok: false, reason: 'network', error: e.message }; }
+    }
+    return this.backend.questProgress(questId, delta);
+  }
+  /** Live quests (optionally for one game) with my progress: [{id, gameId, title, goal, progress, completed, claimed, itemId}]. */
+  async getQuests(gameId = null) {
+    if (this.remote) { try { return await this.remote.getQuests(gameId) || []; } catch { return []; } }
+    return this.backend.getQuests(gameId);
+  }
+  /** Grant the quest's reward cosmetic once. Resolves { granted, itemId, alreadyClaimed?, reason? }. */
+  async claimQuestReward(questId) {
+    let res;
+    if (this.remote) {
+      try { res = await this.remote.claimQuestReward(questId); } catch (e) { return { granted: false, reason: 'network', error: e.message }; }
+      if (res?.granted || res?.alreadyClaimed) {
+        if (res.itemId && !this.profile.owned.includes(res.itemId)) { this.profile.owned.push(res.itemId); this._save(); bus.emit('inventory:changed', this.profile); }
+      }
+    } else {
+      res = this.backend.claimQuestReward(questId);
+      if (res.granted) { this.profile = this.backend.loadProfile(); bus.emit('inventory:changed', this.profile); }
+    }
+    if (res?.granted) bus.emit('quest:reward', { questId, itemId: res.itemId });
+    return { granted: !!res?.granted, itemId: res?.itemId ?? null, alreadyClaimed: !!res?.alreadyClaimed, ...(res?.reason ? { reason: res.reason } : {}) };
+  }
+  /** Pay for a one-use item (e.g. Apple heal) priced by the server from the game's CONSUMABLE_PRICES_BB.
+   *  Resolves { ok, coins?, reason? }. Use the item only when ok. `price` is the client's copy for the optimistic balance. */
+  async buyConsumable(gameId, itemId, price, ref = newRef()) {
+    if (!(price >= 0) || this.profile.coins < price) return { ok: false, reason: 'Not enough coins' };
+    if (!this.remote) {
+      this.profile.coins -= price; this._changed(-price, `Used ${itemId}`);
+      return { ok: true, coins: this.profile.coins, local: true };
+    }
+    this.profile.coins -= price; this._changed(-price, `Used ${itemId}`);
+    return new Promise((ok) => {
+      this._enqueue(-price, (r) => r.buyConsumable(gameId, itemId, ref), {
+        onResult: (res) => ok(res?.ok ? { ok: true, coins: res.coins, price: res.price } : { ok: false, reason: res?.reason || 'rejected' }),
+        onFail: (e) => ok({ ok: false, reason: 'network', error: e.message }),
+      });
+    });
   }
 
   // equipped + rocketColors + cosmeticColors -> server (debounced; server re-validates ownership/colors)

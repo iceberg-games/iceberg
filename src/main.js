@@ -3,6 +3,7 @@
 import './style.css';
 import { backend, modelStore, modelPrefs } from './backend/LocalBackend.js';
 import { Economy } from './core/economy.js';
+import { bindQuests } from './core/quests.js';
 import { bus } from './core/events.js';
 import { Avatar } from './game/avatar.js';
 import { ModelLibrary } from './game/models.js';
@@ -21,6 +22,7 @@ import { CONFIG } from './net/config.js';
 import { registerServiceWorker } from './net/pwa.js';
 import { mountGameChat } from './chat/gameChat.js';
 import { startPlaySession } from './net/gameStats.js';
+import { createMultiplayer } from './mp/multiplayer.js';
 
 // Multi-page site: the game lives in play/ and the portal opens it with ?game=<id>.
 const params = new URLSearchParams(location.search);
@@ -31,6 +33,7 @@ async function boot() {
   const app = document.getElementById('app');
   if (CONFIG.isSite) document.body.classList.add('iceberg-site');
   const economy = new Economy(backend);
+  const quests = bindQuests(economy);   // games: import { quests } from '../core/quests.js' or window.iceberg.quests
   const remote = await connectStoredSession(economy);   // null = guest (localStorage only)
   const settings = modelPrefs.loadSettings();
   const music = new Music(settings, (s) => modelPrefs.saveSettings({ ...modelPrefs.loadSettings(), ...s }));
@@ -47,18 +50,28 @@ async function boot() {
   const backToEditor = h('button.btn.floating.hidden#back-to-editor', { onclick: () => edit(testingDoc) }, '✏️ Back to editor');
 
   let session = null;
-  const goHome = () => { session?.stop(); session = null; gameChat.leave(); engine.unloadGame(); testingDoc = null; backToEditor.classList.add('hidden'); menu.showGames(); music.play('winter'); };
+  const goHome = () => { session?.stop(); session = null; mp.leave(); gameChat.leave(); engine.unloadGame(); testingDoc = null; backToEditor.classList.add('hidden'); menu.showGames(); music.play('winter'); };
   const play = async (def) => {
     menu.hide(); testingDoc = null; backToEditor.classList.add('hidden');
     await engine.loadGame(def);
-    gameChat.show(true); gameChat.join(def.id).catch(() => {});
+    gameChat.show(true);
+    // multiplayer: pick/create a server instance (or the friend's from ?join=), then chat in that instance's room
+    const joinFriend = def.id === GAME_PARAM ? params.get('join') : null;
+    const inst = await mp.join(def.id, { friend: joinFriend }).catch((e) => { console.warn('multiplayer unavailable', e); return null; });
+    if (inst?.note === 'friend_full') ui.toast('That server is full, so you joined another one.', '👥');
+    else if (inst && joinFriend && !inst.note) ui.toast(`Joined ${joinFriend}'s server!`, '👋');
+    gameChat.join(def.id, inst?.room).catch(() => {});
     session?.stop(); session = startPlaySession(remote, def.id);   // visit + 30 s heartbeats (portal tabs)
   };
   const edit = async (doc) => { menu.hide(); testingDoc = null; backToEditor.classList.add('hidden'); await engine.loadGame(CREATOR, { doc }); };
 
   const ui = new UI(app, { engine, economy, avatar, models, music, onHome: goHome });
   const me = remote ? { username: economy.profile.username, displayName: economy.profile.displayName } : null;
-  const gameChat = mountGameChat({ engine, avatar, remote, me, root: document.body });
+  const gameChat = mountGameChat({ engine, avatar, remote, me, root: document.body,
+    speak: (username, text, ms) => mp.speak(username, text, ms), onSent: () => mp.hintChat() });
+  const mp = createMultiplayer({ engine, getRemote: () => remote, bubbles: gameChat.bubbles, me: () => me });
+  mp.onChatHint(() => gameChat.pollNow());
+  addEventListener('pagehide', () => { mp.leave(); });
   bus.on('economy:rejected', (e) => ui.toast(e.action === 'buy' ? 'The server said no to that purchase; your Birg Bucks were refunded.' : 'Not enough Birg Bucks on the server.', '⚠️'));
   bus.on('economy:capped', (e) => { if (e.source !== 'build') ui.toast('Daily Birg Bucks limit reached for that. Come back tomorrow!', '⏰'); });
   addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') economy.resync().catch(() => {}); });
@@ -92,7 +105,7 @@ async function boot() {
   menu.showTitle();
 
   // Handy hooks for automated tests / debugging in the console.
-  window.iceberg = { engine, economy, avatar, models, music, ui, menu, backend, remote, gameChat, play: (id) => play(findGame(id)), edit, goHome };
+  window.iceberg = { engine, economy, quests, avatar, models, music, ui, menu, backend, remote, gameChat, mp, play: (id) => play(findGame(id)), edit, goHome };
   if (SITE_ROOT) registerServiceWorker(SITE_ROOT);
 }
 

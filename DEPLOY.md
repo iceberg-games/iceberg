@@ -143,3 +143,35 @@ npm test      # catalog check, PGlite DB tests, single-file game, full site e2e;
 
 The dev server is a stub of GoTrue/PostgREST (opaque tokens, no email flows, no auth rate
 limiting) over the real migrations. Don't expose it to the internet.
+
+## 8. Multiplayer and Supabase Realtime limits (free plan)
+
+Every game instance is one **private** Realtime channel, `game:<gameId>:<instance>`.
+- RLS on `realtime.messages` (policies `iceberg_mp_read` / `iceberg_mp_write`) only lets players who are currently placed in that instance by `mp_join` read from it or write to it.
+- In the Supabase dashboard → Realtime settings, keep **"Allow public access" OFF**. The client only uses private channels.
+
+Free-plan limits ([docs](https://supabase.com/docs/guides/realtime/limits)):
+
+| Limit | Free plan | How we stay inside it |
+|---|---|---|
+| Concurrent connections | 200 | One socket per playing tab, and only while in a game. |
+| Messages per second (sent + delivered, whole project) | 100 | The server computes `sendHz = clamp(mp_msg_budget / Σ(players²), 1, 10)` with `mp_msg_budget = 60`. Clients send only when someone else is there and only when something changed, plus a 5 s keepalive. |
+| Presence messages per second | 20 | Presence is tracked once per join. Movement goes over broadcast, not presence. |
+| Channel joins per second | 100 | One join per game start. Reconnect uses backoff. |
+| Broadcast payload | 256 KB | Each state message is about 80 bytes. |
+
+What this means:
+- One broadcast to an instance of N players costs N events (1 sent plus N−1 delivered), so an instance costs about N²·Hz events/s.
+- On the free plan: 3 players get the full 10 Hz. 12 players in one instance get only about 1 Hz (12² = 144 > 60 at 1 Hz, so it is already slightly over budget at the floor). In total the plan supports roughly 7 players at 1 Hz across the whole site.
+- Interpolation hides low rates, but movement looks laggy at 1–2 Hz.
+- For real traffic, either **lower `mp_instance_cap`** (e.g. 6) or move to **Pro** (500 msg/s, then raise `mp_msg_budget` to about 400).
+- Both are a single SQL update: `update app_config set value = '6' where key = 'mp_instance_cap'`.
+
+Rate limiting and trust:
+- The client sends at most 10 Hz and drops incoming messages from a sender above 15/s.
+- Incoming messages are type and range checked, sequence checked, and must come from a sender in the server roster.
+
+**Known limitation:**
+- Supabase does not stamp broadcast messages with the sender's identity. A modified client that has joined an instance can therefore draw *another member's* avatar in the wrong place on other screens.
+- It cannot affect coins, inventory, chat text or anything stored. Outsiders cannot join at all.
+- If this becomes a problem, the fix is a server relay (an Edge Function) that stamps the sender.
