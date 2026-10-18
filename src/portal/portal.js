@@ -14,6 +14,7 @@ import { getRemote, connectStoredSession } from '../net/session.js';
 import { signIn, signUp, validateCredentials } from '../net/auth.js';
 import { getDeviceMode, setDeviceMode, onDeviceChange } from '../core/device.js';
 import { registerServiceWorker } from '../net/pwa.js';
+import { isDev, devUpdateButton } from '../net/devAccess.js';
 import { mountChatRoom } from '../chat/chatRoom.js';
 import { loadGameStats, SORTS } from '../net/gameStats.js';
 import { loadFeatured, createFeaturedBanner } from './featured.js';
@@ -23,6 +24,7 @@ if (CONFIG.isSite) document.body.classList.add('iceberg-site');
 document.body.classList.add('portal-page');
 const economy = new Economy(backend);
 let remote = null;
+let dev = false;   // server says this account is on the developer allowlist (is_dev)
 let view = new URLSearchParams(location.search).get('view') || 'games';
 let chatRoom = null, friendsTimer = null, banner = null;
 let gameSort = new URLSearchParams(location.search).get('sort') || 'newest';
@@ -47,6 +49,9 @@ function header() {
       remote ? h('button.btn.small.secondary#p-signout', { onclick: signOutNow }, 'Sign out')
              : (accountsEnabled() ? h('button.btn.small#p-signin-open', { onclick: () => go('account') }, 'Sign in') : null)));
 }
+// Developers only: rendered directly under the username/balance row, never created for anyone else.
+const devRow = () => (dev && remote ? h('div.p-dev-row', devUpdateButton(h, './preview/')) : null);
+async function refreshDev() { const d = remote ? await isDev(remote) : false; if (d !== dev) { dev = d; render(); } }
 function nav() {
   const tab = (id, label) => h('button.p-tab' + (view === id ? '.on' : ''), { 'data-view': id, onclick: () => go(id) }, label);
   return h('nav.p-nav', tab('games', '🎮 Games'), tab('chat', '💬 Chat'), tab('friends', '🤝 Friends'), tab('settings', '⚙️ Settings'),
@@ -168,6 +173,7 @@ function accountView() {
         if (mode === 'up') await signUp(client, { username: u.value, password: p.value, displayName: d.value });
         else await signIn(client, { username: u.value, password: p.value });
         remote = await connectStoredSession(economy);
+        refreshDev();
         if (!remote) throw new Error('Signed in, but the profile could not be loaded.');
         toast(mode === 'up' ? 'Welcome to Iceberg!' : 'Welcome back!', '🎉');
         go('games');
@@ -184,7 +190,7 @@ function accountView() {
 async function signOutNow() {
   await chatRoom?.destroy(); chatRoom = null;
   await getRemote()?.client.signOut();
-  economy.disconnect(); remote = null;
+  economy.disconnect(); remote = null; dev = false;
   toast('Signed out', '👋'); go('games');
 }
 
@@ -193,7 +199,7 @@ function go(v) { view = v; const u = new URL(location.href); u.searchParams.set(
 function render() {
   chatRoom?.destroy(); chatRoom = null; clearInterval(friendsTimer); banner?.destroy(); banner = null;
   const views = { games: gamesView, chat: chatView, friends: friendsView, settings: settingsView, account: accountView };
-  clear(root).append(h('div.snowbg'), h('div.p-wrap', header(), nav(), (views[view] || gamesView)()), toastBox);
+  clear(root).append(h('div.snowbg'), h('div.p-wrap', header(), devRow(), nav(), (views[view] || gamesView)()), toastBox);
 }
 
 onDeviceChange(() => { if (view === 'settings' || view === 'games') render(); });
@@ -202,5 +208,6 @@ render();
   remote = await connectStoredSession(economy);
   render();
   registerServiceWorker('./');
+  refreshDev();
 })();
 window.icebergPortal = { economy, get remote() { return remote; }, get chatRoom() { return chatRoom; }, get banner() { return banner; }, go, render, playUrl };

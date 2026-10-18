@@ -1,10 +1,16 @@
 # Deploy Iceberg to GitHub Pages: catalog check → site build → deploy.
 # Repo secrets: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY (public anon key ONLY; RLS protects data).
 # DB migrations + price sync are run separately (scripts/migrate.mjs --mgmt-api), not from CI.
+# Developers-only preview: the branch named in ./preview-ref (or the workflow input) is built with
+# scripts/build-preview.mjs into dist-site/preview/ against the SANDBOX project
+# (secrets VITE_PREVIEW_SUPABASE_URL / VITE_PREVIEW_SUPABASE_ANON_KEY). It is optional: if it fails,
+# the main site still deploys and there is no preview/ folder.
 name: Deploy Iceberg
 on:
   push: { branches: [main] }
   workflow_dispatch:
+    inputs:
+      preview_ref: { description: 'Branch/tag/commit for the dev preview (default: ./preview-ref, else release/a)', required: false, default: '' }
 permissions: { contents: read, pages: write, id-token: write }
 concurrency: { group: pages, cancel-in-progress: false }
 jobs:
@@ -26,6 +32,29 @@ jobs:
           VITE_USERNAME_EMAIL_DOMAIN: users.iceberg.invalid
       - name: Refuse to ship without the backend config
         run: grep -q "supabase.co" dist-site/index.html
+      - name: Build developers-only preview (optional; never blocks the main deploy)
+        id: preview
+        continue-on-error: true
+        env:
+          PREVIEW_REF_INPUT: ${{ github.event.inputs.preview_ref }}
+          VITE_PREVIEW_SUPABASE_URL: ${{ secrets.VITE_PREVIEW_SUPABASE_URL }}
+          VITE_PREVIEW_SUPABASE_ANON_KEY: ${{ secrets.VITE_PREVIEW_SUPABASE_ANON_KEY }}
+          VITE_PROD_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_PROD_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_USERNAME_EMAIL_DOMAIN: users.iceberg.invalid
+        run: |
+          set -euo pipefail
+          REF="${PREVIEW_REF_INPUT:-$(head -n1 preview-ref 2>/dev/null | tr -d '[:space:]')}"; REF="${REF:-release/a}"
+          echo "preview ref: $REF"
+          git fetch --no-tags origin "$REF" && git worktree add --detach "$RUNNER_TEMP/preview-src" FETCH_HEAD
+          (cd "$RUNNER_TEMP/preview-src" && npm ci --no-audit --no-fund)
+          node scripts/build-preview.mjs --root "$RUNNER_TEMP/preview-src" --out "$RUNNER_TEMP/preview-out"
+          grep -q "$VITE_PREVIEW_SUPABASE_URL" "$RUNNER_TEMP/preview-out/index.html"
+          mv "$RUNNER_TEMP/preview-out" dist-site/preview
+          echo "preview built from $REF ($(git -C "$RUNNER_TEMP/preview-src" rev-parse --short HEAD))"
+      - name: No preview folder if the preview build failed
+        if: steps.preview.outcome != 'success'
+        run: rm -rf dist-site/preview && echo "::warning::Dev preview build failed; deploying the main site without /preview/"
       - uses: actions/upload-pages-artifact@v3
         with: { path: dist-site }
   deploy:

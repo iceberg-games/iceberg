@@ -8,6 +8,9 @@ const CACHE = `iceberg-shell-${VERSION}`;
 const SHELL = ['./', './index.html', './play/', './play/index.html', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png'];
 const BYPASS = /\/(auth|rest|realtime|functions|storage|graphql)\/v\d/;
+// The developers-only preview build lives in ./preview/ (its own app, sandbox backend, no SW of its own):
+// this worker never caches, serves or intercepts anything under it.
+const isPreview = (url) => url.href.startsWith(new URL('./preview/', self.registration.scope).href);
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL.map(p => new URL(p, self.registration.scope)))).then(() => self.skipWaiting()));
@@ -21,6 +24,7 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;                  // Supabase & all third parties: untouched
+  if (isPreview(url)) return;                                        // dev preview: straight to the network, never cached
   if (BYPASS.test(url.pathname) || req.headers.has('authorization')) return;
   if (!url.href.startsWith(self.registration.scope)) return;
   if (req.mode === 'navigate') {                                     // network first, offline fallback
