@@ -522,15 +522,16 @@ export default {
       const fn = avatar?.updateProximity, nd = avatar?.setNearbyDistance; if (!fn && !nd) return;
       hatPos.length = 0;
       for (const b of bots) if (b.alive && b.onMap && b.hat === 'tornado_hat') hatPos.push(b.pos);
-      try { // mp.nearby(radius): feature-detected; tolerant of array / {players} / map shapes until docs/MULTIPLAYER_API.md fixes one
-        const mp = (typeof net !== 'undefined' && net?.nearby) ? net : window.iceberg?.mp;
+      try { // mp.nearby(radius) -> [{ id, name, position }], nearest first (docs/MULTIPLAYER_API.md); no-op without it
+        const mp = window.iceberg?.mp;
         if (typeof mp?.nearby === 'function') {
-          const r = mp.nearby(C.HAT_NEARBY_RADIUS || 24); const list = Array.isArray(r) ? r : Array.isArray(r?.players) ? r.players : (r && typeof r === 'object' && typeof r.then !== 'function') ? Object.values(r) : [];
-          for (const p of list) {
-            const q = p?.pos || p?.position || (p && Number.isFinite(p.x) ? p : null);
-            const hat = p?.equipped?.hat ?? p?.loadout?.hat ?? p?.cosmetics?.hat ?? p?.hat;
-            const wears = hat === 'tornado_hat' || (Array.isArray(p?.wearing) && p.wearing.includes('tornado_hat'));
-            if (q && Number.isFinite(q.x) && Number.isFinite(q.z) && wears) hatPos.push({ x: q.x, y: q.y || 0, z: q.z });
+          const me = (() => { try { return net?.localId?.() ?? (typeof mp.localId === 'function' ? mp.localId() : mp.localId); } catch { return null; } })();
+          const list = mp.nearby(C.HAT_NEARBY_RADIUS || 24);
+          if (Array.isArray(list)) for (const p of list) {
+            if (!p || (me != null && p.id === me)) continue;
+            if (p.hat != null && p.hat !== 'tornado_hat') continue;   // only if the API ever reports loadouts
+            const q = p.position; const v = Array.isArray(q) ? { x: q[0], y: q[1], z: q[2] } : q;
+            if (v && Number.isFinite(v.x) && Number.isFinite(v.z)) hatPos.push({ x: v.x, y: Number.isFinite(v.y) ? v.y : 0, z: v.z });
           }
         }
       } catch { /* optional API */ }
