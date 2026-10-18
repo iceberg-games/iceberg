@@ -14,7 +14,7 @@ export const creatorDef = {
   id: 'creator',
   name: 'Create a Game',
   tagline: 'Iceberg Studio — build & publish your own game',
-  description: 'Desktop studio: parts, gizmos, explorer & properties, plain-words scripts, gears, animator. Publish to the Games menu.',
+  description: 'Computer: full studio (parts, gizmos, explorer & properties, plain-words scripts, gears, animator). Mobile: simple block building. Publish to the Games menu.',
   thumbnail: 'creator',
   isCreator: true,
   create: (ctx, { doc }) => { const dr = drafts.get(doc.id); const use = dr && (dr.updatedAt || 0) > (doc.updatedAt || 0) ? dr : doc; return createEditor(ctx, upgradeDoc(use)); },

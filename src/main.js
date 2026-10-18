@@ -12,6 +12,7 @@ import { Engine } from './engine/engine.js';
 import { UI } from './ui/ui.js';
 import { Menu } from './ui/menu.js';
 import { CreatorPanel } from './ui/creator.js';
+import { MobileStudio } from './ui/mobileStudio.js';
 import { h } from './ui/dom.js';
 import { CREATOR, findGame } from './games/registry.js';
 import { customGameDef } from './games/customGame.js';
@@ -85,12 +86,10 @@ async function boot() {
       if (def) setTimeout(() => play(def), 0);   // after the menu renders the games list
     },
   });
-  new CreatorPanel(app, {
-    engine, models, ui,
-    onTest: async (doc) => { testingDoc = doc; menu.hide(); await engine.loadGame(customGameDef(doc)); backToEditor.classList.remove('hidden'); },
-    onExit: goHome,
-    onReload: (doc) => edit(doc),
-  });
+  const onTest = async (doc) => { testingDoc = doc; menu.hide(); await engine.loadGame(customGameDef(doc)); backToEditor.classList.remove('hidden'); };
+  new CreatorPanel(app, { engine, models, ui, onTest, onExit: goHome, onReload: (doc) => edit(doc) });
+  // Phones/tablets (device mode 'mobile') get the simple Mobile Studio on the same editor + save path.
+  const mobileStudio = new MobileStudio(document.body, { engine, ui, onTest, onExit: goHome });
   app.append(backToEditor);
 
   // Browsers only allow audio after a user gesture.
@@ -105,7 +104,7 @@ async function boot() {
   menu.showTitle();
 
   // Handy hooks for automated tests / debugging in the console.
-  window.iceberg = { engine, economy, quests, avatar, models, music, ui, menu, backend, remote, gameChat, mp, play: (id) => play(findGame(id)), edit, goHome };
+  window.iceberg = { engine, mobileStudio, economy, quests, avatar, models, music, ui, menu, backend, remote, gameChat, mp, play: (id) => play(findGame(id)), edit, goHome };
   if (SITE_ROOT) registerServiceWorker(SITE_ROOT);
 }
 

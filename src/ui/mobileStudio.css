@@ -1,0 +1,41 @@
+/* Mobile Studio: compact touch building UI (see src/ui/mobileStudio.js).
+   The bar sits under the 3D view; the renderer is resized to the space above
+   it, so the GUI never covers the building area. */
+body.mobile-studio-active #touch-ui, body.mobile-studio-active #game-chat-btn, body.mobile-studio-active #game-chat-log { display: none !important; }
+body.mobile-studio-active #game-canvas { touch-action: none; }
+.mstudio { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; font: 600 12px/1.2 system-ui, -apple-system, 'Segoe UI', sans-serif; color: #e4edf5;
+  background: #23272e; border-top: 1px solid #3a414b; padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+.mstudio.hidden { display: none; }
+.ms-wrap { display: flex; flex-direction: column; gap: 4px; }
+.ms-palette { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 1px; }
+.ms-palette::-webkit-scrollbar { display: none; }
+.ms-swatch { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 8px; border: 2px solid rgba(255,255,255,.25); padding: 0; cursor: pointer; }
+.ms-swatch.on { border-color: #fff; box-shadow: 0 0 0 2px #3fa2ea inset; }
+.ms-bar { display: flex; gap: 3px; }
+.ms-btn { flex: 1 1 0; min-width: 40px; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  border: 1px solid transparent; border-radius: 8px; background: #2d323a; color: #e4edf5; font: inherit; font-size: 10px; padding: 0 2px; cursor: pointer; }
+.ms-btn span { font-size: 17px; line-height: 1; }
+.ms-btn.on { background: #1e5d8f; border-color: #3fa2ea; }
+.ms-btn:disabled { opacity: .4; }
+.ms-btn.play { background: #2f9e6a; } .ms-btn.save { background: #2e6fa3; }
+.ms-sep { flex: 0 0 1px; background: #3a414b; margin: 4px 0; }
+/* Landscape phones: one row (tools + scrolling palette) to keep the 3D view tall. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .ms-wrap { flex-direction: row-reverse; align-items: center; }
+  .ms-bar { flex: 0 0 auto; }
+  .ms-btn { flex: 0 0 auto; width: 46px; }
+  .ms-palette { flex: 1 1 auto; min-width: 0; }
+}
+/* "More" sheet: name, mobile-playable, publish, exit */
+.ms-sheet-back { position: fixed; inset: 0; z-index: 60; background: rgba(10,20,30,.45); display: flex; align-items: flex-end; justify-content: center; }
+.ms-sheet { width: min(420px, 100%); max-height: 90vh; overflow-y: auto; background: #23272e; color: #e4edf5; border-radius: 14px 14px 0 0; padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 10px; font: 600 14px/1.3 system-ui, -apple-system, 'Segoe UI', sans-serif; }
+.ms-sheet h3 { margin: 0; font-size: 15px; }
+.ms-sheet label { display: flex; flex-direction: column; gap: 4px; }
+.ms-sheet label.ms-check { flex-direction: row; align-items: center; gap: 8px; min-height: 40px; }
+.ms-sheet input[type=text] { height: 40px; border-radius: 8px; border: 1px solid #4a535e; background: #15181d; color: #fff; padding: 0 10px; font: inherit; font-size: 16px; }
+.ms-sheet input[type=checkbox] { width: 24px; height: 24px; }
+.ms-sheet .ms-row { display: flex; gap: 8px; }
+.ms-sheet .ms-row button { flex: 1; min-height: 44px; border-radius: 8px; border: 0; font: inherit; color: #fff; background: #3a414b; cursor: pointer; }
+.ms-sheet .ms-row button.pub { background: #8b6cf0; } .ms-sheet .ms-row button.save { background: #2e6fa3; }
+.ms-sheet .ms-hint { font-weight: 400; font-size: 12px; color: #9fb0c0; margin: 0; }

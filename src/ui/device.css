@@ -1,10 +1,7 @@
 /* Device mode styles (body.device-mobile / body.device-computer set by core/device.js). */
 
-/* Fallback: Create/Studio are computer-only. menu.js also handles this; this rule
-   keeps it hidden even if that code changes. */
-body.device-mobile .game-card[data-game="creator"],
-body.device-mobile #create-btn,
-body.device-mobile .edit-btn { display: none !important; }
+/* Create/Studio show on both devices: computer opens the full Studio, mobile the
+   simple Mobile Studio (src/ui/mobileStudio.js). */
 
 /* Production site build: no free demo packs or dev grants (see core/economy.js). */
 body.iceberg-site .dev,

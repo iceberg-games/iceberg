@@ -3,7 +3,7 @@
 // and screenshots go to /tmp/iceberg-test/shots.
 //   1. catalog check (cosmetics prices + safe-chat phrases valid)
 //   2. real-Postgres DB tests (PGlite): migrations, RLS, RPCs, price sync
-//   3. single-file game build: menu, 3 games, device toggle, mobile mode, picker
+//   3. single-file game build: menu, 3 games, device toggle, mobile mode, picker, Mobile Studio
 //   4. site build (portal + play/ + PWA) against the local dev backend at a sub-path:
 //      sign-up, guest migration, Play-in-new-tab, server-synced economy + colors,
 //      Safe Chat room with 2 players (bubbles, talking, dispose on leave, rate limit), friends,
@@ -37,7 +37,7 @@ if (SLOT === 10) throw new Error('e2e: 10 runs already in progress');
 process.on('exit', () => { try { if (readFileSync(`/tmp/iceberg-e2e-${SLOT}.lock`, 'utf8') === String(process.pid)) unlinkSync(`/tmp/iceberg-e2e-${SLOT}.lock`); } catch { /* gone */ } });
 if (SLOT) console.log(`e2e: default ports/dir busy (another run?), using slot ${SLOT} (ports +${SLOT * 20}, /tmp/iceberg-test-${SLOT})`);
 const PORT = (n) => n + SLOT * 20;
-const TMP = SLOT ? `/tmp/iceberg-test-${SLOT}` : '/tmp/iceberg-test';
+const TMP = process.env.ICEBERG_TEST_TMP || (SLOT ? `/tmp/iceberg-test-${SLOT}` : '/tmp/iceberg-test');   // explicit override wins
 const SHOTS = resolve(TMP, 'shots');
 rmSync(TMP, { recursive: true, force: true }); mkdirSync(SHOTS, { recursive: true });
 const only = process.argv.slice(2);
@@ -97,6 +97,10 @@ if (want('game')) {
   const r = spawnSync('node', ['scripts/device-smoke.mjs', resolve(out, 'index.html')], { cwd: ROOT, encoding: 'utf8' });
   check('device: Help toggle enabled + switches mode + window event', r.status === 0, (r.stdout + r.stderr).slice(-600));
 
+  const ms = spawnSync('node', ['scripts/mobile-studio-e2e.mjs', resolve(out, 'index.html')], { cwd: ROOT, encoding: 'utf8', env: { ...process.env, MS_SHOTS: SHOTS } });
+  const msSum = (ms.stdout.match(/\d+\/\d+ mobile studio checks passed/) || [''])[0]; if (msSum) console.log(`  ${msSum}`);
+  check('mobile studio: phone viewport build/save/test-play (scripts/mobile-studio-e2e.mjs)', ms.status === 0, (ms.stdout + ms.stderr).split('\n').filter(l => /FAIL|Error/.test(l)).join('\n').slice(-1500));
+
   const p2 = await b.newPage({ viewport: { width: 1280, height: 800 } });
   const errs2 = []; watch(p2, errs2);
   await p2.goto(file + '?devicePicker=1');
@@ -108,8 +112,8 @@ if (want('game')) {
   await p2.waitForSelector('#start-btn');
   check('picker: choice saved', (await p2.evaluate(() => localStorage.getItem('iceberg:v1:deviceMode'))) === 'mobile');
   await p2.click('#start-btn'); await p2.waitForSelector('.game-card');
-  const creatorHidden = await p2.evaluate(() => { const c = document.querySelector('.game-card[data-game="creator"]'); return !c || getComputedStyle(c).display === 'none'; });
-  check('mobile: Create card hidden', creatorHidden);
+  const creatorShown = await p2.evaluate(() => { const c = document.querySelector('.game-card[data-game="creator"]'); return !!c && getComputedStyle(c).display !== 'none'; });
+  check('mobile: Create card shown (opens Mobile Studio)', creatorShown);
   await p2.evaluate(() => window.iceberg.play('frost-fields')); await p2.waitForTimeout(800);
   const touchVisible = await p2.evaluate(() => { const t = document.getElementById('touch-ui'); return !!t && !t.classList.contains('hidden'); });
   check('mobile: touch controls visible in game', touchVisible);
@@ -547,6 +551,14 @@ if (want('quests')) {
     check('quests: no page errors', errs.filter(e => !/401|403|Unauthorized/.test(e)).length === 0, errs.join(' | ').slice(0, 500));
   } catch (e) { check('quests: unexpected error', false, e.stack); }
   finally { await b.close(); web.close(); await dev.close(); }
+}
+
+if (want('mobile')) {
+  const out = resolve(TMP, 'site-mobile');
+  run('build: site (guest) for mobile release checks', 'node', ['scripts/build-site.mjs', '--out', out]);
+  const r = spawnSync('node', ['scripts/mobile-release-e2e.mjs', out], { cwd: ROOT, encoding: 'utf8' });
+  const sum = (r.stdout.match(/\d+\/\d+ mobile release checks passed/) || [''])[0]; if (sum) console.log(`  ${sum}`);
+  check('mobile: 2 phones: portal lists only mobile-playable games, one joystick in Studio games (scripts/mobile-release-e2e.mjs)', r.status === 0, (r.stdout + r.stderr).split('\n').filter(l => /FAIL|Error/.test(l)).join('\n').slice(-1500));
 }
 
 console.log('\n' + results.map(r => `${r[0]}  ${r[1]}${r[0] === 'FAIL' && r[2] ? '\n      ' + String(r[2]).replace(/\n/g, '\n      ') : ''}`).join('\n'));

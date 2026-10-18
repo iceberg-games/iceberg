@@ -156,7 +156,7 @@ function settingsView() {
   const devBtn = (mode, label) => h('button.btn.small' + (getDeviceMode() === mode ? '' : '.secondary'), { 'data-mode': mode, onclick: () => { setDeviceMode(mode); render(); } }, label);
   return h('section.p-view#view-settings', h('h2', '⚙️ Settings'),
     h('div.p-card', h('h3', 'Device'), h('div.row#portal-device', devBtn('computer', '🖥️ Computer'), devBtn('mobile', '📱 Mobile')),
-      h('p.muted.small', 'Mobile shows touch controls and hides Create/Studio.')),
+      h('p.muted.small', 'Mobile shows touch controls and the simple Mobile Studio.')),
     h('div.p-card', h('h3', 'Install'), h('p.muted.small', 'Use your browser menu → "Install app" / "Add to Home Screen" to keep Iceberg on your device.')),
     remote ? h('div.p-card', h('h3', 'Account'), h('p', `Signed in as @${economy.profile.username}`), h('button.btn.secondary', { onclick: signOutNow }, 'Sign out')) : null);
 }

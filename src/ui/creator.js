@@ -12,6 +12,7 @@ import { getScriptTranslator } from '../studio/ai.js';
 import { drafts, publish, isPublished } from '../studio/store.js';
 import { upgradeDoc } from '../studio/templates.js';
 import { exportGameJSON, importGameJSON, downloadText } from '../core/share.js';
+import { isMobile, onDeviceChange } from '../core/device.js';
 
 const num = (v) => (Math.round(v * 1000) / 1000).toString();
 
@@ -21,13 +22,15 @@ export class CreatorPanel {
     this.el = h('div.studio.hidden#creator-panel');
     root.append(this.el);
     this.leftTab = 'explorer'; this.scriptSel = null; this.showCode = false; this.collapsed = new Set(); this.anchor = null;
-    bus.on('game:loaded', ({ game }) => { if (game.editing) this.show(game); else this.hide(); });
+    // Device mode 'mobile' uses the simple Mobile Studio (src/ui/mobileStudio.js) instead of this panel.
+    bus.on('game:loaded', ({ game }) => { if (game.editing && !isMobile()) this.show(game); else this.hide(); });
+    onDeviceChange(() => { const g = this.engine.game; if (g?.editing) (isMobile() ? this.hide() : this.show(g)); });
     bus.on('game:unloaded', () => this.hide());
     bus.on('models:changed', () => this.ed && this.renderLeft());
     bus.on('studio:changed', (what) => this._onChange(what));
     addEventListener('keydown', (e) => this._onKey(e), true);
   }
-  get ed() { return this.engine.game?.editing ? this.engine.game : null; }
+  get ed() { return this.engine.game?.editing && !isMobile() ? this.engine.game : null; }
   hide() { this.el.classList.add('hidden'); document.body.classList.remove('studio-active'); }
   show(game) { this.game = game; this.scriptSel = null; this.el.classList.remove('hidden'); document.body.classList.add('studio-active'); this.render(); }
 

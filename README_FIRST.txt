@@ -20,7 +20,8 @@ Birg Bucks (BB) are pretend money. You get them by:
 Spend them in the Shop on hats, skins, wings, the Ice Rocket and more!
 
 Make your own game (Studio)
-  On the Games screen, press CREATE (computer only).
+  On the Games screen, press CREATE. On a computer you get the full Studio;
+  on a phone you get the simple Mobile Studio (place blocks, pick colors, set a spawn).
   - Right-click + drag to look around, WASD to fly.
   - Insert blocks, balls, cylinders, wedges, a spawn point,
     checkpoints, lava, coins and gears from the top bar or the Toolbox.
