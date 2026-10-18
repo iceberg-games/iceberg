@@ -7,13 +7,13 @@ const errs = []; page.on('pageerror', e => errs.push(e.message));
 await page.goto(url); await page.waitForFunction(() => window.iceberg);
 await page.evaluate(async () => {
   const { economy } = window.iceberg; economy.demoGrant(5000);
-  for (const id of ['earmuffs', 'snowglobe_pack', 'cocoa_mug', 'frost_lantern', 'penguin_pal', 'cable_sweater']) { economy.buy?.(id) ?? economy.purchase?.(id); economy.equip(id); }
+  for (const id of ['earmuffs', 'snowglobe_pack', 'cocoa_mug', 'frost_lantern', 'penguin_pal', 'cable_sweater', 'frost_specs', 'owl_hood']) { economy.buy?.(id) ?? economy.purchase?.(id); economy.equip(id); }
   await window.iceberg.play('frost-fields').catch(() => window.iceberg.play(window.iceberg.menu?.games?.[0]?.id));
 });
 await page.waitForTimeout(2500);
 await page.keyboard.press('KeyL'); await page.waitForTimeout(500);
 const res = {};
-for (const [id, preset] of [['earmuffs', 'Cranberry'], ['snowglobe_pack', 'Gold Ribbon'], ['cocoa_mug', 'Mint'], ['frost_lantern', 'Aurora Green'], ['penguin_pal', 'Sky Scarf'], ['cable_sweater', 'Fjord Blue']]) {
+for (const [id, preset] of [['earmuffs', 'Cranberry'], ['snowglobe_pack', 'Gold Ribbon'], ['cocoa_mug', 'Mint'], ['frost_lantern', 'Aurora Green'], ['penguin_pal', 'Sky Scarf'], ['cable_sweater', 'Fjord Blue'], ['frost_specs', 'Rose Copper'], ['owl_hood', 'Tawny']]) {
   await page.locator(`.cosmetic-custom[data-id="${id}"] button`, { hasText: preset }).click();
   res[id] = await page.evaluate((id) => {
     const o = Object.values(window.iceberg.avatar.attached).find(o => o.userData.cosmeticId === id);

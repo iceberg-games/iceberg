@@ -88,3 +88,21 @@ COSMETICS.push({
   desc: 'Chunky cable-knit with a snowflake band, ribbed cuffs and a fold-over collar. Instant fireside vibes.',
 });
 COSMETIC_BY_ID.cable_sweater = COSMETICS[COSMETICS.length - 1];
+
+// Frosted spectacles (face) — color = frame color.
+COSMETICS.push({
+  id: 'frost_specs', name: 'Frosted Round Spectacles', slot: 'face', price: 160, icon: '👓',
+  kind: 'model', winter: true, customizable: true, defaultColor: '#c9a24a',
+  colorPresets: [['Antique Gold', '#c9a24a'], ['Silver Frost', '#cfd8e0'], ['Rose Copper', '#c27a5e'], ['Ink Black', '#24262c']],
+  desc: 'Round wire spectacles with lenses frosted at the edges, like a window on a snowy morning.',
+});
+COSMETIC_BY_ID.frost_specs = COSMETICS[COSMETICS.length - 1];
+
+// Snow Owl Hood (hat) — color = plumage.
+COSMETICS.push({
+  id: 'owl_hood', name: 'Snow Owl Hood', slot: 'hat', price: 280, icon: '🦉',
+  kind: 'model', winter: true, customizable: true, defaultColor: '#f4f1ea',
+  colorPresets: [['Snowy White', '#f4f1ea'], ['Tawny', '#a8743f'], ['Arctic Grey', '#9aa4ad'], ['Midnight', '#2c3550']],
+  desc: 'A plush feathered hood with ear tufts, big golden owl eyes and a fluffy trim that frames your face.',
+});
+COSMETIC_BY_ID.owl_hood = COSMETICS[COSMETICS.length - 1];

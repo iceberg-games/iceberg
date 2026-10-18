@@ -1,5 +1,6 @@
 // Blocky Roblox-style avatar + 3D cosmetics. Shared across every game.
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { COSMETIC_BY_ID } from '../data/cosmetics.js';
 
 const DEFAULT = { skin: '#f5cd30', torso: '#3d7bd9', legs: '#4a9e4a' };
@@ -40,6 +41,8 @@ const BUILDERS = {
   earmuffs(_rc, color) { return buildEarmuffs(color); },
   snowglobe_pack(_rc, color) { return buildSnowGlobe(color); },
   cocoa_mug(_rc, color) { return buildCocoaMug(color); },
+  owl_hood(_rc, color) { return buildOwlHood(color); },
+  frost_specs(_rc, color) { return buildFrostSpecs(color); },
   cable_sweater(_rc, color) { return buildSweater(color); },
   frost_lantern(_rc, color) { return buildFrostLantern(color); },
   penguin_pal(_rc, color) { return buildPenguinPal(color); },
@@ -559,6 +562,114 @@ function buildSweater(color) {
     for (const m of ribs) { const nt = ribTexture(col); nt.repeat.copy(m.map.repeat); m.map.dispose(); m.map = nt; m.needsUpdate = true; }
   };
   return { bone: 'torso', object: g, extras };
+}
+
+let _frostLensTex = null;
+function frostLensTexture() {
+  if (_frostLensTex) return _frostLensTex;
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const gr = g.createRadialGradient(64, 64, 20, 64, 64, 64);
+  gr.addColorStop(0, 'rgba(235,248,255,0.08)'); gr.addColorStop(0.65, 'rgba(235,248,255,0.25)'); gr.addColorStop(1, 'rgba(255,255,255,0.95)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  // frost ferns creeping in from the rim
+  g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineCap = 'round';
+  let seed = 11; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  const fern = (x, y, a, len, w) => {
+    if (len < 4) return;
+    const x2 = x + Math.cos(a) * len, y2 = y + Math.sin(a) * len;
+    g.lineWidth = w; g.beginPath(); g.moveTo(x, y); g.lineTo(x2, y2); g.stroke();
+    fern(x2, y2, a + 0.5, len * 0.6, w * 0.7); fern(x2, y2, a - 0.5, len * 0.6, w * 0.7);
+  };
+  for (let i = 0; i < 9; i++) { const a = rnd() * Math.PI * 2; fern(64 + Math.cos(a) * 62, 64 + Math.sin(a) * 62, a + Math.PI + (rnd() - 0.5) * 0.6, 12 + rnd() * 8, 2); }
+  // glint
+  g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 5; g.beginPath(); g.arc(64, 64, 40, 3.6, 4.3); g.stroke();
+  _frostLensTex = new THREE.CanvasTexture(c); _frostLensTex.colorSpace = THREE.SRGBColorSpace;
+  return _frostLensTex;
+}
+
+function buildFrostSpecs(color) {
+  const g = new THREE.Group();
+  const frame = std(color, { metalness: 0.85, roughness: 0.25 });
+  const lens = new THREE.MeshStandardMaterial({ map: frostLensTexture(), transparent: true, roughness: 0.1, metalness: 0, depthWrite: false });
+  const EX = 0.107, EY = 0.368, Z = 0.335, R = 0.085;
+  for (const s of [-1, 1]) {
+    g.add(mesh(new THREE.TorusGeometry(R, 0.011, 8, 32), frame, s * EX, EY, Z));
+    const l = mesh(new THREE.CircleGeometry(R, 32), lens, s * EX, EY, Z - 0.002); l.castShadow = false; l.renderOrder = 3; g.add(l);
+    // hinge block + temple arm running back along the side of the head
+    g.add(mesh(new THREE.BoxGeometry(0.03, 0.022, 0.022), frame, s * (EX + R + 0.01), EY + 0.01, Z - 0.005));
+    g.add(mesh(new THREE.BoxGeometry(0.012, 0.014, 0.62), frame, s * 0.322, EY + 0.01, Z - 0.32));
+    const tip = mesh(new THREE.BoxGeometry(0.012, 0.06, 0.014), frame, s * 0.322, EY - 0.025, -0.27); tip.rotation.x = 0.35; g.add(tip);
+    // nose pad
+    g.add(mesh(new THREE.SphereGeometry(0.012, 8, 6), std('#e8f4ff', { transparent: true, opacity: 0.7 }), s * 0.03, EY - 0.05, Z - 0.01));
+  }
+  // arched bridge
+  const bridge = mesh(new THREE.TorusGeometry(0.03, 0.009, 6, 16, Math.PI), frame, 0, EY + 0.005, Z); g.add(bridge);
+  // tiny snowflake stud on the right hinge
+  const flake = snowflakeCharm(0.022); flake.position.set(EX + R + 0.025, EY + 0.012, Z + 0.01); g.add(flake);
+  g.userData.setColor = (c) => frame.color.set(c);
+  return { bone: 'head', object: g };
+}
+
+function drawFeathers(c, color) {
+  const g = c.getContext('2d'), W = c.width, H = c.height;
+  const base = new THREE.Color(color), dark = base.clone().lerp(new THREE.Color('#000'), 0.22), light = base.clone().lerp(new THREE.Color('#fff'), 0.25);
+  g.fillStyle = '#' + base.getHexString(); g.fillRect(0, 0, W, H);
+  const fw = 16, fh = 12;
+  for (let row = -1; row < H / fh + 1; row++) for (let col = -1; col < W / fw + 1; col++) {
+    const x = col * fw + (row % 2) * fw / 2, y = row * fh;
+    g.fillStyle = '#' + light.getHexString(); g.beginPath(); g.arc(x, y, fw * 0.5, 0, Math.PI); g.fill();
+    g.strokeStyle = '#' + dark.getHexString(); g.lineWidth = 1.5; g.beginPath(); g.arc(x, y, fw * 0.5, 0.15, Math.PI - 0.15); g.stroke();
+    if ((row * 7 + col * 3) % 5 === 0) { g.fillStyle = '#' + dark.getHexString(); g.beginPath(); g.ellipse(x, y + 3, 1.6, 2.4, 0, 0, Math.PI * 2); g.fill(); }
+  }
+}
+
+function buildOwlHood(color) {
+  const g = new THREE.Group();
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256; drawFeathers(cv, color);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(0.55, 0.55);
+  const plume = new THREE.MeshStandardMaterial({ map: tex, bumpMap: tex, bumpScale: 0.8, roughness: 1 });
+  const fluffM = std(_tint(color, '#ffffff', 0.55), { roughness: 1 });
+  const tuftM = std(_tint(color, '#000000', 0.15), { roughness: 1 });
+  const RB = (w, h, d, x, y, z) => mesh(new RoundedBoxGeometry(w, h, d, 3, 0.06), plume, x, y, z);
+  // hood shell around the 0.62 head box (open at the front)
+  g.add(RB(0.76, 0.12, 0.74, 0, 0.67, -0.02));     // crown
+  g.add(RB(0.1, 0.62, 0.74, -0.35, 0.34, -0.02));  // sides
+  g.add(RB(0.1, 0.62, 0.74, 0.35, 0.34, -0.02));
+  g.add(RB(0.76, 0.66, 0.1, 0, 0.33, -0.36));      // back
+  g.add(RB(0.86, 0.12, 0.6, 0, 0.03, -0.12));      // cape collar on the shoulders
+  g.add(RB(0.56, 0.22, 0.12, 0, 0.8, 0.27));       // forehead crest that carries the owl face
+  // fluffy trim framing the face
+  let seed = 5; const rnd = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+  const rim = [];
+  for (let i = 0; i <= 22; i++) { const t = i / 22; rim.push(t < 0.5 ? [-0.33 + t * 2 * 0.66, 0.66] : null); }
+  const pts = [];
+  for (let i = 0; i <= 16; i++) pts.push([-0.34, 0.04 + i * 0.04]);
+  for (let i = 1; i < 17; i++) pts.push([-0.34 + i * 0.04, 0.68]);
+  for (let i = 16; i >= 0; i--) pts.push([0.34, 0.04 + i * 0.04]);
+  for (const [x, y] of pts) { const f = mesh(new THREE.SphereGeometry(0.042 + rnd() * 0.014, 10, 8), fluffM, x + (rnd() - 0.5) * 0.012, y + (rnd() - 0.5) * 0.01, 0.335); f.scale.z = 0.7; g.add(f); }
+  // owl face on the crown front
+  const eyeW = std('#f6c445', { roughness: 0.35, emissive: '#7a5200', emissiveIntensity: 0.2 });
+  const pupil = std('#111', { roughness: 0.2 });
+  for (const s of [-1, 1]) {
+    const disc = mesh(new THREE.CircleGeometry(0.09, 24), fluffM, s * 0.12, 0.81, 0.335);  g.add(disc);
+    const eye = mesh(new THREE.SphereGeometry(0.058, 20, 14), eyeW, s * 0.12, 0.81, 0.34); eye.scale.z = 0.5; g.add(eye);
+    g.add(mesh(new THREE.SphereGeometry(0.03, 14, 10), pupil, s * 0.12, 0.81, 0.365));
+    g.add(mesh(new THREE.SphereGeometry(0.01, 6, 4), std('#fff'), s * 0.12 + 0.012, 0.823, 0.392));
+    // ear tufts
+    const tuft = new THREE.Group(); tuft.position.set(s * 0.27, 0.72, 0.05); tuft.rotation.z = -s * 0.45;
+    tuft.add(mesh(new THREE.ConeGeometry(0.07, 0.2, 10), tuftM, 0, 0.09, 0));
+    tuft.add(rotated(mesh(new THREE.ConeGeometry(0.045, 0.15, 8), plume, s * 0.04, 0.06, 0), 'z', -s * 0.4));
+    g.add(tuft);
+  }
+  const beak = mesh(new THREE.ConeGeometry(0.03, 0.08, 4), std('#e8a03a', { roughness: 0.5 }), 0, 0.755, 0.37); beak.rotation.x = Math.PI; g.add(beak);
+  // brow feathers
+  for (const s of [-1, 1]) { const b = mesh(new THREE.BoxGeometry(0.12, 0.022, 0.03), tuftM, s * 0.12, 0.905, 0.33); b.rotation.z = s * 0.3; g.add(b); }
+  g.userData.setColor = (c) => {
+    drawFeathers(cv, c); tex.needsUpdate = true;
+    fluffM.color.copy(_tint(c, '#ffffff', 0.55)); tuftM.color.copy(_tint(c, '#000000', 0.15));
+  };
+  return { bone: 'head', object: g };
 }
 
 export class Avatar {

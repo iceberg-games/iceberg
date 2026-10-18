@@ -1,0 +1,19 @@
+<!doctype html><html><body style="margin:0"><script type="module">
+import * as THREE from 'three';
+import { Avatar } from '/src/game/avatar.js';
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(480, 480); r.outputColorSpace = THREE.SRGBColorSpace; document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#cfe6f5');
+scene.add(new THREE.HemisphereLight('#fff', '#8aa', 1.5)); const d = new THREE.DirectionalLight('#fff', 2); d.position.set(-3, 5, -4); scene.add(d);
+const av = new Avatar(); scene.add(av.root); av.applyLoadout({ equipped: { back: 'icerocket' } });
+const cam = new THREE.PerspectiveCamera(35, 1, 0.1, 50);
+window.shot = (yaw, colors) => {
+  if (colors) av.setRocketColors(colors);
+  for (let i = 0; i < 20; i++) av.animate(0.016, { flying: true });
+  cam.position.set(Math.sin(yaw) * 5, 2.2, Math.cos(yaw) * 5); cam.lookAt(0, 1.6, 0); r.render(scene, cam);
+  const rocket = Object.values(av.attached)[0]; av.root.updateMatrixWorld(true);
+  const n = new THREE.Vector3(); rocket.userData.nozzle.getWorldPosition(n);
+  const box = new THREE.Box3().setFromObject(rocket.children.find(c => c.isGroup));
+  return { nozzle: n.toArray().map(v => +v.toFixed(2)), rocketMinY: +box.min.y.toFixed(2), rocketMaxY: +box.max.y.toFixed(2), rocketZ: [+box.min.z.toFixed(2), +box.max.z.toFixed(2)] };
+};
+window.__ready = true;
+</script></body></html>
