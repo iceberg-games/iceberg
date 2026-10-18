@@ -8,8 +8,10 @@ import * as THREE from 'three';
 import { Collision } from '../../engine/collision.js';
 import { bus } from '../../core/events.js';
 import * as C from './config.js';
+import THUMB from './thumbnail.js';
 import { ISLAND_R, LOBBY, BUILDINGS, CELL, buildBlocks, buildBunker, inBunker, BUNKER, hillBoxes, groundHeight, HILL_TOP, TREES, spawnPoints } from './map.js';
-import { DISASTERS, findDisaster } from './disasters.js';
+import { DISASTERS, findDisaster, seedDisasterRng, drand } from './disasters.js';
+import { createNet, mulberry32 } from './net.js';
 import { DisasterAudio } from './audio.js';
 import { UI_FILES, makePlayUi } from './uiSounds.js';
 import { DisasterUI } from './ui.js';
@@ -106,7 +108,7 @@ let _thumb = null;
 export default {
   id: C.GAME_ID, name: 'Natural Disaster Survival', tagline: 'Survive tornadoes, blizzards & meteors',
   description: 'Round-based survival on an icy island town. A random disaster strikes every round: tornado, blizzard, avalanche, earthquake, flood, meteor shower or lightning. Survive to earn Birg Bucks.',
-  get thumbnail() { if (!_thumb) { try { _thumb = drawThumb(); } catch { _thumb = 'frost'; } } return _thumb; },
+  get thumbnail() { if (THUMB) return THUMB; if (!_thumb) { try { _thumb = drawThumb(); } catch { _thumb = 'frost'; } } return _thumb; },
   music: 'none',
   credits: C.CREDITS, mobile: true,  // tap HUD + joystick (Portal Mobile mode)
 
@@ -361,14 +363,14 @@ export default {
       get flood() { return flood; },
       setFlood(l) { flood = l; water.visible = l > 0.02; water.position.y = l; },
       playerPos: () => player.pos, playerAlive: () => alive && onMap,
-      randomPoint(frac = 0.9, avoidBunker = false) { for (;;) { const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * ISLAND_R * frac, x = Math.cos(a) * r, z = Math.sin(a) * r; if (!avoidBunker || !inBunker(x, z)) return new THREE.Vector3(x, 0, z); } },
+      randomPoint(frac = 0.9, avoidBunker = false) { for (;;) { const a = drand() * Math.PI * 2, r = Math.sqrt(drand()) * ISLAND_R * frac, x = Math.cos(a) * r, z = Math.sin(a) * r; if (!avoidBunker || !inBunker(x, z)) return new THREE.Vector3(x, 0, z); } },
       bunker, bunkerBox: BUNKER, bunkerMinX: BUNKER.x - BUNKER.hx, nearOpening(p) { return bunker.openings.some(o => Math.abs(o.x - p.x) < 3.5 && Math.abs(o.z - p.z) < 3.5 && p.y > o.y - 1 && p.y < o.y + 4); },
       surfaceAt(x, z) { let y = groundHeight(x, z); for (const b of blocks) if (b.alive && Math.abs(b.x - x) < b.w / 2 && Math.abs(b.z - z) < b.d / 2) y = Math.max(y, b.y + b.h / 2); return y; },
       forBlocksNear,
       forBlocksInBox(x0, x1, h, fn) { for (const b of blocks) if (b.alive && !b.perm && b.x > x0 && b.x < x1 && b.y - b.h / 2 < h) fn(b); },
       detach, shake(a) { shakeAmt = Math.max(shakeAmt, a); },
-      randomBlock(highBias) { let best = null; for (let k = 0; k < (highBias ? 3 : 1); k++) { const b = blocks[(Math.random() * blocks.length) | 0]; if (b && b.alive && !b.perm && (!best || b.y > best.y)) best = b; } return best; },
-      collapseBuilding() { const alive = [...BUILDINGS.map((_, i) => i), 100].filter(i => blocks.some(b => b.b === i && b.alive && !b.perm)); const bi = alive[(Math.random() * alive.length) | 0]; if (bi == null) return; blocks.filter(b => b.b === bi && b.alive && !b.perm && (bi !== 100 || b.part === 'catwalk' || Math.random() < 0.35)).forEach((b, k) => setTimeout(() => { if (alive && b.alive && api.phase === 'disaster') detach(b, (Math.random() - 0.5) * 4, -2, (Math.random() - 0.5) * 4); }, k * 12)); },
+      randomBlock(highBias) { let best = null; for (let k = 0; k < (highBias ? 3 : 1); k++) { const b = blocks[(drand() * blocks.length) | 0]; if (b && b.alive && !b.perm && (!best || b.y > best.y)) best = b; } return best; },
+      collapseBuilding() { const alive = [...BUILDINGS.map((_, i) => i), 100].filter(i => blocks.some(b => b.b === i && b.alive && !b.perm)); const bi = alive[(drand() * alive.length) | 0]; if (bi == null) return; blocks.filter(b => b.b === bi && b.alive && !b.perm && (bi !== 100 || b.part === 'catwalk' || drand() < 0.35)).forEach((b, k) => setTimeout(() => { if (alive && b.alive && api.phase === 'disaster') detach(b, (drand() - 0.5) * 4, -2, (drand() - 0.5) * 4); }, k * 12)); },
       precip: setPrecip,
       skyFlash(a) { sky.material.uniforms.flash.value = a; },
       explode(at, r, dmg, opts = {}) {
@@ -398,6 +400,7 @@ export default {
     function killPlayer(why) {
       if (!alive) return;
       alive = false; dyingT = 2.2; player.enabled = false; avatar.root.visible = false;
+      if (roundState && onMap) net.sendEvent('eliminated', { n: roundState.n });
       burst(player.pos.clone().setY(player.pos.y + 1.3), [0xf5cd30, 0x3d7bd9, 0x4a9e4a, 0xffffff], 28, 9, 0.45);
       audio.stinger('lose', 0.8, 'death'); // local player only
       const msg = { tornado: 'Swept away by the tornado', blizzard: 'Frozen solid', avalanche: 'Buried by the avalanche', flood: 'Swept away by icy water', meteor: 'Flattened by a meteor', lightning: 'Struck by lightning', debris: 'Hit by falling debris', fall: 'Took a nasty fall' }[why] || 'You didn\'t make it';
@@ -569,6 +572,7 @@ export default {
           buying = false;
           if (!ok) { if (stormsBoughtRound === forRound) stormsBoughtRound = -1; deny(`You need ${C.BIGGER_STORM_PRICE_BB} Birg Bucks for a Bigger Storm`); return false; }
           stormQueued = id; ui.setStormQueued(findDisaster(id).name);
+          if (!net.isHost()) net.sendEvent('storm', { id }); // the host owns the round pick (one Bigger Storm per round, server-wide)
           popup('bought', { icon: findDisaster(id).icon, title: 'Bigger Storm ready', sub: `Next round: a BIGGER ${findDisaster(id).name}!` }); return true;
         });
       },
@@ -615,8 +619,50 @@ export default {
       player.teleport(lobbySpawn(), Math.PI);
       bots.forEach(b => { b.onMap = false; b.alive = true; b.hp = C.MAX_HP; b.pos.copy(lobbySpawn()); });
     }
+    // ---------- shared rounds (net.js) ----------
+    const net = createNet(ctx);
+    let lastBotSurv = 0;
+    let roundState = null, roundSurvivors = new Set(), resultsShownFor = 0;
+    function startFromState(r) {
+      if (!r || (roundState && r.n <= roundState.n)) return;
+      roundState = r; roundSurvivors = new Set();
+      if (current) endDisaster();
+      if (!alive) toLobby();
+      if (mapDirty) resetMap();
+      const pick = r.disaster, big = !!r.big;
+      lastId = pick;
+      current = { def: findDisaster(pick), big, inst: null };
+      seedDisasterRng(mulberry32(r.seed));
+        api.round = r.n; applesThisRound = 0;
+        teleportToMap();
+        api.phase = 'warning'; api.timer = Math.max(0, Math.min(C.T_WARNING, (r.startsAt - net.now()) / 1000));
+        applyMood(current.def.mood, 0);
+        audio.setMode('storm');
+        popup('warning', { icon: current.def.icon, title: `${big ? 'BIGGER ' : ''}${current.def.name.toUpperCase()}!`, sub: current.def.warn, ms: 4400 });
+    }
+    Object.defineProperties(api, { roundState: { get: () => roundState }, net: { get: () => net } });
+    net.onState('round', startFromState);
+    net.onState('results', (res) => {
+      if (!res || res.n !== roundState?.n || resultsShownFor === res.n) return; resultsShownFor = res.n;
+      const names = (res.survivors || []).map(id => (id === net.selfId ? 'You' : id));
+      lastSurvivors = names.length;
+      const subTxt = (names.length ? names.slice(0, 8).join(', ') + (names.length > 8 ? ` +${names.length - 8}` : '') : 'No players made it') + (lastBotSurv ? ` · ${lastBotSurv} bot${lastBotSurv === 1 ? '' : 's'}` : '');
+      setTimeout(() => live && popup('info', { icon: '🏁', title: `Round ${res.n} survivors`, sub: subTxt, ms: 3200 }, false), 2000);
+      api.lastResults = res;
+    });
+    net.onEvent('storm', (e) => { if (net.isHost() && e.from !== net.selfId && !stormQueued && findDisaster(e.id)) { stormQueued = e.id; ui.setStormQueued(findDisaster(e.id).name); } });
+    net.onEvent('survived', (e) => { if (e?.n === roundState?.n) roundSurvivors.add(e.from); });
+    net.onEvent('eliminated', (e) => { if (e?.n === roundState?.n) roundSurvivors.delete(e.from); });
+    net.onHostChanged?.(() => { if (net.isHost() && api.phase === 'intermission' && api.timer > C.T_INTERMISSION) api.timer = C.T_INTERMISSION; }); // new host carries on from the current state
+    function publishResults() {
+      if (!net.isHost() || !roundState) return;
+      const n = roundState.n, ids = [...roundSurvivors];
+      // NPC bots are simulated per client (local flavour), so only real players go into the shared list
+      setTimeout(() => net.setState('results', { n, survivors: ids }), net.online ? 600 : 0);
+    }
     function beginDisaster() {
       const big = !!current.big;
+      if (roundState) seedDisasterRng(mulberry32(roundState.seed ^ 0x9e3779b9)); // same randomness on every client
       current.inst = current.def.create(W, big ? C.BIG_STORM_MULT : 1);
       audio.setMode('storm');
     }
@@ -630,17 +676,12 @@ export default {
       if (api.phase === 'intermission') {
         if (mapDirty) resetMap();
         let pick, big = false;
+        // Host-authoritative: only the host picks; everyone (host included) starts the round from the 'round' state.
+        if (!net.isHost()) { api.timer = 1; return; } // wait for the host's round
         if (forced) { pick = forced.id; big = forced.big; forced = null; }
         else if (stormQueued) { pick = stormQueued; big = true; stormQueued = null; ui.setStormQueued(null); }
         else { const pool = DISASTERS.filter(d => d.id !== lastId); pick = pool[(Math.random() * pool.length) | 0].id; }
-        lastId = pick;
-        current = { def: findDisaster(pick), big, inst: null };
-        api.round++; applesThisRound = 0;
-        teleportToMap();
-        api.phase = 'warning'; api.timer = C.T_WARNING;
-        applyMood(current.def.mood, 0);
-        audio.setMode('storm');
-        popup('warning', { icon: current.def.icon, title: `${big ? 'BIGGER ' : ''}${current.def.name.toUpperCase()}!`, sub: current.def.warn, ms: 4400 });
+        net.setState('round', { n: (roundState?.n || api.round) + 1, startsAt: net.now() + C.T_WARNING * 1000, disaster: pick, big, seed: (Math.random() * 2 ** 32) >>> 0, mapVariant: 0 });
       } else if (api.phase === 'warning') {
         beginDisaster(); api.phase = 'disaster'; api.timer = C.T_DISASTER;
       } else if (api.phase === 'disaster') {
@@ -649,7 +690,9 @@ export default {
         const botSurv = bots.filter(b => b.alive && b.onMap).length;
         bots.forEach(b => { if (b.alive && b.onMap) sessionWins[b.name] = (sessionWins[b.name] || 0) + 1; });
         if (alive && onMap) sessionWins.you++;
-        lastSurvivors = botSurv + (alive && onMap ? 1 : 0);
+        lastSurvivors = botSurv + (alive && onMap ? 1 : 0); lastBotSurv = botSurv;
+        if (alive && onMap && roundState) net.sendEvent('survived', { n: roundState.n });
+        publishResults();
         save = { ...save, rounds: save.rounds + 1 };
         if (alive && onMap) {
           save.survived++; save.streak = (save.streak || 0) + 1; save.best = Math.max(save.best, save.streak);
@@ -797,7 +840,7 @@ export default {
       },
       dispose() {
         live = false;
-        endDisaster(); setBalloon(false); audio.stop(); ui.dispose(); hunt.dispose(); tracker.dispose(); qhud.dispose();
+        endDisaster(); setBalloon(false); audio.stop(); ui.dispose(); hunt.dispose(); net.dispose?.(); tracker.dispose(); qhud.dispose();
         avatar.root.visible = true; player.enabled = true;
         engine.camera.far = camFar; engine.camera.updateProjectionMatrix();
         for (const d of disposables) d.dispose?.();

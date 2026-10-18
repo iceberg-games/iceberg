@@ -5,15 +5,20 @@
 import * as THREE from 'three';
 import { ISLAND_R } from './map.js';
 
-const rand = (a, b) => a + Math.random() * (b - a);
+// All disaster randomness goes through rng(), seeded per round from the host's round state (net.js),
+// so every client sees the same meteor spots, strike targets, sinkholes, tornado path...
+let rng = Math.random;
+export function seedDisasterRng(fn) { rng = fn || Math.random; }
+export const drand = () => rng();
+const rand = (a, b) => a + rng() * (b - a);
 const xz = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
 function swirlTexture() {
   const c = document.createElement('canvas'); c.width = 128; c.height = 256; const g = c.getContext('2d');
   g.clearRect(0, 0, 128, 256);
   for (let i = 0; i < 70; i++) {
-    const y = Math.random() * 256, a = 0.35 + Math.random() * 0.45, v = 120 + Math.random() * 80;
-    g.strokeStyle = `rgba(${v},${v},${v + 10},${a})`; g.lineWidth = 2 + Math.random() * 7;
+    const y = rng() * 256, a = 0.35 + rng() * 0.45, v = 120 + rng() * 80;
+    g.strokeStyle = `rgba(${v},${v},${v + 10},${a})`; g.lineWidth = 2 + rng() * 7;
     g.beginPath(); g.moveTo(0, y); g.bezierCurveTo(40, y - 20, 90, y + 20, 128, y - 8); g.stroke();
   }
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
@@ -45,7 +50,7 @@ export const DISASTERS = [
         pos,
         update(dt, t, k) {
           grp.scale.setScalar(Math.min(1, grp.scale.x + dt * 0.5));
-          if (xz(pos, target) < 4) target = Math.random() < 0.4 ? W.playerPos().clone() : W.randomPoint(0.75);
+          if (xz(pos, target) < 4) target = rng() < 0.4 ? W.playerPos().clone() : W.randomPoint(0.75);
           const d = new THREE.Vector3(target.x - pos.x, 0, target.z - pos.z).normalize();
           pos.addScaledVector(d, (5 + mult * 1.5) * dt);
           grp.position.set(pos.x + Math.sin(t * 1.7) * 0.6, 0, pos.z + Math.cos(t * 1.3) * 0.6);
@@ -55,7 +60,7 @@ export const DISASTERS = [
           W.audio.sampleLoop('tornado', 0.6 * near, { name: 'wind', freq: 500, type: 'bandpass', q: 0.8, lfo: 1.3 });
           // rip blocks off buildings
           ripT += dt;
-          if (ripT > 0.05) { ripT = 0; W.forBlocksNear(pos.x, pos.z, R * 1.1, (b) => { if (Math.random() < 0.18 * mult) { const a = Math.atan2(b.z - pos.z, b.x - pos.x) + Math.PI / 2; W.detach(b, Math.cos(a) * 14, rand(10, 18), Math.sin(a) * 14); } }); }
+          if (ripT > 0.05) { ripT = 0; W.forBlocksNear(pos.x, pos.z, R * 1.1, (b) => { if (rng() < 0.18 * mult) { const a = Math.atan2(b.z - pos.z, b.x - pos.x) + Math.PI / 2; W.detach(b, Math.cos(a) * 14, rand(10, 18), Math.sin(a) * 14); } }); }
           // swirl loose debris
           for (const p of W.debris) {
             const dx = p.p.x - pos.x, dz = p.p.z - pos.z, dd = Math.hypot(dx, dz);
@@ -84,7 +89,7 @@ export const DISASTERS = [
         update(dt, t, k) {
           W.audio.loop('wind', 0.75 + Math.sin(t * 0.7) * 0.2, { freq: 900, type: 'bandpass', q: 1.2, lfo: 0.9 });
           W.ui.setFrost(W.playerExposed ? Math.min(1, 0.4 + k) : 0.15);
-          if (Math.random() < dt * 3) W.forBlocksNear(rand(-60, 60), rand(-60, 60), 3, (b) => { if (b.y > 3 && Math.random() < 0.08) W.detach(b, wx * 8, 2, wz * 8); });
+          if (rng() < dt * 3) W.forBlocksNear(rand(-60, 60), rand(-60, 60), 3, (b) => { if (b.y > 3 && rng() < 0.08) W.detach(b, wx * 8, 2, wz * 8); });
         },
         hazard(e) { if (e.sheltered) { if (W.nearOpening(e.pos)) return { dmg: 1.6 * mult, cold: true }; return null; } return { dmg: 4.8 * mult, px: wx * 3 * mult, pz: wz * 3 * mult, cold: true }; },
         end() { W.precip(null); W.fogOverride = null; W.ui.setFrost(0); W.audio.loop('wind', 0); },
@@ -99,13 +104,13 @@ export const DISASTERS = [
       const Hh = 5.2 * mult, BAND = 14;
       const geo = new THREE.BoxGeometry(BAND, 1, 190, 10, 1, 60);
       const p = geo.attributes.position;
-      for (let i = 0; i < p.count; i++) { if (p.getY(i) > 0) { p.setY(i, 0.5 + Math.sin(p.getZ(i) * 0.35) * 0.08 + Math.random() * 0.12 - (p.getX(i) > 0 ? 0.25 : 0)); } }
+      for (let i = 0; i < p.count; i++) { if (p.getY(i) > 0) { p.setY(i, 0.5 + Math.sin(p.getZ(i) * 0.35) * 0.08 + rng() * 0.12 - (p.getX(i) > 0 ? 0.25 : 0)); } }
       geo.computeVertexNormals();
       const wall = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: '#f4f8ff', roughness: 1, emissive: '#c8d8ea', emissiveIntensity: 0.25 })); wall.castShadow = true;
       wall.scale.y = Hh; wall.position.y = Hh / 2; W.scene.add(wall);
       // powder cloud in front of the wall
       const N = 900, pp = new Float32Array(N * 3), seeds = new Float32Array(N);
-      for (let i = 0; i < N; i++) { seeds[i] = Math.random(); pp[i * 3 + 2] = rand(-95, 95); }
+      for (let i = 0; i < N; i++) { seeds[i] = rng(); pp[i * 3 + 2] = rand(-95, 95); }
       const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(pp, 3));
       const powder = new THREE.Points(pg, new THREE.PointsMaterial({ color: '#ffffff', size: 1.6, transparent: true, opacity: 0.55, depthWrite: false })); powder.frustumCulled = false; W.scene.add(powder);
       let xf = -ISLAND_R - 30, wave = 0, rumble = 0, baseH = Hh, curH = Hh;
@@ -152,7 +157,7 @@ export const DISASTERS = [
           W.audio.loop('rumble', 0.6 + s, { freq: 90 + Math.sin(t * 3) * 20, type: 'lowpass' });
           for (const c of crackList) c.m.scale.z = Math.min(c.len, c.m.scale.z + dt * 3);
           acc += dt * (4 + 14 * k) * mult;
-          while (acc > 1) { acc--; const b = W.randomBlock(true); if (b) { W.detach(b, rand(-2, 2), rand(0, 2), rand(-2, 2)); if (Math.random() < 0.15) W.audio.sfx('crack', 0.6); } }
+          while (acc > 1) { acc--; const b = W.randomBlock(true); if (b) { W.detach(b, rand(-2, 2), rand(0, 2), rand(-2, 2)); if (rng() < 0.15) W.audio.sfx('crack', 0.6); } }
           if (!collapsed && k > 0.55) { collapsed = true; W.collapseBuilding(); W.audio.sfx('boom', 0.8); }
         },
         hazard(e) { return { dmg: 0, px: Math.sin(performance.now() * 0.03) * 2.2 * mult, pz: Math.cos(performance.now() * 0.027) * 2.2 * mult }; },
@@ -205,7 +210,7 @@ export const DISASTERS = [
           acc += dt * (1.2 + k * 1.2) * mult;
           while (acc > 1) {
             acc--;
-            const tgt = Math.random() < 0.35 ? W.playerPos().clone().add(new THREE.Vector3(rand(-6, 6), 0, rand(-6, 6))) : W.randomPoint(0.95);
+            const tgt = rng() < 0.35 ? W.playerPos().clone().add(new THREE.Vector3(rand(-6, 6), 0, rand(-6, 6))) : W.randomPoint(0.95);
             tgt.y = W.surfaceAt(tgt.x, tgt.z);
             const size = rand(0.8, 1.6) * Math.sqrt(mult);
             const m = new THREE.Mesh(rock, rockM); m.scale.setScalar(size);
@@ -214,7 +219,7 @@ export const DISASTERS = [
             const ring = new THREE.Mesh(ringG, new THREE.MeshBasicMaterial({ color: '#ff2a1a', transparent: true, opacity: 0.9, depthWrite: false })); ring.position.set(tgt.x, tgt.y + 0.06, tgt.z); ring.scale.setScalar(4 * size);
             W.scene.add(m, ring);
             list.push({ m, ring, tgt, size, tt: 2.0 });
-            if (Math.random() < 0.3) W.audio.sfx('whoosh', 0.7);
+            if (rng() < 0.3) W.audio.sfx('whoosh', 0.7);
           }
           fire.intensity = Math.max(0, fire.intensity - dt * 120);
           for (let i = list.length - 1; i >= 0; i--) {
@@ -268,8 +273,8 @@ export const DISASTERS = [
             acc--;
             let tgt;
             const pp = W.playerPos();
-            if (pp.y > 3.5 && Math.random() < 0.5) tgt = pp.clone().add(new THREE.Vector3(rand(-1.5, 1.5), 0, rand(-1.5, 1.5)));
-            else { const b = W.randomBlock(true); tgt = b && Math.random() < 0.7 ? new THREE.Vector3(b.x, b.y + b.h / 2, b.z) : W.randomPoint(0.9); }
+            if (pp.y > 3.5 && rng() < 0.5) tgt = pp.clone().add(new THREE.Vector3(rand(-1.5, 1.5), 0, rand(-1.5, 1.5)));
+            else { const b = W.randomBlock(true); tgt = b && rng() < 0.7 ? new THREE.Vector3(b.x, b.y + b.h / 2, b.z) : W.randomPoint(0.9); }
             tgt.y = Math.max(tgt.y, W.surfaceAt(tgt.x, tgt.z));
             const mk = new THREE.Mesh(markG, new THREE.MeshBasicMaterial({ color: '#8fd0ff', transparent: true, opacity: 0.25, depthWrite: false, side: THREE.DoubleSide }));
             mk.scale.set(2.6, 30, 2.6); mk.position.set(tgt.x, tgt.y + 15, tgt.z); W.scene.add(mk);
@@ -283,7 +288,7 @@ export const DISASTERS = [
               flashL.position.copy(q.tgt).setY(q.tgt.y + 6); flashL.intensity = 900;
               W.explode(q.tgt, 2.4, 55, { lightning: true });
               const near = W.playerPos().distanceTo(q.tgt);
-              { const pick = near < 30 ? (lastStrike === 1 ? 3 : lastStrike === 3 ? 1 : (Math.random() < 0.5 ? 1 : 3)) : (lastStrike === 2 ? (Math.random() < 0.5 ? 1 : 3) : 2); lastStrike = pick;
+              { const pick = near < 30 ? (lastStrike === 1 ? 3 : lastStrike === 3 ? 1 : (rng() < 0.5 ? 1 : 3)) : (lastStrike === 2 ? (rng() < 0.5 ? 1 : 3) : 2); lastStrike = pick;
                 if (!W.audio.oneShot(`lightning_strike_${pick}`, Math.max(0.8, 1 - near / 200))) W.audio.sfx('thunder', Math.max(0.25, 1 - near / 80));
                 W.audio.duckLoop('lightning', 0.35, 2); }
               if (near < 40) W.ui.whiteFlash(0.5 * (1 - near / 40));
@@ -293,7 +298,7 @@ export const DISASTERS = [
           flashL.intensity = Math.max(0, flashL.intensity - dt * 4000);
           for (let i = 0; i < cpos.length; i++) { const c = cpos[i], sc = c[3] * Math.min(1, k * 6 + 0.2); cm.compose(new THREE.Vector3(c[0] + Math.sin(t * 0.05 + i) * 6 + t * 0.6 % 40 - 20, c[1], c[2]), cq, new THREE.Vector3(sc, sc * 0.32, sc)); clouds.setMatrixAt(i, cm); }
           clouds.instanceMatrix.needsUpdate = true; cloudM.emissiveIntensity = flashL.intensity / 900 * 0.9;
-          if (!W.audio.bank?.lightning?.buffer && Math.random() < dt * 0.25) W.audio.sfx('thunder', 0.25);
+          if (!W.audio.bank?.lightning?.buffer && rng() < dt * 0.25) W.audio.sfx('thunder', 0.25);
           W.skyFlash(flashL.intensity / 900);
           W.audio.sampleLoop('lightning', 0.6, { name: 'water', freq: 2500, type: 'highpass' });
         },
@@ -330,7 +335,7 @@ export const DISASTERS = [
         update(dt, t, k) {
           const rise = Math.min(1, k / 0.18);
           cone.scale.set(0.5 + 0.5 * rise, Math.max(0.01, H * rise), 0.5 + 0.5 * rise);
-          if (k < 0.18) { W.shake(0.25); if (Math.random() < dt * 4) W.forBlocksNear(cx, cz, 9, (b) => Math.random() < 0.2 && W.detach(b, rand(-6, 6), 10, rand(-6, 6))); }
+          if (k < 0.18) { W.shake(0.25); if (rng() < dt * 4) W.forBlocksNear(cx, cz, 9, (b) => rng() < 0.2 && W.detach(b, rand(-6, 6), 10, rand(-6, 6))); }
           lavaM.color.setHSL(0.05 + Math.sin(t * 6) * 0.01, 1, 0.55 + Math.sin(t * 9) * 0.06);
           coneM.emissiveIntensity = 0.12 + 0.25 * rise + Math.sin(t * 5) * 0.05;
           glow.intensity = (200 + Math.sin(t * 13) * 40) * rise; glow.position.y = base + H * rise + 2;
@@ -341,7 +346,7 @@ export const DISASTERS = [
           // lava bombs with landing rings (warning 1.6 s)
           // eruptions: a burst of 3-5 lava bombs every few seconds, each with the eruption one-shot + lava-bed duck
           let launch = 0;
-          if (rise >= 1) { burstT -= dt; if (burstT <= 0) { burstT = rand(4.5, 7) / Math.sqrt(mult); launch = 3 + ((Math.random() * 3) | 0); erupted++;
+          if (rise >= 1) { burstT -= dt; if (burstT <= 0) { burstT = rand(4.5, 7) / Math.sqrt(mult); launch = 3 + ((rng() * 3) | 0); erupted++;
             if (!W.audio.oneShot('volcano_eruption', 1, erupted % 2 ? 0.9 : 1.05)) W.audio.sfx('boom', 0.8);
             W.audio.duckLoop('volcano', 0.4, 1.5); W.shake(0.5); } }
           while (launch-- > 0) {
@@ -385,7 +390,7 @@ export const DISASTERS = [
           gust = 0.6 + 0.4 * Math.sin(t * 0.9) * Math.sin(t * 0.37);
           W.audio.sampleLoop('gritstorm', 0.55 + gust * 0.12, { name: 'wind', freq: 1400, type: 'bandpass', q: 0.9, lfo: 1.6 });
           W.ui.setFrost(W.playerExposed ? 0.25 + gust * 0.2 : 0.08);
-          if (Math.random() < dt * 4) W.forBlocksNear(rand(-60, 60), rand(-60, 60), 3, (b) => { if (b.y > 2 && Math.random() < 0.06) W.detach(b, wx * 12, 2, wz * 12); });
+          if (rng() < dt * 4) W.forBlocksNear(rand(-60, 60), rand(-60, 60), 3, (b) => { if (b.y > 2 && rng() < 0.06) W.detach(b, wx * 12, 2, wz * 12); });
         },
         hazard(e) { if (e.sheltered) return null; return { dmg: 2.2 * mult * gust, px: wx * 5.5 * mult * gust, pz: wz * 5.5 * mult * gust }; },
         end() { W.precip(null); W.fogOverride = null; W.ui.setFrost(0); W.audio.sampleLoop('gritstorm', 0); W.audio.loop('wind', 0); },
@@ -404,9 +409,9 @@ export const DISASTERS = [
       const pm = new THREE.Matrix4(); let hiss = 0;
       return {
         update(dt, t, k) {
-          if (puds.count < 60 && Math.random() < dt * 6) { const p = W.randomPoint(0.95, true); p.y = W.surfaceAt(p.x, p.z) + 0.05; pm.makeScale(rand(0.8, 2.2), 1, rand(0.8, 2.2)).setPosition(p); puds.setMatrixAt(puds.count++, pm); puds.instanceMatrix.needsUpdate = true; }
+          if (puds.count < 60 && rng() < dt * 6) { const p = W.randomPoint(0.95, true); p.y = W.surfaceAt(p.x, p.z) + 0.05; pm.makeScale(rand(0.8, 2.2), 1, rand(0.8, 2.2)).setPosition(p); puds.setMatrixAt(puds.count++, pm); puds.instanceMatrix.needsUpdate = true; }
           pudM.opacity = 0.35 + 0.15 * Math.sin(t * 3);
-          if (Math.random() < dt * 1.5 * mult) { const b = W.randomBlock(true); if (b && b.y > 4 && Math.random() < 0.3) W.detach(b, 0, 1, 0); } // roofs slowly corrode
+          if (rng() < dt * 1.5 * mult) { const b = W.randomBlock(true); if (b && b.y > 4 && rng() < 0.3) W.detach(b, 0, 1, 0); } // roofs slowly corrode
           W.audio.sampleLoop('acidrain', 0.65, { name: 'water', freq: 3200, type: 'highpass', lfo: 0.3 });
           hiss -= dt; if (W.playerExposed && W.playerAlive?.() && hiss <= 0) { hiss = 0.3; if (!W.audio.oneShot('acid_sizzle', 0.9, rand(0.9, 1.1))) W.audio.sfx('sizzle', 0.4); } // local, while the acid hurts you
           W.ui.setFrost(0);
@@ -428,7 +433,7 @@ export const DISASTERS = [
       const darkM = new THREE.MeshBasicMaterial({ color: '#05080c' });
       let acc = 0.6;
       function spawn() {
-        const pp = W.playerPos(), near = Math.random() < 0.45;
+        const pp = W.playerPos(), near = rng() < 0.45;
         const c = near ? pp.clone().add(new THREE.Vector3(rand(-7, 7), 0, rand(-7, 7))) : W.randomPoint(0.9, true);
         { const B = W.bunkerBox; if (B && Math.abs(c.x - B.x) < B.hx + 3 && Math.abs(c.z - B.z) < B.hz + 3) return; } // the bunker's legs stand on bedrock
         const r = rand(4, 7) * Math.min(1.4, Math.sqrt(mult)), y = W.surfaceAt(c.x, c.z);
