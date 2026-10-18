@@ -39,6 +39,7 @@ export class SupabaseBackend {
   // quests + consumables (see supabase/migrations/20261018000008_quests_event.sql)
   questProgress(questId, delta = 1) { return this.client.rpc('quest_progress', { p_quest_id: questId, p_delta: delta }); }
   getQuests(gameId = null)         { return this.client.rpc('get_quests', { p_game_id: gameId }, { anon: !this.client.signedIn }); }
+  eventStatus(eventId)             { return this.client.rpc('event_status', { p_event_id: eventId }, { anon: !this.client.signedIn }); }
   claimQuestReward(questId)        { return this.client.rpc('claim_quest_reward', { p_quest_id: questId }); }
   buyConsumable(gameId, itemId, ref) { return this.client.rpc('buy_consumable', { p_game_id: gameId, p_item_id: itemId, p_ref: ref }); }
   // multiplayer (game server instances); see src/mp/multiplayer.js

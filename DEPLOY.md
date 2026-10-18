@@ -144,7 +144,32 @@ npm test      # catalog check, PGlite DB tests, single-file game, full site e2e;
 The dev server is a stub of GoTrue/PostgREST (opaque tokens, no email flows, no auth rate
 limiting) over the real migrations. Don't expose it to the internet.
 
-## 8. Multiplayer and Supabase Realtime limits (free plan)
+## 8. Limited-time events (Natural Disasters "Hunt", 1 week)
+
+Migration 8 seeds `public.game_events` row `natural_disasters` with **no dates**. Until they are set, the event is "not started": the Hunt menu shows no countdown and quest progress is refused.
+
+**At release (the deploy step), set the window.** Unless Colin or Jojo give dates, it starts at deploy time and ends 7 days later:
+
+```bash
+. /workspace/iceberg-ops/load-env.sh && export SUPABASE_ACCESS_TOKEN="$SB_ACCESS_TOKEN" SUPABASE_PROJECT_REF="$SB_PROJECT_REF"
+node scripts/event-window.mjs natural_disasters --start now --days 7          # default
+node scripts/event-window.mjs natural_disasters --start 2026-10-20T00:00:00Z --end 2026-10-27T00:00:00Z   # given dates
+node scripts/event-window.mjs natural_disasters --show                         # check (event_status shows serverNow)
+```
+
+Later changes:
+- Extend: `--extend-days 2`.
+- Claim grace: `--grace-hours 48` (default 24 h).
+- Pause or resume: `--off` / `--on`.
+
+Add `--print` to get the SQL to paste into the SQL editor instead of running it. An admin account can also call `set_event_window` directly.
+
+What happens after the end:
+- Progress stops.
+- Completed quests can still be claimed for the claim grace.
+- Owned rewards are never removed.
+
+## 9. Multiplayer and Supabase Realtime limits (free plan)
 
 Every game instance is one **private** Realtime channel, `game:<gameId>:<instance>`.
 - RLS on `realtime.messages` (policies `iceberg_mp_read` / `iceberg_mp_write`) only lets players who are currently placed in that instance by `mp_join` read from it or write to it.

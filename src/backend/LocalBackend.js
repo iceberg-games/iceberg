@@ -7,7 +7,10 @@
 // would return Promises and the callers (Economy, Building) already funnel
 // all mutations through a handful of calls, so the change is contained.
 
-import { questDefs, questLive } from '../core/questDefs.js';
+import { questDefs } from '../core/questDefs.js';
+
+const LOCAL_EVENT_DAYS = 7;                 // offline event length when the quest files give no dates
+const LOCAL_CLAIM_GRACE_MS = 24 * 3600e3;  // same default as game_events.claim_grace
 
 const NS = 'iceberg:v1:';
 
@@ -66,21 +69,47 @@ export class LocalBackend {
     return { ok: true, profile };
   }
 
-  // ---- quests (guest / offline only: a local mirror of the server rules, nothing leaves the device) ----
+  // ---- events + quests (guest / offline only: a local mirror of the server rules, nothing leaves the device) ----
+  // Local event window: from the event's QUESTS startsAt/endsAt when given, else an active 7-day window
+  // from this device's first run. Same shape as the server's event_status().
+  eventStatus(eventId, now = Date.now()) {
+    const ev = read('events', {});
+    if (!ev[eventId]) { ev[eventId] = { firstRun: now }; write('events', ev); }
+    const qs = questDefs().filter(q => q.eventId === eventId);
+    const starts = qs.map(q => q.startsAt && Date.parse(q.startsAt)).filter(Number.isFinite);
+    const ends = qs.map(q => q.endsAt && Date.parse(q.endsAt)).filter(Number.isFinite);
+    const s0 = starts.length ? Math.min(...starts) : ev[eventId].firstRun;
+    const e0 = ends.length ? Math.max(...ends) : s0 + LOCAL_EVENT_DAYS * 86400e3;
+    return { eventId, title: qs[0]?.eventTitle || null, startsAt: new Date(s0).toISOString(), endsAt: new Date(e0).toISOString(),
+      claimUntil: new Date(e0 + LOCAL_CLAIM_GRACE_MS).toISOString(), active: now >= s0 && now < e0, serverNow: new Date(now).toISOString(), local: true };
+  }
+  /** Effective window: the quest's own dates narrowed by its event's (same rule as the server's _quest_eff). */
+  _questEff(q, now = Date.now()) {
+    let s0 = q.startsAt ? Date.parse(q.startsAt) : null, e0 = q.endsAt ? Date.parse(q.endsAt) : null, until = null;
+    if (q.eventId) {
+      const ev = this.eventStatus(q.eventId, now), es = Date.parse(ev.startsAt), ee = Date.parse(ev.endsAt);
+      s0 = s0 == null ? es : Math.max(s0, es); e0 = e0 == null ? ee : Math.min(e0, ee); until = e0 + LOCAL_CLAIM_GRACE_MS;
+    }
+    const state = s0 != null && now < s0 ? 'not_started' : e0 != null && now >= e0 ? 'ended' : 'live';
+    return { state, startsAt: s0 == null ? null : new Date(s0).toISOString(), endsAt: e0 == null ? null : new Date(e0).toISOString(),
+      claimUntil: until == null ? null : new Date(until).toISOString(), claimable: until == null || now < until };
+  }
   _questRow(id) { const all = read('quests', {}); return [all, all[id] || { count: 0 }]; }
-  _questView(q, r = {}) {
-    const progress = Math.min(r.count || 0, q.goal);
+  _questView(q, r = {}, now = Date.now()) {
+    const progress = Math.min(r.count || 0, q.goal), w = this._questEff(q, now);
     return { id: q.id, gameId: q.gameId, title: q.title, description: q.description, goal: q.goal, progress, completed: progress >= q.goal,
-      claimed: !!r.claimedAt, itemId: q.itemId, eventId: q.eventId, startsAt: q.startsAt, endsAt: q.endsAt, live: questLive(q), local: true };
+      claimed: !!r.claimedAt, itemId: q.itemId, eventId: q.eventId, startsAt: w.startsAt, endsAt: w.endsAt, claimUntil: w.claimUntil,
+      live: w.state === 'live', local: true, _w: w };
   }
   questProgress(questId, delta = 1, now = Date.now()) {
     const q = questDefs().find(x => x.id === questId);
     if (!q) return { ok: false, reason: 'unknown_quest' };
-    if (!questLive(q, now)) return { ok: false, reason: 'not_live' };
+    const w = this._questEff(q, now);
+    if (w.state !== 'live') return { ok: false, reason: !q.eventId ? 'not_live' : w.state === 'not_started' ? 'event_not_started' : 'event_ended' };
     delta = Math.trunc(delta);
     if (!(delta >= 1) || delta > q.maxPerCall) return { ok: false, reason: 'invalid_delta' };
     const [all, r] = this._questRow(questId);
-    if (r.count >= q.goal) return { ok: true, added: 0, quest: this._questView(q, r) };
+    if (r.count >= q.goal) return { ok: true, added: 0, quest: this._view(q, r, now) };
     if (r.lastAt && now - r.lastAt < q.minIntervalMs) return { ok: false, reason: 'too_fast', retryAfterMs: q.minIntervalMs - (now - r.lastAt) };
     if (!r.hourStart || now - r.hourStart >= 3600e3) { r.hourStart = now; r.hourCount = 0; }
     if (!r.minStart || now - r.minStart >= 60e3) { r.minStart = now; r.minCount = 0; }
@@ -90,24 +119,27 @@ export class LocalBackend {
     r.count += added; r.hourCount = (r.hourCount || 0) + added; r.minCount = (r.minCount || 0) + added; r.lastAt = now;
     if (r.count >= q.goal) r.completedAt = now;
     all[questId] = r; write('quests', all);
-    return { ok: true, added, quest: this._questView(q, r) };
+    return { ok: true, added, quest: this._view(q, r, now) };
   }
-  getQuests(gameId = null) {
+  _view(q, r, now) { const { _w, ...v } = this._questView(q, r, now); return v; }
+  getQuests(gameId = null, now = Date.now()) {
     const all = read('quests', {});
     return questDefs().filter(q => (!gameId || q.gameId === gameId))
-      .map(q => this._questView(q, all[q.id]))
-      .filter(v => v.live || (v.completed && !v.claimed));
+      .map(q => this._questView(q, all[q.id], now))
+      .filter(v => v._w.state !== 'ended' || (v.completed && !v.claimed && v._w.claimable))
+      .map(({ _w, ...v }) => v);
   }
-  claimQuestReward(questId) {
+  claimQuestReward(questId, now = Date.now()) {
     const q = questDefs().find(x => x.id === questId);
     if (!q) return { granted: false, reason: 'unknown_quest' };
     const [all, r] = this._questRow(questId);
-    if ((r.count || 0) < q.goal) return { granted: false, reason: 'not_complete', itemId: q.itemId, progress: r.count || 0, goal: q.goal };
     if (r.claimedAt) return { granted: false, alreadyClaimed: true, itemId: q.itemId };
+    if (!this._questEff(q, now).claimable) return { granted: false, reason: 'event_ended', itemId: q.itemId };
+    if ((r.count || 0) < q.goal) return { granted: false, reason: 'not_complete', itemId: q.itemId, progress: r.count || 0, goal: q.goal };
     const p = this.loadProfile();
     if (q.itemId && !p.owned.includes(q.itemId)) p.owned.push(q.itemId);
     this.saveProfile(p);
-    r.claimedAt = Date.now(); all[questId] = r; write('quests', all);
+    r.claimedAt = now; all[questId] = r; write('quests', all);
     return { granted: true, alreadyClaimed: false, itemId: q.itemId };
   }
 
