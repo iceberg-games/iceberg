@@ -714,6 +714,30 @@ await t("game_earn 'disaster_survival' (0010): 5 BB per round paid, max 9 per ca
   assert.equal(Number((await su(db, `select coins from public.profiles where id = $1`, [U]))[0].coins), 100);
 });
 
+await t('bans (0012): dev-only ban/unban, cannot ban a dev, is_banned, chat/mp/earn refused, spending ok', async () => {
+  const D = await createUser(db, { username: 'zz_ban_dev' }), V = await createUser(db, { username: 'zz_ban_victim' }), O = await createUser(db, { username: 'zz_ban_other' });
+  await su(db, `insert into public.dev_accounts (user_id) values ($1)`, [D]);
+  assert.equal((await rpc(db, O, 'ban_user', { p_username: 'zz_ban_victim' })).reason, 'not_dev');
+  assert.equal((await rpc(db, D, 'ban_user', { p_username: 'zz_ban_dev' })).reason, 'cannot_ban_dev');
+  assert.equal((await rpc(db, D, 'ban_user', { p_username: 'nobody_here' })).reason, 'no_such_user');
+  assert.equal(await rpc(db, V, 'is_banned'), false);
+  assert.equal((await rpc(db, V, 'game_earn', { p_source: 'coin', p_amount: 5 })).granted, 5);
+  assert.equal((await rpc(db, D, 'ban_user', { p_username: 'ZZ_Ban_Victim', p_reason: 'test' })).ok, true);
+  assert.equal(await rpc(db, V, 'is_banned'), true); assert.equal(await rpc(db, O, 'is_banned'), false);
+  const refused = async (fn, args) => { try { await rpc(db, V, fn, args); return false; } catch (e) { return /banned/.test(e.message); } };
+  assert.ok(await refused('game_earn', { p_source: 'coin', p_amount: 5 }), 'earn');
+  assert.ok(await refused('mp_join', { p_game_id: 'giant-rainbow-obby' }), 'mp_join');
+  assert.ok(await refused('claim_daily_bonus', {}), 'daily');
+  const ph = (await su(db, `select id from public.chat_phrases limit 1`))[0].id;
+  assert.ok(await refused('post_chat', { p_room: 'lobby', p_phrase_id: ph }), 'chat');
+  assert.equal((await rpc(db, O, 'game_earn', { p_source: 'coin', p_amount: 5 })).granted, 5);   // others unaffected
+  assert.equal((await rpc(db, O, 'unban_user', { p_username: 'zz_ban_victim' })).reason, 'not_dev');
+  assert.equal((await rpc(db, D, 'unban_user', { p_username: 'zz_ban_victim' })).ok, true);
+  assert.equal(await rpc(db, V, 'is_banned'), false);
+  assert.equal((await rpc(db, V, 'game_earn', { p_source: 'coin', p_amount: 5 })).granted, 5);
+  await denied(as(db, V, tx => tx.query('select * from public.bans')));
+});
+
 await db.close();
 for (const r of results) console.log(r[0], r[1], r[2] ? '\n     ' + r[2] : '');
 const failed = results.filter(r => r[0] === 'FAIL').length;

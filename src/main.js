@@ -1,5 +1,6 @@
 // Iceberg — platform bootstrap. Wires shared services (economy, avatar,
 // models, music) to the engine, the Games menu, the HUD and the creator.
+import { isBanned, showBanned } from './net/ban.js';
 import './style.css';
 import { backend, modelStore, modelPrefs } from './backend/LocalBackend.js';
 import { Economy } from './core/economy.js';
@@ -39,6 +40,7 @@ async function boot() {
   const economy = new Economy(backend);
   const quests = bindQuests(economy);   // games: import { quests } from '../core/quests.js' or window.iceberg.quests
   const remote = await connectStoredSession(economy);   // null = guest (localStorage only)
+  if (await isBanned(remote)) return showBanned();      // banned (0012): no game, chat or multiplayer
   const settings = modelPrefs.loadSettings();
   const music = new Music(settings, (s) => modelPrefs.saveSettings({ ...modelPrefs.loadSettings(), ...s }));
   const models = new ModelLibrary(modelStore);

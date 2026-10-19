@@ -16,6 +16,7 @@ import { signIn, signUp, validateCredentials } from '../net/auth.js';
 import { getDeviceMode, setDeviceMode, onDeviceChange } from '../core/device.js';
 import { registerServiceWorker } from '../net/pwa.js';
 import { isDev, devUpdateButton } from '../net/devAccess.js';
+import { isBanned, showBanned, banUser, unbanUser } from '../net/ban.js';
 import { mountChatRoom } from '../chat/chatRoom.js';
 import { loadGameStats, SORTS } from '../net/gameStats.js';
 import { loadFeatured, createFeaturedBanner } from './featured.js';
@@ -71,6 +72,19 @@ function header() {
 }
 // Developers only: rendered directly under the username/balance row, never created for anyone else.
 const devRow = () => (dev && remote ? h('div.p-dev-row', devUpdateButton(h, './preview/')) : null);
+// Developers only: ban / unban by username (server checks is_dev and refuses to ban a dev)
+function banPanel() {
+  if (!dev || !remote) return null;
+  const inp = h('input', { id: 'ban-username', placeholder: 'username', autocomplete: 'off', style: 'width:140px' });
+  const act = (fn, verb) => async () => {
+    const u = inp.value.trim(); if (!u) return;
+    try { const r = await fn(remote, u); toast(r?.ok ? `${verb}: ${r.username || u}` : `${verb} failed: ${r?.reason || 'error'}`, r?.ok ? '✅' : '⚠️'); }
+    catch (e) { toast(`${verb} failed: ${e.message}`, '⚠️'); }
+  };
+  return h('div.p-dev-row', { id: 'ban-panel', style: 'gap:6px;align-items:center' }, inp,
+    h('button.btn.secondary', { id: 'ban-btn', onclick: act(banUser, 'Banned') }, 'Ban'),
+    h('button.btn.secondary', { id: 'unban-btn', onclick: act(unbanUser, 'Unbanned') }, 'Unban'));
+}
 async function refreshDev() { const d = remote ? await isDev(remote) : false; if (d !== dev) { dev = d; render(); } }
 function nav() {
   const tab = (id, label) => h('button.p-tab' + (view === id ? '.on' : ''), { 'data-view': id, onclick: () => go(id) }, label);
@@ -203,6 +217,7 @@ function accountView() {
         if (mode === 'up') await signUp(client, { username: u.value, password: p.value, displayName: d.value });
         else await signIn(client, { username: u.value, password: p.value });
         remote = await connectStoredSession(economy);
+        if (await isBanned(remote)) return showBanned();
         refreshDev();
         if (!remote) throw new Error('Signed in, but the profile could not be loaded.');
         toast(mode === 'up' ? 'Welcome to Iceberg!' : 'Welcome back!', '🎉');
@@ -229,7 +244,7 @@ function go(v) { view = v; const u = new URL(location.href); u.searchParams.set(
 function render() {
   chatRoom?.destroy(); chatRoom = null; clearInterval(friendsTimer); banner?.destroy(); banner = null;
   const views = { games: gamesView, chat: chatView, friends: friendsView, settings: settingsView, account: accountView };
-  clear(root).append(h('div.snowbg'), h('div.p-wrap', header(), devRow(), nav(), (views[view] || gamesView)()));
+  clear(root).append(h('div.snowbg'), h('div.p-wrap', header(), devRow(), banPanel(), nav(), (views[view] || gamesView)()));
   if (ready && (view === 'games' || !views[view])) checkEventPopup();
 }
 function checkEventPopup() {
@@ -240,6 +255,7 @@ onDeviceChange(() => { if (view === 'settings' || view === 'games') render(); })
 render();
 (async () => {
   remote = await connectStoredSession(economy);
+  if (await isBanned(remote)) return showBanned();
   ready = true;
   render();
   registerServiceWorker('./');
