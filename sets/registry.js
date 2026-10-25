@@ -6,4 +6,5 @@ export const SETS = {
   'starfall-observatory': () => import('./starfall-observatory/index.js'),
   'knockout-floes': () => import('./knockout-floes/index.js'),
   'rimebound-resort': () => import('./rimebound-resort/index.js'),
+  'rimebound-mines': () => import('./rimebound-mines/index.js'),
 };
