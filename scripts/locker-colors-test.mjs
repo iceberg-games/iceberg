@@ -8,6 +8,7 @@ const SETS = { base: [['earmuffs', 'Cranberry'], ['snowglobe_pack', 'Gold Ribbon
 SETS.wh1 = [['wh_earflap_cap', 'Glacier'], ['wh_hot_cocoa', 'Forest Green'], ['wh_aurora_scarf', 'Midnight Plum'], ['wh_pine_cloak', 'Winter Berry']];
 SETS.wh2 = [['wh_lantern_hat', 'Frost Blue'], ['wh_crystal_pet', 'Amethyst'], ['wh_blizzard_back', 'Violet Gale']];
 SETS.wh3 = [['wh_frostspire_crown', 'Royal Gold']];
+SETS.wh4 = [['wh_wool_mittens', 'Fjord Navy'], ['wh_puffer_vest', 'Alpine Teal'], ['wh_jingle_hat', 'Elf Green']];
 const LIST = SETS[process.env.SET || 'base'];
 const errs = []; page.on('pageerror', e => errs.push(e.message));
 await page.goto(url); await page.waitForFunction(() => window.iceberg);

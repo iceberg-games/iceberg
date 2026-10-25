@@ -41,6 +41,9 @@ function mesh(geo, mat, x = 0, y = 0, z = 0) {
 // ---------- cosmetic model builders ----------
 // Each returns { bone: 'head'|'torso'|'armR', object }
 const BUILDERS = {
+  wh_wool_mittens(_rc, color) { return buildWoolMittens(color); },
+  wh_puffer_vest(_rc, color) { return buildPufferVest(color); },
+  wh_jingle_hat(_rc, color) { return buildJingleHat(color); },
   wh_earflap_cap(_rc, color) { return buildEarflapCap(color); },
   wh_hot_cocoa(_rc, color) { return buildHotCocoa(color); },
   wh_lantern_hat(_rc, color) { return buildLanternHat(color); },
@@ -1428,6 +1431,96 @@ function buildBlizzardBack(color) {
   g.userData.tick(0);
   g.userData.setColor = (c) => { ribbonM.color.set(c); core.material.color.set(c); gem.material.color.set(c); gem.material.emissive.set(c); };
   return { bone: 'torso', object: g };
+}
+
+function buildWoolMittens(color) {
+  const mats = [];
+  const make = (side) => {
+    const g = new THREE.Group();
+    const tex = knitTexture().clone(); tex.needsUpdate = true; tex.repeat.set(4, 2);
+    const knit = std(color, { map: tex, bumpMap: tex, bumpScale: 1.4, roughness: 0.95 }); mats.push(['knit', knit]);
+    let band = fairIsleTexture(color); band.repeat.set(1, 1);
+    const bandM = new THREE.MeshStandardMaterial({ map: band, bumpMap: band, bumpScale: 0.4, roughness: 1 }); mats.push(['band', bandM]);
+    const cuffTex = ribTexture('#f3ead6'); cuffTex.repeat.set(6, 1);
+    const cuff = new THREE.MeshStandardMaterial({ map: cuffTex, roughness: 1 });
+    g.add(mesh(new RoundedBoxGeometry(0.56, 0.3, 0.56, 3, 0.1), knit, 0, -0.9, 0));          // mitt
+    g.add(mesh(new RoundedBoxGeometry(0.5, 0.08, 0.5, 2, 0.04), knit, 0, -1.07, 0));         // rounded fingertip end
+    const thumb = mesh(new RoundedBoxGeometry(0.15, 0.22, 0.12, 2, 0.05), knit, -side * 0.14, -0.9, 0.3); thumb.rotation.z = side * 0.3; g.add(thumb);
+    const bandMesh = mesh(new THREE.CylinderGeometry(0.405, 0.405, 0.1, 4, 1, true, Math.PI / 4), bandM, 0, -0.82, 0); bandMesh.material.side = THREE.DoubleSide; g.add(bandMesh);
+    g.add(mesh(new RoundedBoxGeometry(0.6, 0.12, 0.6, 2, 0.04), cuff, 0, -0.72, 0));          // ribbed cuff
+    const pom = pomPom(std('#f3ead6', { roughness: 1 }), 0.045); pom.position.set(side * 0.12, -0.74, 0.32); g.add(pom);
+    return g;
+  };
+  const R = make(1), L = make(-1);
+  R.userData.setColor = (c) => {
+    for (const [k, m] of mats) {
+      if (k === 'knit') m.color.set(c);
+      else { const nb = fairIsleTexture(c); nb.repeat.copy(m.map.repeat); m.map.dispose(); m.map = nb; m.bumpMap = nb; m.needsUpdate = true; }
+    }
+  };
+  return { bone: 'armR', object: R, extras: [{ bone: 'armL', object: L }] };
+}
+
+function buildPufferVest(color) {
+  const g = new THREE.Group();
+  const shell = new THREE.MeshPhysicalMaterial({ color, roughness: 0.38, clearcoat: 0.6, clearcoatRoughness: 0.3, sheen: 0.4 });
+  const seam = std(_tint(color, '#000000', 0.3), { roughness: 0.6 });
+  const fleece = std('#f1ece2', { roughness: 1 });
+  const zipM = std('#c9ced4', { metalness: 0.7, roughness: 0.3 });
+  // quilted body: stacked puffy channels (front+back halves each side of the zip)
+  for (let i = 0; i < 5; i++) {
+    const y = 0.38 - i * 0.2;
+    const p = mesh(new RoundedBoxGeometry(1.08, 0.2, 0.6, 3, 0.08), shell, 0, y, 0); g.add(p);
+    g.add(mesh(new THREE.BoxGeometry(1.085, 0.014, 0.605), seam, 0, y - 0.1, 0));
+  }
+  // vertical stitch lines on the front for the diamond-ish quilting
+  for (const x of [-0.3, 0.3]) g.add(mesh(new THREE.BoxGeometry(0.012, 0.98, 0.012), seam, x, -0.02, 0.302));
+  // arm holes trim (sleeveless): dark piping at the shoulders
+  for (const sx of [-1, 1]) g.add(mesh(new RoundedBoxGeometry(0.06, 0.5, 0.62, 2, 0.02), seam, sx * 0.53, 0.25, 0));
+  // zip + pull
+  g.add(mesh(new THREE.BoxGeometry(0.035, 0.96, 0.02), zipM, 0, -0.02, 0.31));
+  const pull = mesh(new RoundedBoxGeometry(0.035, 0.08, 0.012, 2, 0.006), zipM, 0, 0.34, 0.325); g.add(pull);
+  // fleece collar
+  const collar = mesh(new THREE.TorusGeometry(0.34, 0.07, 10, 32), fleece, 0, 0.52, 0); collar.rotation.x = Math.PI / 2; collar.scale.set(1.08, 0.75, 1.3); g.add(collar);
+  // chest pocket with a snowflake patch
+  g.add(mesh(new RoundedBoxGeometry(0.22, 0.03, 0.02, 2, 0.008), seam, -0.26, 0.3, 0.315));
+  const flake = snowflakeCharm(0.04); flake.position.set(0.26, 0.3, 0.32); g.add(flake);
+  g.userData.tick = () => { pull.rotation.x = Math.sin(performance.now() / 600) * 0.15; };
+  g.userData.setColor = (c) => { shell.color.set(c); seam.color.copy(_tint(c, '#000000', 0.3)); };
+  return { bone: 'torso', object: g };
+}
+
+function buildJingleHat(color) {
+  const g = new THREE.Group();
+  const tex = knitTexture().clone(); tex.needsUpdate = true; tex.repeat.set(8, 4);
+  const knit = std(color, { map: tex, bumpMap: tex, bumpScale: 1.3, roughness: 0.95 });
+  const stripe = std('#f3ead6', { roughness: 1 });
+  const fur = std('#fbf8f2', { roughness: 1 });
+  // fluffy fur brim around the head
+  const brim = mesh(new RoundedBoxGeometry(0.72, 0.14, 0.72, 4, 0.07), fur, 0, 0.56, 0); g.add(brim);
+  // slouchy stocking: chain of tapering segments that droop to the side and swing
+  const base = new THREE.Group(); base.position.set(0, 0.62, 0); g.add(base);
+  const segs = []; let parent = base; const N = 7;
+  for (let i = 0; i < N; i++) {
+    const r0 = 0.34 * (1 - i / N) + 0.03, r1 = 0.34 * (1 - (i + 1) / N) + 0.03, h = 0.21;
+    const s = new THREE.Group(); s.position.y = i === 0 ? 0 : 0.15; parent.add(s);
+    const m = mesh(new THREE.CylinderGeometry(r1, r0, h, i < 2 ? 4 : 12, 1, false, Math.PI / 4), i % 2 ? stripe : knit, 0, h / 2, 0);
+    if (i < 2) m.scale.set(1.35, 1, 1.35);
+    s.add(m); segs.push(s); parent = s;
+  }
+  // jingle bell at the tip
+  const gold = std('#f0c040', { metalness: 0.5, roughness: 0.25, emissive: '#6a4a00', emissiveIntensity: 0.5 });
+  const bell = new THREE.Group(); bell.position.y = 0.2; parent.add(bell);
+  bell.add(mesh(new THREE.SphereGeometry(0.07, 18, 14), gold));
+  bell.add(mesh(new THREE.BoxGeometry(0.1, 0.008, 0.012), std('#4a3510', { roughness: 0.6 }), 0, -0.01, 0.066));
+  bell.add(mesh(new THREE.SphereGeometry(0.012, 8, 6), std('#4a3510'), 0, -0.04, 0.06));
+  bell.add(rotated(mesh(new THREE.TorusGeometry(0.02, 0.006, 6, 12), gold, 0, 0.075, 0), 'y', Math.PI / 2));
+  g.userData.tick = () => { const t = performance.now() / 1000;
+    segs.forEach((s, i) => { s.rotation.z = (i < 2 ? -0.1 : -0.38) + Math.sin(t * 2 - i * 0.5) * 0.05 * (i / N); s.rotation.x = (i > 2 ? 0.12 : 0) + Math.sin(t * 1.5 - i * 0.4) * 0.04 * (i / N); });
+    bell.rotation.z = Math.sin(t * 6) * 0.25; };
+  g.userData.tick();
+  g.userData.setColor = (c) => knit.color.set(c);
+  return { bone: 'head', object: g };
 }
 
 function buildIceSkates(color) {

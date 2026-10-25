@@ -162,6 +162,18 @@ for (const c of [
     kind: 'model', winter: true, customizable: true, defaultColor: '#c0392b',
     colorPresets: [['Cabin Red', '#c0392b'], ['Forest Green', '#2e6b47'], ['Sky Blue', '#4f8fd0'], ['Cream', '#efe4cc']],
     desc: 'A trusty enamel thermos with a steaming cocoa cup-lid. Warms your hands on the walk through Winterhaven.' },
+  { id: 'wh_wool_mittens', name: 'Woolly Winterhaven Mittens', slot: 'hand', price: 160, icon: '🧤', rarity: 'common',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#c0392b',
+    colorPresets: [['Holly Red', '#c0392b'], ['Spruce Green', '#2e6b47'], ['Fjord Navy', '#2b3f6b'], ['Oat Cream', '#d8c9a8']],
+    desc: 'Chunky knit mittens on both hands with a Fair Isle snowflake band, ribbed cuffs and tiny pom-poms.' },
+  { id: 'wh_puffer_vest', name: 'Quilted Puffer Vest', slot: 'shirt', price: 240, icon: '🦺', rarity: 'rare',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#d9572b',
+    colorPresets: [['Ember Orange', '#d9572b'], ['Alpine Teal', '#1f7a7a'], ['Plum', '#6b2f5e'], ['Glacier White', '#eef2f5']],
+    desc: 'A puffy quilted vest with a fleece collar, silver zip and snowflake patch. Cosy core, free arms.' },
+  { id: 'wh_jingle_hat', name: 'Jingle Bell Stocking Cap', slot: 'hat', price: 220, icon: '🔔', rarity: 'rare',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#c0392b',
+    colorPresets: [['Festive Red', '#c0392b'], ['Elf Green', '#2f8a4a'], ['Frost Blue', '#4a8fd6'], ['Berry Purple', '#7a3a8a']],
+    desc: 'A long striped stocking cap with a fluffy brim and a golden jingle bell that swings with every step.' },
 ]) { COSMETICS.push(c); COSMETIC_BY_ID[c.id] = c; }
 
 const WH = { price: 0, earnOnly: true, event: 'winterhaven', kind: 'model', winter: true, customizable: true, earnIn: 'Winterhaven' };
