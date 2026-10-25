@@ -84,6 +84,7 @@ const BUILDERS = {
   frost_specs(_rc, color) { return buildFrostSpecs(color); },
   cable_sweater(_rc, color) { return buildSweater(color); },
   frost_lantern(_rc, color) { return buildFrostLantern(color); },
+  bubble_wand(_rc, color) { return buildBubbleWand(color); },
   penguin_pal(_rc, color) { return buildPenguinPal(color); },
   cap() {
     const g = new THREE.Group(), m = std('#d83a3f');
@@ -477,6 +478,81 @@ function buildFrostLantern(color) {
     L.rotation.z = Math.sin(t * 1.6) * 0.06;
   };
   g.userData.setColor = (c) => { glow.color.set(c); glow.emissive.set(c); halo.material.color.set(c); light.color.set(c); };
+  return { bone: 'armR', object: g };
+}
+
+function buildBubbleWand(color) {
+  const g = new THREE.Group(); g.position.set(0, -0.92, 0.22); // in front of the right fist
+  const W = new THREE.Group(); W.rotation.x = 0.35; g.add(W); // tilt the wand forward a touch
+  const stickM = std('#f4f1ea', { roughness: 0.4 });
+  const accent = std(color, { roughness: 0.3, metalness: 0.1 });
+  const stripe = std(_tint(color, '#ffffff', 0.55), { roughness: 0.35 });
+  // candy-striped handle
+  W.add(mesh(new THREE.CylinderGeometry(0.02, 0.024, 0.5, 12), stickM, 0, 0.1, 0));
+  for (let i = 0; i < 5; i++) {
+    const r = mesh(new THREE.TorusGeometry(0.023, 0.006, 6, 14), i % 2 ? stripe : accent, 0, -0.08 + i * 0.09, 0);
+    r.rotation.x = Math.PI / 2 + 0.25; W.add(r);
+  }
+  W.add(mesh(new THREE.SphereGeometry(0.032, 14, 10), accent, 0, -0.16, 0)); // pommel
+  // loop tip with a little star knob and soap film
+  const tip = new THREE.Group(); tip.position.y = 0.45; W.add(tip);
+  const ring = mesh(new THREE.TorusGeometry(0.1, 0.014, 10, 32), accent); tip.add(ring);
+  tip.add(mesh(new THREE.CylinderGeometry(0.018, 0.02, 0.06, 10), accent, 0, -0.1, 0));
+  const star = mesh(new THREE.OctahedronGeometry(0.03), stripe, 0, 0.115, 0); star.scale.set(1, 1.3, 0.5); tip.add(star);
+  const filmM = new THREE.MeshPhysicalMaterial({ color: _tint(color, '#ffffff', 0.6), transparent: true, opacity: 0.32, roughness: 0.05,
+    iridescence: 1, iridescenceIOR: 1.3, iridescenceThicknessRange: [120, 480], depthWrite: false, side: THREE.DoubleSide,
+    emissive: color, emissiveIntensity: 0.15 });
+  const film = new THREE.Mesh(new THREE.CircleGeometry(0.095, 28), filmM); film.castShadow = false; tip.add(film);
+  // bubbles: iridescent shells + additive rim glow + specular glint
+  const dot = softDotTexture();
+  const N = 10, bubbles = [];
+  const shellGeo = new THREE.SphereGeometry(1, 16, 12);
+  for (let i = 0; i < N; i++) {
+    const shellM = new THREE.MeshPhysicalMaterial({ color: _tint(color, '#ffffff', 0.5), transparent: true, opacity: 0.28, roughness: 0.02,
+      iridescence: 1, iridescenceIOR: 1.33, iridescenceThicknessRange: [100, 600], depthWrite: false,
+      emissive: color, emissiveIntensity: 0.2 });
+    const b = new THREE.Group();
+    const shell = new THREE.Mesh(shellGeo, shellM); b.add(shell);
+    const rim = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot, color, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }));
+    rim.scale.setScalar(2.6); b.add(rim);
+    const glint = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot, color: '#ffffff', transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }));
+    glint.scale.setScalar(0.45); glint.position.set(-0.4, 0.45, 0.6); b.add(glint);
+    g.add(b);
+    bubbles.push({ b, shell, rim, glint, life: i / N * 2.6, max: 2.2 + Math.random() * 0.9, size: 0.035 + Math.random() * 0.05,
+      vx: (Math.random() - 0.5) * 0.25, vz: 0.12 + Math.random() * 0.2, ph: Math.random() * 6.28, x: 0, y: 0, z: 0 });
+  }
+  const origin = new THREE.Vector3();
+  const spawn = (p) => { // emerge from the ring
+    origin.set((Math.random() - 0.5) * 0.08, 0.45 + (Math.random() - 0.5) * 0.08, 0).applyEuler(W.rotation);
+    p.x = origin.x; p.y = origin.y; p.z = origin.z + 0.03; p.life = 0; p.max = 2.2 + Math.random() * 0.9;
+    p.size = 0.035 + Math.random() * 0.05; p.vx = (Math.random() - 0.5) * 0.25; p.vz = 0.12 + Math.random() * 0.2;
+  };
+  bubbles.forEach(p => { const l = p.life; spawn(p); p.life = l; p.x += p.vx * l; p.y += 0.22 * l; p.z += p.vz * l; });
+  let t = 0;
+  g.userData.tick = (dt) => {
+    t += dt;
+    W.rotation.z = Math.sin(t * 1.3) * 0.08;
+    filmM.opacity = 0.26 + Math.sin(t * 3) * 0.08; film.scale.setScalar(1 + Math.sin(t * 5) * 0.03);
+    for (const p of bubbles) {
+      p.life += dt;
+      if (p.life >= p.max) spawn(p);
+      const k = p.life / p.max;
+      p.x += (p.vx + Math.sin(t * 2.2 + p.ph) * 0.12) * dt; p.y += (0.18 + k * 0.12) * dt; p.z += p.vz * dt;
+      const grow = Math.min(1, p.life / 0.35);                 // blown out of the ring
+      const pop = k > 0.9 ? 1 + (k - 0.9) * 4 : 1;             // swell right before the pop
+      const fade = k > 0.9 ? Math.max(0, 1 - (k - 0.9) * 10) : 1;
+      const s = p.size * grow * pop;
+      p.b.position.set(p.x, p.y, p.z);
+      p.b.scale.set(s * (1 + Math.sin(t * 9 + p.ph) * 0.07), s * (1 + Math.cos(t * 8 + p.ph) * 0.07), s); // wobble
+      p.shell.material.opacity = 0.28 * fade; p.rim.material.opacity = 0.35 * fade * (1 + (pop - 1) * 2);
+      p.glint.material.opacity = 0.9 * fade;
+    }
+  };
+  g.userData.setColor = (c) => {
+    accent.color.set(c); stripe.color.copy(_tint(c, '#ffffff', 0.55));
+    filmM.color.copy(_tint(c, '#ffffff', 0.6)); filmM.emissive.set(c);
+    for (const p of bubbles) { p.shell.material.color.copy(_tint(c, '#ffffff', 0.5)); p.shell.material.emissive.set(c); p.rim.material.color.set(c); }
+  };
   return { bone: 'armR', object: g };
 }
 

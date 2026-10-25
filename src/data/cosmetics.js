@@ -78,6 +78,12 @@ for (const c of [
     colorPresets: [['Red Scarf', '#d83a3f'], ['Sky Scarf', '#4aa8e8'], ['Sunny Scarf', '#f2c230'], ['Mint Scarf', '#4fc59a']],
     desc: 'A tiny penguin buddy who rides on your shoulder, flaps happily and wears a scarf you pick.',
   },
+  {
+    id: 'bubble_wand', name: 'Soap Bubble Wand', slot: 'hand', price: 240, icon: '🫧', rarity: 'rare',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#7ec8ff',
+    colorPresets: [['Glacier', '#7ec8ff'], ['Pink Soap', '#ff8fd0'], ['Lime Fizz', '#a8f06a'], ['Grape Pop', '#a98bff']],
+    desc: 'Swish it and shimmering rainbow soap bubbles drift out, wobble on the breeze and pop with a sparkle. Impossible to stop watching.',
+  },
 ]) { COSMETICS.push(c); COSMETIC_BY_ID[c.id] = c; }
 
 // Wearable 3D outfit (kind 'model' in the shirt slot: knit body + sleeves over the torso/arms).
