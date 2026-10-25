@@ -87,9 +87,25 @@ export class RimeUI {
     this.root.appendChild(panel);
   }
 
+  renderHud(h = {}) {
+    if (!this.root) return;
+    let el = this.root.querySelector('.rb-hud');
+    if (!el) { el = document.createElement('div'); el.className = 'rb-hud'; el.style.cssText = 'position:absolute;top:14px;left:50%;transform:translateX(-50%);background:rgba(8,18,32,.85);padding:8px 14px;border-radius:10px;border:1px solid #3a6a9a;font-size:13px;font-weight:700;white-space:nowrap;text-align:center'; this.root.appendChild(el); }
+    const t = Math.max(0, Math.ceil(h.timer || 0));
+    const parts = [h.role === 'killer' ? 'KILLER' : 'SURVIVOR', `Cores ${h.coresDone}/${h.coresTotal}`, `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`];
+    if (h.role !== 'killer') parts.push(`HP ${Math.ceil(h.hp)}`);
+    if (h.exitOpen) parts.push('EXITS OPEN');
+    let line2 = h.prompt || '';
+    if (h.downed) line2 = `DOWNED — hold out for a revive (${Math.ceil(h.downed)}s)`;
+    if (h.result) line2 = h.result + ' — press Enter for lobby';
+    el.innerHTML = parts.join(' · ') + (line2 ? `<div style="font-size:15px;color:#ffd27e;margin-top:4px">${line2}</div>` : '');
+  }
+
   renderMatch(kit, cds = {}) {
     if (!this.root || !kit) return;
+    const hud = this.root.querySelector('.rb-hud');
     this.root.innerHTML = '';
+    if (hud) this.root.appendChild(hud);
     const bar = document.createElement('div');
     Object.assign(bar.style, {
       pointerEvents: 'auto', position: 'absolute', left: '50%', bottom: '18px',
@@ -112,8 +128,6 @@ export class RimeUI {
     }
     const wait = document.createElement('div');
     wait.style.cssText = 'position:absolute;top:14px;left:50%;transform:translateX(-50%);background:rgba(8,18,32,.85);padding:8px 14px;border-radius:10px;border:1px solid #3a6a9a;font-size:13px';
-    wait.textContent = 'Lobby ready — waiting for match (GM1 loop)';
-    this.root.appendChild(wait);
     this.root.appendChild(bar);
   }
 }

@@ -57,10 +57,10 @@ export function createEffects({ scene, player, engine, audio, banner }) {
       statuses.add(id); banner?.(id);
       setTimeout(() => statuses.delete(id), ms);
     },
-    CoreSpark() { statuses.add('CoreSpark'); banner?.('CoreSpark +25% repair'); pulseRing(0x5fe3ff); audio?.('sfx_pip_repair_spark'); },
+    CoreSpark() { statuses.add('CoreSpark'); banner?.('CoreSpark +25% repair'); pulseRing(0x5fe3ff); audio?.('sfx_pip_corespark'); },
     FlareBlind() { flash('#fff6c8', 450); pulseRing(0xffe28a, 1.2); banner?.('FlareBlind!'); audio?.('sfx_pip_flare'); api.applyStatus('blinded-out', 2000); },
-    WarmHands() { statuses.add('WarmHands'); banner?.('WarmHands +40% revive'); pulseRing(0xffb48a); audio?.('sfx_nell_revive'); },
-    ThawKit() { flash('#9dffe0', 300); ['slow', 'freeze', 'rooted'].forEach(s => statuses.delete(s)); pulseRing(0x6dffe0); banner?.('ThawKit — cleansed'); audio?.('sfx_nell_thaw'); },
+    WarmHands() { statuses.add('WarmHands'); banner?.('WarmHands +40% revive'); pulseRing(0xffb48a); audio?.('sfx_nell_warmhands'); },
+    ThawKit() { flash('#9dffe0', 300); ['slow', 'freeze', 'rooted'].forEach(s => statuses.delete(s)); pulseRing(0x6dffe0); banner?.('ThawKit — cleansed'); audio?.('sfx_nell_thawkit'); },
     RidgeRunner() { statuses.add('RidgeRunner'); banner?.('RidgeRunner stamina'); },
     IceGrapple() { dash(10, 2.2); pulseRing(0x9ec9ff, 1); banner?.('IceGrapple'); audio?.('sfx_juno_grapple'); },
     Slide() { dash(7, 0); flash('#cfe9ff', 180); banner?.('Slide'); audio?.('sfx_juno_slide'); },
@@ -93,7 +93,7 @@ export function createEffects({ scene, player, engine, audio, banner }) {
         new THREE.MeshBasicMaterial({ color: 0x6a9a4a, transparent: true, opacity: 0.35 }),
       );
       cloud.position.copy(player.pos).addScaledVector(facing(), 4); cloud.position.y = 1.2;
-      scene.add(cloud); banner?.('GasVent'); audio?.('sfx_kettle_gas'); api.applyStatus('slow', 4000);
+      scene.add(cloud); banner?.('GasVent'); audio?.('sfx_kettle_gasvent'); api.applyStatus('slow', 4000);
       const t0 = performance.now();
       (function fade() {
         const t = (performance.now() - t0) / 4000;

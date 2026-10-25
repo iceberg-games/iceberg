@@ -17,7 +17,7 @@ export const GAME_META = {
   'sled-rush':          { publishedAt: '2026-10-25T14:02:00-07:00', mobile: true },  // joystick lean + shared Jump; tap Start/One more run
   'knockout-floes':     { mobile: true, publishedAt: '2026-10-25T14:41:50-07:00' },  // NEW: joystick + Jump + big THROW tap (hold = charge). Publisher: replace unscheduled with publishedAt to go live.
   'lumen-tag':          { mobile: true, publishedAt: '2026-10-25T14:44:33-07:00' },  // NEW: joystick + Jump + big FIRE (hold = auto-fire w/ aim assist). Publisher: replace unscheduled with publishedAt to go live.
-  'rimebound':          { publishedAt: '2026-10-25T15:51:07-07:00', mobile: true },  // MVP kits+lobby
+  'rimebound':          { publishedAt: '2026-10-25T15:52:30-07:00', mobile: true },  // full MVP lobby+match
   'rainbow-obby':       { publishedAt: '2026-10-16T22:11:58-07:00', retired: true },  // replaced by Giant Rainbow Obby
 };
 

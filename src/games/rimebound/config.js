@@ -12,3 +12,4 @@ export const EMOTES = [
   { id: 'emote_concierge_bow', musical: true, cue: 'mus_emote_concierge' },
 ];
 export const DEFAULT_SAVE = { rounds: 0, picks: {}, milestones: [] };
+export const MATCH = { ROUND_SEC: 240, CORE_REPAIR_SEC: 8, DOWN_TIMER: 20, EXIT_HOLD: 2, TERROR_R: 18, CHASE_R: 10, HIT_DAMAGE: 34, MAX_HP: 100, REVIVE_SEC: 4, SET_TIMEOUT_MS: 6000 };
