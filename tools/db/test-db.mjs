@@ -744,6 +744,15 @@ await t('bans (0012): dev-only ban/unban, cannot ban a dev, is_banned, chat/mp/e
   assert.equal((await rpc(db, D, 'ban_user', { p_username: 'gooberr478' })).reason, 'cannot_ban_dev');
 });
 
+await t('winterhaven prep (0013): unscheduled event (inactive), earn source 25/call 100/day', async () => {
+  const st = await rpc(db, null, 'event_status', { p_event_id: 'winterhaven' });
+  assert.equal(st.active, false); assert.equal(st.startsAt, null); assert.equal(st.endsAt, null);
+  const U = await createUser(db, { username: 'zz_wh_earn' });
+  assert.equal((await rpc(db, U, 'game_earn', { p_source: 'winterhaven', p_amount: 40 })).granted, 25);
+  for (let i = 0; i < 6; i++) await rpc(db, U, 'game_earn', { p_source: 'winterhaven', p_amount: 25 });
+  assert.equal(Number((await su(db, `select coins from public.profiles where id = $1`, [U]))[0].coins), 100);
+});
+
 await db.close();
 for (const r of results) console.log(r[0], r[1], r[2] ? '\n     ' + r[2] : '');
 const failed = results.filter(r => r[0] === 'FAIL').length;

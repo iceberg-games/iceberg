@@ -604,7 +604,7 @@ export default {
       /** Console/filming helper: no damage while true. */
       godMode: false,
     });
-    const ui = new DisasterUI({ prices: C.CONSUMABLE_PRICES_BB, disasters: DISASTERS, onBalloon: api.balloon, onApple: api.apple, onStorm: api.storm, onPick: api.pickStorm, onHunt: () => hunt.toggle(), onPress: () => playUi('click') });
+    const ui = new DisasterUI({ prices: C.CONSUMABLE_PRICES_BB, disasters: DISASTERS, onBalloon: api.balloon, onApple: api.apple, onStorm: api.storm, onPick: api.pickStorm, onHunt: () => { if (huntOn) hunt.toggle(); }, onPress: () => playUi('click') });
     const hunt = new HuntMenu({ sfx: (n) => (n === 'open' ? playUi('popup_open') : n === 'close' ? playUi('popup_close') : n === 'click' ? playUi('click') : n === 'deny' ? playUi('error') : n === 'big' ? playUi('play') : audio.sfx(n)), ambience: (on) => audio.sampleLoop('hunt', on ? 0.75 : 0, { name: 'huntAmb', freq: 380, type: 'lowpass', lfo: 0.25 }) });
     api.hunt = hunt;
     W.ui = ui;
@@ -616,6 +616,11 @@ export default {
     let lastQP = null;
     const tracker = createQuestTracker(quest, { onChange: (s) => { if (lastQP != null && s.progress > lastQP) playUi('notification'); lastQP = s.progress; qhud.update(s); }, onResult: (r) => { if (r.granted) { hunt.celebrate(r.itemId || quest.rewardItemId); if (hunt.open) hunt.refresh(); } } });
     api.quest = tracker;
+    // Event over (after the claim grace) / not live: NDS plays as a normal game (no Hunt button, no H key, no event quest HUD)
+    let huntOn = false;
+    const applyEvent = (ev) => { huntOn = !!ev?.active || (!!ev?.claimUntil && Date.now() < Date.parse(ev.claimUntil)); /* live, or still in the claim grace */ if (ui.bHunt) ui.bHunt.style.display = huntOn ? '' : 'none'; if (qhud.el) qhud.el.style.display = huntOn ? '' : 'none'; if (!huntOn) hunt.close?.(); };
+    applyEvent(null);
+    Promise.resolve(window.iceberg?.quests?.eventStatus?.('natural_disasters')).then(applyEvent, () => applyEvent(null));
 
     // ---------- round flow ----------
     let current = null, forced = null, lastId = null, paid = 0;
@@ -731,7 +736,7 @@ export default {
     const prevKeys = {};
     const pressed = (code) => { const d = engine.input.down(code), was = prevKeys[code]; prevKeys[code] = d; return d && !was; };
     let live = true;
-    const hot = (code) => { if (code === 'Digit1') api.balloon(); else if (code === 'Digit2') api.apple(); else if (code === 'Digit3') api.storm(); else if (code === 'KeyH') hunt.toggle(); };
+    const hot = (code) => { if (code === 'Digit1') api.balloon(); else if (code === 'Digit2') api.apple(); else if (code === 'Digit3') api.storm(); else if (code === 'KeyH') { if (huntOn) hunt.toggle(); } };
     engine.input.onKey((e) => { if (!live || engine.game !== game || prevKeys[e.code]) return; if (/^Digit[1-3]$/.test(e.code)) { prevKeys[e.code] = true; hot(e.code); } else if (e.code === 'KeyH') { prevKeys[e.code] = true; hot(e.code); } else if (e.code === 'Escape' && hunt.open) hunt.close(); });
 
     resetMap();

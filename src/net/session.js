@@ -14,6 +14,8 @@ export function getRemote() {
  *  Returns the remote backend, or null (guest). Never throws; falls back to guest mode. */
 export async function connectStoredSession(economy, { timeoutMs = 8000 } = {}) {
   const remote = getRemote();
+  if (remote && !remote.signedIn) await remote.client.restoreBackup?.().catch(() => false);   // localStorage cleared, IndexedDB copy kept
+  try { navigator.storage?.persist?.(); } catch { /* best effort: ask the browser not to evict site storage */ }
   if (!remote || !remote.signedIn) return null;
   try {
     const res = await Promise.race([economy.connect(remote), new Promise((_, no) => setTimeout(() => no(new Error('timeout')), timeoutMs))]);
