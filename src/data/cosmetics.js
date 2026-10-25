@@ -196,13 +196,13 @@ for (const c of [
     colorPresets: [['Lantern Mint', '#a8f0d8'], ['Frostgate Blue', '#9cc8ff'], ['Mirrorfrost Pink', '#ffc2e0'], ['Glimmer Violet', '#d0b0ff']],
     desc: 'The Winterhaven night sky on your skin: a soft, drifting aurora shimmer in festive village tones.' },
   // Plus perk showpieces (Premium tab)
-  { ...WH_SHOP, premium: true, id: 'wh_plus_frost_wings', name: 'Plus Frost Wings', slot: 'back', price: 8000, icon: '🪽', rarity: 'legendary', defaultColor: '#9fe0ff',
+  { ...WH_SHOP, premium: true, plusOnly: true, id: 'wh_plus_frost_wings', name: 'Plus Frost Wings', slot: 'back', price: 8000, icon: '🪽', rarity: 'legendary', defaultColor: '#9fe0ff',
     colorPresets: [['Glacier', '#9fe0ff'], ['Aurora', '#8affc1'], ['Amethyst', '#c49bff'], ['Rose Frost', '#ffb3d1']],
     desc: 'Plus perk. Three tiers of glowing crystal feathers that beat slowly and shed frost sparkles as you move.' },
-  { ...WH_SHOP, premium: true, id: 'wh_plus_aurora_crown', name: 'Plus Aurora Crown', slot: 'hat', price: 5000, icon: '👑', rarity: 'legendary', defaultColor: '#8affc1',
+  { ...WH_SHOP, premium: true, plusOnly: true, id: 'wh_plus_aurora_crown', name: 'Plus Aurora Crown', slot: 'hat', price: 5000, icon: '👑', rarity: 'legendary', defaultColor: '#8affc1',
     colorPresets: [['Borealis', '#8affc1'], ['Polar Blue', '#8fd0ff'], ['Violet Night', '#c4a0ff'], ['Dawn Rose', '#ffb3d1']],
     desc: 'Plus perk. A silver crown crowned by shimmering aurora ribbons and a floating star gem.' },
-  { ...WH_SHOP, premium: true, id: 'wh_plus_crystal_scepter', name: 'Plus Crystal Scepter', slot: 'hand', price: 3500, icon: '🔮', rarity: 'epic', defaultColor: '#8fe8ff',
+  { ...WH_SHOP, premium: true, plusOnly: true, id: 'wh_plus_crystal_scepter', name: 'Plus Crystal Scepter', slot: 'hand', price: 3500, icon: '🔮', rarity: 'epic', defaultColor: '#8fe8ff',
     colorPresets: [['Ice', '#8fe8ff'], ['Amethyst', '#c49bff'], ['Emerald', '#7dffb0'], ['Sunstone', '#ffc870']],
     desc: 'Plus perk. A silver-wrapped staff topped with a spinning ice crystal and orbiting snow motes.' },
 ]) { COSMETICS.push(c); COSMETIC_BY_ID[c.id] = c; }
