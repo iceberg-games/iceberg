@@ -149,3 +149,39 @@ for (const c of [
     colorPresets: [['Rescue Orange', '#ff6a1a'], ['Storm Yellow', '#f5c816'], ['Glacier Blue', '#3a8fd6'], ['Slate', '#4a5563']],
     desc: 'A glossy hooded rain slicker with reflective stripes, toggle buttons and a Survivor patch. Rain and frost slide right off.' },
 ]) { COSMETICS.push(c); COSMETIC_BY_ID[c.id] = c; }
+
+// ---- Winterhaven: regular shop items (always for sale) + free quest-earned event rewards.
+// earnOnly items are granted by Game Maker's Winterhaven quests (`unlock` = quest id) and stay hidden
+// in the shop until the 'winterhaven' event is live (economy.shopVisible), like Natural Disasters.
+for (const c of [
+  { id: 'wh_earflap_cap', name: 'Winterhaven Earflap Cap', slot: 'hat', price: 180, icon: '🧢', rarity: 'rare',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#b8322f',
+    colorPresets: [['Cranberry', '#b8322f'], ['Evergreen', '#2f6b45'], ['Glacier', '#5d93c9'], ['Charcoal', '#3b3f46']],
+    desc: 'Winterhaven village knit with a Fair Isle band, braided earflap ties and a big fluffy pom-pom.' },
+  { id: 'wh_hot_cocoa', name: 'Hot Cocoa Thermos', slot: 'hand', price: 140, icon: '☕', rarity: 'common',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#c0392b',
+    colorPresets: [['Cabin Red', '#c0392b'], ['Forest Green', '#2e6b47'], ['Sky Blue', '#4f8fd0'], ['Cream', '#efe4cc']],
+    desc: 'A trusty enamel thermos with a steaming cocoa cup-lid. Warms your hands on the walk through Winterhaven.' },
+]) { COSMETICS.push(c); COSMETIC_BY_ID[c.id] = c; }
+
+const WH = { price: 0, earnOnly: true, event: 'winterhaven', kind: 'model', winter: true, customizable: true, earnIn: 'Winterhaven' };
+for (const c of [
+  { id: 'wh_lantern_hat', unlock: 'wh_quest_lantern', name: 'Lantern Hat', slot: 'hat', rarity: 'rare', icon: '🏮', defaultColor: '#ffb347',
+    colorPresets: [['Ember', '#ffb347'], ['Frost Blue', '#7fd8ff'], ['Holly Red', '#ff5a5a'], ['Pine Glow', '#7dffa8']],
+    desc: 'A cosy knit hat with a little glowing lantern bobbing on top. Earned in Winterhaven.' },
+  { id: 'wh_aurora_scarf', unlock: 'wh_quest_skate', name: 'Aurora Scarf', slot: 'neck', rarity: 'epic', icon: '🧣', defaultColor: '#2b3f6b',
+    colorPresets: [['Night Sky', '#2b3f6b'], ['Midnight Plum', '#4a2b5e'], ['Frost White', '#e8eef4'], ['Pine', '#1f4a3a']],
+    desc: 'A long knitted scarf with shifting northern-lights stripes and tasselled ends that sway in the wind. Earned in Winterhaven.' },
+  { id: 'wh_pine_cloak', unlock: 'wh_quest_pine', name: 'Pine Cloak', slot: 'back', rarity: 'rare', icon: '🌲', defaultColor: '#2f6b45',
+    colorPresets: [['Spruce', '#2f6b45'], ['Fir Blue', '#2f5d6b'], ['Snowy', '#e8eef4'], ['Winter Berry', '#8a2b3a']],
+    desc: 'A woodland cloak of layered pine boughs dusted with snow. Earned in Winterhaven.' },
+  { id: 'wh_crystal_pet', unlock: 'wh_quest_cave', name: 'Crystal Sprite', slot: 'neck', rarity: 'epic', icon: '💎', defaultColor: '#8fe8ff',
+    colorPresets: [['Ice', '#8fe8ff'], ['Amethyst', '#c49bff'], ['Rose Quartz', '#ffb3d1'], ['Emerald', '#7dffb0']],
+    desc: 'A glowing ice-crystal sprite found deep in the Winterhaven caves. It rides on your shoulder. Earned in Winterhaven.' },
+  { id: 'wh_frostspire_crown', unlock: 'wh_quest_castle', name: 'Frostspire Crown', slot: 'hat', rarity: 'legendary', icon: '👑', defaultColor: '#bfe9ff',
+    colorPresets: [['Ice', '#bfe9ff'], ['Aurora', '#8affc1'], ['Rose Frost', '#ffc2dc'], ['Royal Gold', '#ffd98a']],
+    desc: 'The crown of the Frostspire castle: soaring ice spires and a shining heart gem. Earned in Winterhaven.' },
+  { id: 'wh_blizzard_back', unlock: 'wh_quest_frostgate', name: 'Frostgate Blizzard', slot: 'back', rarity: 'epic', icon: '🌨️', defaultColor: '#9fdcff',
+    colorPresets: [['Frost', '#9fdcff'], ['Storm Grey', '#8a96a8'], ['Violet Gale', '#b49bff'], ['Aurora Green', '#8affc1']],
+    desc: 'A swirling ring of blizzard that orbits your back, straight from the Frostgate. Earned in Winterhaven.' },
+]) { const item = { ...WH, ...c }; COSMETICS.push(item); COSMETIC_BY_ID[item.id] = item; }
