@@ -2,6 +2,7 @@
 // Properties, plain-words Script editor and Animator. Talks to the editor
 // instance from src/studio/editor.js (engine.game while editing).
 import { h, clear } from './dom.js';
+import { hasPerk } from '../core/plus.js';
 import { bus } from '../core/events.js';
 import { TYPE_INFO, MATERIALS, SHAPES } from '../studio/instances.js';
 import { SKIES, GROUNDS } from '../studio/world.js';
@@ -174,6 +175,22 @@ export class CreatorPanel {
       this.el.append(wrap); setTimeout(() => { input.focus(); input.select(); }, 0);
     });
   }
+  // Iceberg Plus perk: save the selected instance as a reusable prefab (local-only). Gated on the Plus flag.
+  prefabSection() {
+    const ed = this.ed, KEY = 'iceberg:v1:prefabs';
+    if (!hasPerk('studioCustomPrefab')) return h('p.st-hint.plus-lock#prefab-locked', '🔒 Custom prefabs are an Iceberg Plus perk (coming soon, $9/mo). Try it via Settings → Iceberg Plus (demo).');
+    const list = (() => { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } })();
+    const save = () => {
+      if (!hasPerk('studioCustomPrefab')) return;
+      const inst = ed.doc.instances.find(i => i.id === ed.selectedId && i.type !== 'group');
+      if (!inst) { this.ui.toast('Select a part first', '🧩'); return; }
+      const { id, parent, ...props } = JSON.parse(JSON.stringify(inst));
+      list.push({ name: props.name || 'Prefab', type: props.type || 'part', props }); localStorage.setItem(KEY, JSON.stringify(list.slice(-30)));
+      this.ui.toast(`Saved prefab "${props.name || 'Prefab'}"`, '🧩'); this.renderLeft();
+    };
+    return h('div#prefab-section', h('button.st-big#prefab-save', { onclick: save }, '💾 Save selection as prefab'),
+      list.length ? h('div.st-grid', list.map(p => h('button.st-tbx', { 'data-prefab': p.name, onclick: () => hasPerk('studioCustomPrefab') && ed.insert(p.type, { ...p.props }) }, h('span', '🧩'), p.name))) : h('p.st-hint', 'No prefabs yet.'));
+  }
   toolbox() {
     const ed = this.ed;
     const item = (icon, label, fn, attrs = {}) => h('button.st-tbx', { onclick: fn, ...attrs }, h('span', icon), label);
@@ -193,6 +210,7 @@ export class CreatorPanel {
       h('h4', 'Rigs (for the Animator)'), h('div.st-grid',
         item('🧍', 'R6 Rig', () => ed.insert('rig')),
         item('👋', 'R6 + Wave', () => { const id = ed.insert('rig', { name: 'WavingRig' }); ed.animator.rigId = id; ed.openAnimator(true); ed.newAnimation('Wave', 'wave'); ed.setProp(id, 'autoplay', ed.animator.animId); ed.openAnimator(false); })),
+      h('h4', '🧩 My Prefabs ', h('span.plus-badge', '❄️ PLUS')), this.prefabSection(),
       h('h4', 'My Models'), fileIn,
       h('button.st-big#studio-upload', { onclick: () => fileIn.click() }, '⬆️ Upload .glb / .gltf / .obj'),
       h('p.st-hint', 'Blender: File → Export → glTF 2.0 → "glTF Binary (.glb)". Rigged models (armature) can be animated.'),

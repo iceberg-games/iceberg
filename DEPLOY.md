@@ -214,3 +214,9 @@ Rate limiting and trust:
 - Supabase does not stamp broadcast messages with the sender's identity. A modified client that has joined an instance can therefore draw *another member's* avatar in the wrong place on other screens.
 - It cannot affect coins, inventory, chat text or anything stored. Outsiders cannot join at all.
 - If this becomes a problem, the fix is a server relay (an Edge Function) that stamps the sender.
+
+## Iceberg Plus (prep only — not live)
+- Planned: **$9/month** membership (badge, Mobile Studio custom colors, computer Studio custom prefabs). UI shows **Coming soon**; nothing is charged.
+- Flag is local/demo only (`src/core/plus.js`, localStorage `iceberg:v1:plus`). Future server field (additive, NOT applied): `profiles.plus_until timestamptz NULL`, set only by a verified payment webhook.
+- Planned economics: **$1 per purchase held for App Store / Google Play fees; remainder to cadavis84@gmail.com.**
+- **Colin must re-confirm before any payment account (Stripe or otherwise) is set up.** Free/demo for now; no Stripe.

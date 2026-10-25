@@ -162,3 +162,8 @@ select, .field input { font: inherit; padding: 6px 8px; border-radius: 10px; bor
 @media (max-width: 720px) { .hud-btn .lbl { display: none; } .hud-btn { min-width: 44px; } .title { font-size: 48px; } }
 .obby-label { position: absolute; top: 70px; left: 50%; transform: translateX(-50%); z-index: 11; background: var(--glass-strong); padding: 6px 14px; border-radius: 12px; font-weight: 900; box-shadow: var(--shadow); }
 .obby-skip { position: absolute; bottom: 104px; right: 16px; z-index: 11; }
+/* Iceberg Plus */
+.plus-badge { display: inline-flex; align-items: center; gap: 2px; padding: 2px 8px; border-radius: 999px; font: 800 11px/1.6 inherit; font-family: inherit; letter-spacing: .5px;
+  color: #fff; background: linear-gradient(135deg, var(--ice-300), var(--ice-600)); box-shadow: 0 0 0 1px rgba(255,255,255,.7) inset, 0 2px 6px rgba(42,127,196,.35); vertical-align: middle; }
+.plus-card .tag { background: var(--ice-100); color: var(--ice-800); padding: 1px 8px; border-radius: 8px; font-size: 12px; }
+.plus-lock { opacity: .6; }

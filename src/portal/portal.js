@@ -3,6 +3,7 @@
 import '../style.css';
 import './portal.css';
 import { h, clear } from '../ui/dom.js';
+import { plusBadge, plusCard } from '../core/plus.js';
 import { backend } from '../backend/LocalBackend.js';
 import { Economy } from '../core/economy.js';
 import { bus } from '../core/events.js';
@@ -66,7 +67,7 @@ function header() {
     h('div.brand.big', h('span', '🧊'), h('b', 'ICEBERG')),
     h('div.p-right',
       h('span.bucks', h('span.bb-ico', CURRENCY.icon), h('span.bucks-amount#p-bucks', fmt(economy.coins))),
-      user, soundToggle(),
+      plusBadge(h), user, soundToggle(),
       remote ? h('button.btn.small.secondary#p-signout', { onclick: signOutNow }, 'Sign out')
              : (accountsEnabled() ? h('button.btn.small#p-signin-open', { onclick: () => go('account') }, 'Sign in') : null)));
 }
@@ -195,6 +196,7 @@ function settingsView() {
   return h('section.p-view#view-settings', h('h2', '⚙️ Settings'),
     h('div.p-card', h('h3', 'Device'), h('div.row#portal-device', devBtn('computer', '🖥️ Computer'), devBtn('mobile', '📱 Mobile')),
       h('p.muted.small', 'Mobile shows touch controls and the simple Mobile Studio.')),
+    plusCard(h, () => render()),
     h('div.p-card', h('h3', 'Install'), h('p.muted.small', 'Use your browser menu → "Install app" / "Add to Home Screen" to keep Iceberg on your device.')),
     remote ? h('div.p-card', h('h3', 'Account'), h('p', `Signed in as @${economy.profile.username}`), h('button.btn.secondary', { onclick: signOutNow }, 'Sign out')) : null);
 }

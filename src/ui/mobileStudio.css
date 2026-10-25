@@ -39,3 +39,5 @@ body.mobile-studio-active #game-canvas { touch-action: none; }
 .ms-sheet .ms-row button { flex: 1; min-height: 44px; border-radius: 8px; border: 0; font: inherit; color: #fff; background: #3a414b; cursor: pointer; }
 .ms-sheet .ms-row button.pub { background: #8b6cf0; } .ms-sheet .ms-row button.save { background: #2e6fa3; }
 .ms-sheet .ms-hint { font-weight: 400; font-size: 12px; color: #9fb0c0; margin: 0; }
+.ms-swatch.ms-custom { position: relative; overflow: hidden; }
+.ms-swatch.ms-custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }

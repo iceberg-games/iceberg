@@ -13,6 +13,7 @@
 // renderer is resized to the area above the bar so the GUI never covers it.
 import * as THREE from 'three';
 import { h, clear } from './dom.js';
+import { hasPerk } from '../core/plus.js';
 import { bus } from '../core/events.js';
 import { isMobile } from '../core/device.js';
 import { drafts, publish, isPublished } from '../studio/store.js';
@@ -89,7 +90,14 @@ export class MobileStudio {
     clear(this.palette).append(...MOBILE_COLORS.map(c => h('button.ms-swatch' + (c === this.color ? '.on' : ''), {
       type: 'button', 'data-color': c, title: c, 'aria-label': `Color ${c}`, 'aria-checked': String(c === this.color), role: 'radio', style: { background: c },
       onclick: () => this.setColor(c),
-    })));
+    })), this.customSwatch());
+  }
+  // Iceberg Plus perk: free-pick block color. Gated on the Plus flag.
+  customSwatch() {
+    if (!hasPerk('mobileCustomColor')) return h('button.ms-swatch.ms-custom.plus-lock#ms-custom-color', { type: 'button', title: 'Custom color — Iceberg Plus', 'aria-label': 'Custom color (Iceberg Plus)', disabled: true }, '🔒');
+    const custom = !MOBILE_COLORS.includes(this.color);
+    return h('label.ms-swatch.ms-custom' + (custom ? '.on' : '') + '#ms-custom-color', { title: 'Custom color (Plus)', style: { background: custom ? this.color : 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' } },
+      h('input', { type: 'color', value: custom ? this.color : '#ffffff', 'aria-label': 'Custom color (Iceberg Plus)', onchange: (e) => { if (hasPerk('mobileCustomColor')) this.setColor(e.target.value); } }));
   }
   renderBar() {
     const ed = this.ed; if (!ed || !this.bar) return;

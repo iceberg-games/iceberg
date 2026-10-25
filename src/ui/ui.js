@@ -7,6 +7,7 @@ import { CURRENCY, fmt } from '../core/currency.js';
 import { COSMETICS, COSMETIC_BY_ID } from '../data/cosmetics.js';
 import { BLOCK_TYPES } from '../data/blocks.js';
 import { PACKS, payments } from '../core/payments.js';
+import { plusCard } from '../core/plus.js';
 import { REWARDS } from '../core/economy.js';
 import { modelPrefs } from '../backend/LocalBackend.js';
 
@@ -382,6 +383,7 @@ export class UI {
     return this._frame('💎 Get Birg Bucks', `Balance: ${fmt(this.economy.coins)}`,
       h('p', `$4 for every 500 ${CURRENCY.name}. `, h('b', 'DEMO: buttons grant bucks for free; no money is charged.')), packs, notice,
       h('p.muted.small', 'Real payments are not connected yet. No card details are collected and nothing is charged.'),
+      plusCard(h, () => this.refreshDrawer()),
       h('h4', 'Earn for free'), h('ul.earn', h('li', `Collect coins in games: +${REWARDS.coinPickup} BB`), h('li', `Build in Frost Fields: +${REWARDS.blockPlaced} BB/block (${REWARDS.blockDailyCap}/day)`), h('li', `Daily bonus: +${REWARDS.dailyBonus} BB`)),
       dev);
   }

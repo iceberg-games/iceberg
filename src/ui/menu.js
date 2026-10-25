@@ -1,5 +1,6 @@
 // Title screen + Games menu (the platform home screen).
 import { h, clear } from './dom.js';
+import { plusBadge } from '../core/plus.js';
 import { confirmModal } from './overlay.js';
 import { isMobile, onDeviceChange } from '../core/device.js';
 import { gameThumb } from './thumbs.js';
@@ -64,7 +65,7 @@ export class Menu {
     clear(this.el).append(h('div.games-screen',
       h('div.snowbg'),
       h('header.menu-head',
-        h('div.brand.big', h('span.logo', '🧊'), h('b', 'Iceberg')),
+        h('div.brand.big', h('span.logo', '🧊'), h('b', 'Iceberg'), plusBadge(h)),
         h('div.menu-actions',
           h('button.bucks', { onclick: () => this.ui.openDrawer('store') }, h('span.bb-ico', CURRENCY.icon), h('span.bucks-amount', fmt(this.economy.coins)), h('span.plus', '+')),
           h('button.btn.secondary', { onclick: () => this.ui.openDrawer('shop') }, '🛍️ Shop'),
