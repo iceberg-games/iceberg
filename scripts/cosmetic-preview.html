@@ -1,12 +1,12 @@
 <!doctype html><html><head><meta charset="utf-8"><title>Cosmetic preview</title>
-<style>html,body{margin:0;background:#cfe6f5;overflow:hidden}</style></head><body>
+<style>html,body{margin:0;height:100%;background:#cfe6f5;overflow:hidden}body{display:flex;align-items:center;justify-content:center}canvas{display:block;max-width:100vw;max-height:100vh}</style></head><body>
 <script type="module">
 import * as THREE from 'three';
 import { Avatar } from '/src/game/avatar.js';
 import { COSMETIC_BY_ID } from '/src/data/cosmetics.js';
 const q = new URLSearchParams(location.search);
 const id = q.get('id') || 'earmuffs', color = q.get('color'), angle = q.get('angle') || 'front';
-const W = +q.get('w') || 640, H = +q.get('h') || 640;
+const S0 = Math.min(innerWidth, innerHeight) || 640, W = +q.get('w') || S0, H = +q.get('h') || S0;
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setSize(W, H); renderer.shadowMap.enabled = true; renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
@@ -19,10 +19,10 @@ av.applyLoadout({ equipped: { [item.slot]: id }, cosmeticColors: color ? { [id]:
 for (let i = 0; i < 90; i++) av.animate(1 / 30, {});
 av.bones.armR.rotation.x = 0; av.bones.armL.rotation.x = 0;
 av.bones.legL.rotation.x = av.bones.legR.rotation.x = 0;
-const focus = id === 'wh_snowflake_halo' || id === 'wh_plus_aurora_crown' ? [0, 3.0, 0, 2.8] : id === 'wh_plus_frost_wings' ? [0, 1.7, -0.4, 4.4] : id === 'wh_plus_crystal_scepter' ? [0.75, 1.5, 0.25, 3.2] : id === 'wh_holly_garland' ? [0, 1.8, 0, 2.6] : id === 'wh_wolf_pup_pal' ? [-0.75, 2.2, 0, 1.9] : ['wh_bridge_badge', 'wh_ranger_badge'].includes(id) ? [0, 1.75, 0.2, 2.2] : ['wh_carol_bells', 'wh_fishing_lure'].includes(id) ? [0.75, 1.2, 0.25, 2.8] : id === 'wh_baker_hat' ? [0, 2.75, 0, 2.6] : id === 'wh_wool_mittens' ? [0, 1.05, 0, 4.0] : id === 'wh_jingle_hat' ? [0.2, 2.75, 0, 2.6] : id === 'wh_crystal_pet' ? [0.75, 2.3, 0, 1.8] : id === 'wh_frostspire_crown' || id === 'wh_lantern_hat' ? [0.1, 2.8, 0, 2.6] : id === 'wh_hot_cocoa' ? [0.75, 1.0, 0.25, 2.6] : id === 'wh_aurora_scarf' ? [0, 1.8, 0, 2.6] : id === 'hail_umbrella' ? [0.3, 1.9, 0.1, 5.2] : id === 'tornado_hat' ? [0, 2.85, 0, 2.7] : id === 'blizzard_hat' ? [0, 2.75, 0, 2.3] : id === 'meteor_pet' ? [0.7, 2.3, 0, 2.2] : id === 'penguin_pal' ? [-0.75, 2.15, 0, 1.6] : id === 'frost_lantern' ? [0.75, 0.85, 0, 1.7] : ['shirt', 'skin'].includes(item.slot) ? [0, 1.55, 0, 4.2] : item.slot === 'face' ? [0, 2.35, 0, 1.9] : { head: [0, 2.4, 0, 2.6], torso: [0, 1.35, -0.4, 3.6], armR: [0.75, 1.1, 0.35, 2.4] }[{ hat: 'head', back: 'torso', hand: 'armR' }[item.slot]];
+const focus = id === 'wh_snowflake_halo' || id === 'wh_plus_aurora_crown' ? [0, 3.0, 0, 2.8] : id === 'wh_plus_frost_wings' ? [0, 1.7, -0.4, 4.4] : id === 'wh_plus_crystal_scepter' ? [0.75, 1.5, 0.25, 3.2] : id === 'wh_holly_garland' ? [0, 1.8, 0, 2.6] : id === 'wh_wolf_pup_pal' ? [-0.75, 2.2, 0, 1.9] : ['wh_bridge_badge', 'wh_ranger_badge'].includes(id) ? [0, 1.75, 0.2, 2.2] : ['wh_carol_bells', 'wh_fishing_lure'].includes(id) ? [0.75, 1.2, 0.25, 2.8] : id === 'wh_baker_hat' ? [0, 2.75, 0, 2.6] : id === 'wh_wool_mittens' ? [0, 1.05, 0, 4.0] : id === 'wh_jingle_hat' ? [0.2, 2.75, 0, 2.6] : id === 'wh_crystal_pet' ? [0.75, 2.3, 0, 1.8] : id === 'wh_frostspire_crown' || id === 'wh_lantern_hat' ? [0.1, 2.8, 0, 2.6] : id === 'wh_hot_cocoa' ? [0.75, 1.0, 0.25, 2.6] : id === 'wh_aurora_scarf' ? [0, 1.8, 0, 2.6] : id === 'hail_umbrella' ? [0.3, 1.9, 0.1, 5.2] : id === 'tornado_hat' ? [0, 2.85, 0, 2.7] : id === 'blizzard_hat' ? [0, 2.75, 0, 2.3] : id === 'meteor_pet' ? [0.7, 2.3, 0, 2.2] : id === 'penguin_pal' ? [-0.75, 2.15, 0, 1.6] : id === 'frost_lantern' ? [0.75, 0.85, 0, 1.7] : id === 'bubble_wand' ? [0.6, 1.6, 0.4, 4.2] : id === 'sf_star_net' ? [0.45, 1.45, 0.3, 4.4] : id === 'sf_star_halo' ? [0, 2.95, 0, 3.6] : id === 'sr_frost_goggles' ? [0, 2.35, 0.15, 2.5] : id === 'ah_glow_shard' ? [0, 1.9, 0.2, 3.1] : id === 'sr_runner_spray' ? [0, 1.45, -0.45, 4.4] : id === 'so_meteor_cape' ? [0, 1.55, -0.35, 4.8] : ['shirt', 'skin'].includes(item.slot) ? [0, 1.55, 0, 4.2] : item.slot === 'face' ? [0, 2.35, 0, 1.9] : { head: [0, 2.4, 0, 2.6], torso: [0, 1.35, -0.4, 3.6], armR: [0.75, 1.1, 0.35, 2.4] }[{ hat: 'head', back: 'torso', hand: 'armR' }[item.slot]];
 const yaw = { front: 0, side: id === 'penguin_pal' ? -Math.PI / 2 : Math.PI / 2, threequarter: Math.PI / 4, back: Math.PI, backthreequarter: Math.PI * 0.75 }[angle];
 const cam = new THREE.PerspectiveCamera(35, W / H, 0.1, 50);
-cam.position.set(focus[0] + Math.sin(yaw) * focus[3], focus[1] + (item.slot === 'hand' ? (id === 'frost_lantern' ? 0.3 : 0.9) : 0.25), focus[2] + Math.cos(yaw) * focus[3]);
+cam.position.set(focus[0] + Math.sin(yaw) * focus[3], focus[1] + (['sr_frost_goggles', 'sf_star_halo', 'ah_glow_shard', 'sr_runner_spray', 'so_meteor_cape'].includes(id) ? 0.1 : item.slot === 'hand' ? (id === 'frost_lantern' ? 0.3 : id === 'bubble_wand' || id === 'sf_star_net' ? 0.3 : 0.9) : 0.25), focus[2] + Math.cos(yaw) * focus[3]);
 cam.lookAt(focus[0], focus[1], focus[2]);
 renderer.render(scene, cam);
 window.__ready = true;

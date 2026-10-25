@@ -84,6 +84,13 @@ const BUILDERS = {
   frost_specs(_rc, color) { return buildFrostSpecs(color); },
   cable_sweater(_rc, color) { return buildSweater(color); },
   frost_lantern(_rc, color) { return buildFrostLantern(color); },
+  bubble_wand(_rc, color) { return buildBubbleWand(color); },
+  sr_frost_goggles(_rc, color) { return buildSledFrostGoggles(color); },
+  sr_runner_spray(_rc, color) { return buildSledRunnerSpray(color); },
+  sf_star_halo(_rc, color) { return buildStarfallHalo(color); },
+  sf_star_net(_rc, color) { return buildStarCatchNet(color); },
+  ah_glow_shard(_rc, color) { return buildHollowShard(color); },
+  so_meteor_cape(_rc, color) { return buildMeteorCape(color); },
   penguin_pal(_rc, color) { return buildPenguinPal(color); },
   cap() {
     const g = new THREE.Group(), m = std('#d83a3f');
@@ -477,6 +484,81 @@ function buildFrostLantern(color) {
     L.rotation.z = Math.sin(t * 1.6) * 0.06;
   };
   g.userData.setColor = (c) => { glow.color.set(c); glow.emissive.set(c); halo.material.color.set(c); light.color.set(c); };
+  return { bone: 'armR', object: g };
+}
+
+function buildBubbleWand(color) {
+  const g = new THREE.Group(); g.position.set(0, -0.92, 0.22); // in front of the right fist
+  const W = new THREE.Group(); W.rotation.x = 0.35; g.add(W); // tilt the wand forward a touch
+  const stickM = std('#f4f1ea', { roughness: 0.4 });
+  const accent = std(color, { roughness: 0.3, metalness: 0.1 });
+  const stripe = std(_tint(color, '#ffffff', 0.55), { roughness: 0.35 });
+  // candy-striped handle
+  W.add(mesh(new THREE.CylinderGeometry(0.02, 0.024, 0.5, 12), stickM, 0, 0.1, 0));
+  for (let i = 0; i < 5; i++) {
+    const r = mesh(new THREE.TorusGeometry(0.023, 0.006, 6, 14), i % 2 ? stripe : accent, 0, -0.08 + i * 0.09, 0);
+    r.rotation.x = Math.PI / 2 + 0.25; W.add(r);
+  }
+  W.add(mesh(new THREE.SphereGeometry(0.032, 14, 10), accent, 0, -0.16, 0)); // pommel
+  // loop tip with a little star knob and soap film
+  const tip = new THREE.Group(); tip.position.y = 0.45; W.add(tip);
+  const ring = mesh(new THREE.TorusGeometry(0.1, 0.014, 10, 32), accent); tip.add(ring);
+  tip.add(mesh(new THREE.CylinderGeometry(0.018, 0.02, 0.06, 10), accent, 0, -0.1, 0));
+  const star = mesh(new THREE.OctahedronGeometry(0.03), stripe, 0, 0.115, 0); star.scale.set(1, 1.3, 0.5); tip.add(star);
+  const filmM = new THREE.MeshPhysicalMaterial({ color: _tint(color, '#ffffff', 0.6), transparent: true, opacity: 0.32, roughness: 0.05,
+    iridescence: 1, iridescenceIOR: 1.3, iridescenceThicknessRange: [120, 480], depthWrite: false, side: THREE.DoubleSide,
+    emissive: color, emissiveIntensity: 0.15 });
+  const film = new THREE.Mesh(new THREE.CircleGeometry(0.095, 28), filmM); film.castShadow = false; tip.add(film);
+  // bubbles: iridescent shells + additive rim glow + specular glint
+  const dot = softDotTexture();
+  const N = 10, bubbles = [];
+  const shellGeo = new THREE.SphereGeometry(1, 16, 12);
+  for (let i = 0; i < N; i++) {
+    const shellM = new THREE.MeshPhysicalMaterial({ color: _tint(color, '#ffffff', 0.5), transparent: true, opacity: 0.28, roughness: 0.02,
+      iridescence: 1, iridescenceIOR: 1.33, iridescenceThicknessRange: [100, 600], depthWrite: false,
+      emissive: color, emissiveIntensity: 0.2 });
+    const b = new THREE.Group();
+    const shell = new THREE.Mesh(shellGeo, shellM); b.add(shell);
+    const rim = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot, color, transparent: true, opacity: 0.35, depthWrite: false, blending: THREE.AdditiveBlending }));
+    rim.scale.setScalar(2.6); b.add(rim);
+    const glint = new THREE.Sprite(new THREE.SpriteMaterial({ map: dot, color: '#ffffff', transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending }));
+    glint.scale.setScalar(0.45); glint.position.set(-0.4, 0.45, 0.6); b.add(glint);
+    g.add(b);
+    bubbles.push({ b, shell, rim, glint, life: i / N * 2.6, max: 2.2 + Math.random() * 0.9, size: 0.035 + Math.random() * 0.05,
+      vx: (Math.random() - 0.5) * 0.25, vz: 0.12 + Math.random() * 0.2, ph: Math.random() * 6.28, x: 0, y: 0, z: 0 });
+  }
+  const origin = new THREE.Vector3();
+  const spawn = (p) => { // emerge from the ring
+    origin.set((Math.random() - 0.5) * 0.08, 0.45 + (Math.random() - 0.5) * 0.08, 0).applyEuler(W.rotation);
+    p.x = origin.x; p.y = origin.y; p.z = origin.z + 0.03; p.life = 0; p.max = 2.2 + Math.random() * 0.9;
+    p.size = 0.035 + Math.random() * 0.05; p.vx = (Math.random() - 0.5) * 0.25; p.vz = 0.12 + Math.random() * 0.2;
+  };
+  bubbles.forEach(p => { const l = p.life; spawn(p); p.life = l; p.x += p.vx * l; p.y += 0.22 * l; p.z += p.vz * l; });
+  let t = 0;
+  g.userData.tick = (dt) => {
+    t += dt;
+    W.rotation.z = Math.sin(t * 1.3) * 0.08;
+    filmM.opacity = 0.26 + Math.sin(t * 3) * 0.08; film.scale.setScalar(1 + Math.sin(t * 5) * 0.03);
+    for (const p of bubbles) {
+      p.life += dt;
+      if (p.life >= p.max) spawn(p);
+      const k = p.life / p.max;
+      p.x += (p.vx + Math.sin(t * 2.2 + p.ph) * 0.12) * dt; p.y += (0.18 + k * 0.12) * dt; p.z += p.vz * dt;
+      const grow = Math.min(1, p.life / 0.35);                 // blown out of the ring
+      const pop = k > 0.9 ? 1 + (k - 0.9) * 4 : 1;             // swell right before the pop
+      const fade = k > 0.9 ? Math.max(0, 1 - (k - 0.9) * 10) : 1;
+      const s = p.size * grow * pop;
+      p.b.position.set(p.x, p.y, p.z);
+      p.b.scale.set(s * (1 + Math.sin(t * 9 + p.ph) * 0.07), s * (1 + Math.cos(t * 8 + p.ph) * 0.07), s); // wobble
+      p.shell.material.opacity = 0.28 * fade; p.rim.material.opacity = 0.35 * fade * (1 + (pop - 1) * 2);
+      p.glint.material.opacity = 0.9 * fade;
+    }
+  };
+  g.userData.setColor = (c) => {
+    accent.color.set(c); stripe.color.copy(_tint(c, '#ffffff', 0.55));
+    filmM.color.copy(_tint(c, '#ffffff', 0.6)); filmM.emissive.set(c);
+    for (const p of bubbles) { p.shell.material.color.copy(_tint(c, '#ffffff', 0.5)); p.shell.material.emissive.set(c); p.rim.material.color.set(c); }
+  };
   return { bone: 'armR', object: g };
 }
 
@@ -2526,4 +2608,114 @@ function buildPlusCrystalScepter(color) {
     ice.emissiveIntensity = 0.6 + Math.sin(t * 2.8) * 0.2; };
   g.userData.setColor = (c) => { ice.color.set(c); ice.emissive.set(c); wrap.color.copy(_tint(c, '#1a2030', 0.55)); };
   return { bone: 'armR', object: g };
+}
+
+// ---- Fun wearables lane 2: Sled Rush / Starfall Lake / Aurora Hollow / Observatory ----
+const _glowSprite = (map, color, s, op = 0.6) => { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map, color, transparent: true, opacity: op, depthWrite: false, blending: THREE.AdditiveBlending })); sp.scale.setScalar(s); return sp; };
+
+function buildSledFrostGoggles(color) {
+  const g = new THREE.Group(); const G = new THREE.Group(); g.add(G);
+  const band = std(color, { roughness: 0.5 }), rim = std('#ffffff', { roughness: 0.35 });
+  const lensM = new THREE.MeshPhysicalMaterial({ color: _tint(color, '#ffffff', 0.35), transparent: true, opacity: 0.55, roughness: 0.05,
+    iridescence: 1, iridescenceIOR: 1.4, emissive: color, emissiveIntensity: 0.35, depthWrite: false });
+  const lens = new THREE.Mesh(new RoundedBoxGeometry(0.56, 0.2, 0.06, 4, 0.08), lensM); lens.position.set(0, 0.38, 0.36); G.add(lens);
+  const frame = new THREE.Mesh(new RoundedBoxGeometry(0.62, 0.26, 0.05, 4, 0.1), rim); frame.position.set(0, 0.38, 0.335); G.add(frame);
+  const strap = mesh(new THREE.CylinderGeometry(0.335, 0.335, 0.09, 24, 1, true), band, 0, 0.4, 0); strap.material.side = THREE.DoubleSide; G.add(strap);
+  const pomM = std(_tint(color, '#ffffff', 0.5), { roughness: 1 });
+  const poms = [-1, 1].map(s => { const p = mesh(new THREE.SphereGeometry(0.07, 14, 10), pomM, s * 0.33, 0.48, 0.3); G.add(p); return p; });
+  const dot = softDotTexture(); const glint = _glowSprite(dot, '#ffffff', 0.12, 0); glint.position.set(-0.18, 0.43, 0.4); G.add(glint);
+  let t = 0;
+  g.userData.tick = (dt) => { t += dt;
+    G.position.y = Math.abs(Math.sin(t * 3)) * 0.012; poms.forEach((p, i) => p.scale.setScalar(1 + Math.sin(t * 6 + i * 2) * 0.12));
+    const k = (t % 2.4) / 2.4; glint.position.x = -0.24 + k * 0.48; glint.material.opacity = Math.sin(k * Math.PI) * 0.9;
+    lensM.emissiveIntensity = 0.3 + Math.sin(t * 2) * 0.1; };
+  g.userData.setColor = (c) => { band.color.set(c); pomM.color.copy(_tint(c, '#ffffff', 0.5)); lensM.color.copy(_tint(c, '#ffffff', 0.35)); lensM.emissive.set(c); };
+  return { bone: 'head', object: g };
+}
+
+function buildSledRunnerSpray(color) {
+  const g = new THREE.Group(); const B = new THREE.Group(); B.position.set(0, 0.05, -0.38); B.rotation.x = -0.12; g.add(B);
+  const board = std(color, { roughness: 0.3, metalness: 0.2 }), runner = std('#e8f6ff', { metalness: 0.9, roughness: 0.15 });
+  const deck = new THREE.Mesh(new RoundedBoxGeometry(0.5, 0.85, 0.07, 4, 0.03), board); B.add(deck);
+  for (const s of [-1, 1]) { const r = mesh(new THREE.TorusGeometry(0.39, 0.018, 8, 24, Math.PI * 0.6), runner, s * 0.2, 0, -0.05); r.rotation.y = Math.PI / 2; r.rotation.z = Math.PI * 0.2; B.add(r); }
+  const dot = softDotTexture(); const N = 18, ps = [];
+  for (let i = 0; i < N; i++) { const sp = _glowSprite(dot, i % 3 ? '#ffffff' : color, 0.09, 0.9); B.add(sp); ps.push({ sp, life: Math.random() * 1.2, vx: 0, vy: 0, vz: 0 }); }
+  const spawn = (p) => { p.life = 0; p.x = (Math.random() - 0.5) * 0.4; p.y = -0.36; p.z = -0.08; p.vx = (Math.random() - 0.5) * 0.7; p.vy = 0.15 + Math.random() * 0.3; p.vz = -0.35 - Math.random() * 0.35; };
+  ps.forEach(spawn); ps.forEach(p => p.life = Math.random() * 1.2);
+  let t = 0;
+  g.userData.tick = (dt) => { t += dt; B.rotation.z = Math.sin(t * 2.2) * 0.05; B.position.y = 0.05 + Math.sin(t * 4.4) * 0.01;
+    for (const p of ps) { p.life += dt; if (p.life > 1.2) spawn(p); p.vy -= 0.8 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+      p.sp.position.set(p.x, p.y, p.z); const k = p.life / 1.2; p.sp.material.opacity = 0.85 * (1 - k); p.sp.scale.setScalar(0.08 + k * 0.14); } };
+  g.userData.setColor = (c) => { board.color.set(c); ps.forEach((p, i) => { if (!(i % 3)) p.sp.material.color.set(c); }); };
+  return { bone: 'torso', object: g };
+}
+
+function buildStarfallHalo(color) {
+  const g = new THREE.Group(); const R = new THREE.Group(); R.position.y = 0.95; g.add(R);
+  const dot = softDotTexture(), stars = [];
+  const starM = std(color, { emissive: color, emissiveIntensity: 1.4, roughness: 0.3 });
+  const shape = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 + Math.PI / 2, r = i % 2 ? 0.035 : 0.08; i ? shape.lineTo(Math.cos(a) * r, Math.sin(a) * r) : shape.moveTo(Math.cos(a) * r, Math.sin(a) * r); }
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.03, bevelEnabled: true, bevelSize: 0.012, bevelThickness: 0.012, bevelSegments: 2 }); geo.center();
+  for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2; const S = new THREE.Group(); S.position.set(Math.cos(a) * 0.38, 0, Math.sin(a) * 0.38);
+    S.add(new THREE.Mesh(geo, starM)); const gl = _glowSprite(dot, color, 0.3, 0.5); S.add(gl); R.add(S); stars.push({ S, gl, ph: i * 1.7 }); }
+  let t = 0;
+  g.userData.tick = (dt) => { t += dt; R.rotation.y += dt * 0.6; R.position.y = 0.95 + Math.sin(t * 1.8) * 0.03;
+    for (const s of stars) { const tw = 0.5 + 0.5 * Math.sin(t * 4 + s.ph); s.S.scale.setScalar(0.85 + tw * 0.35); s.gl.material.opacity = 0.25 + tw * 0.55; s.S.rotation.z = t * 1.5 + s.ph; s.S.lookAt(0, 0, 0); } };
+  g.userData.setColor = (c) => { starM.color.set(c); starM.emissive.set(c); stars.forEach(s => s.gl.material.color.set(c)); };
+  return { bone: 'head', object: g };
+}
+
+function buildStarCatchNet(color) {
+  const g = new THREE.Group(); g.position.set(0, -0.92, 0.22); const W = new THREE.Group(); W.rotation.x = 0.4; g.add(W);
+  W.add(mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.7, 10), std('#c79a5b', { roughness: 0.7 }), 0, 0.15, 0));
+  const hoopM = std(color, { roughness: 0.3 }); const H = new THREE.Group(); H.position.y = 0.62; W.add(H);
+  const hoop = mesh(new THREE.TorusGeometry(0.17, 0.018, 8, 28), hoopM); hoop.rotation.x = Math.PI / 2; H.add(hoop);
+  const netM = new THREE.MeshStandardMaterial({ color: _tint(color, '#ffffff', 0.6), wireframe: true, transparent: true, opacity: 0.6 });
+  const net = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), netM); net.scale.y = 1.5; H.add(net);
+  const dot = softDotTexture(); const caught = [];
+  for (let i = 0; i < 4; i++) { const c = new THREE.Group(); c.add(mesh(new THREE.OctahedronGeometry(0.03), std('#fff6b0', { emissive: '#ffe36a', emissiveIntensity: 1.6 })));
+    c.add(_glowSprite(dot, '#ffe36a', 0.18, 0.6)); H.add(c); caught.push({ c, ph: i * 1.6 }); }
+  const light = new THREE.PointLight('#ffe36a', 0.5, 1.6); light.position.y = -0.1; H.add(light);
+  let t = 0;
+  g.userData.tick = (dt) => { t += dt; W.rotation.z = Math.sin(t * 1.4) * 0.15; net.rotation.y = Math.sin(t * 1.4 + 0.6) * 0.3;
+    for (const s of caught) { const a = t * 1.2 + s.ph; s.c.position.set(Math.cos(a) * 0.08, -0.12 + Math.sin(t * 2 + s.ph) * 0.04, Math.sin(a) * 0.08); s.c.rotation.y = t * 3; }
+    light.intensity = 0.45 + Math.sin(t * 5) * 0.1; };
+  g.userData.setColor = (c) => { hoopM.color.set(c); netM.color.copy(_tint(c, '#ffffff', 0.6)); };
+  return { bone: 'armR', object: g };
+}
+
+function buildHollowShard(color) {
+  const g = new THREE.Group(); const P = new THREE.Group(); P.position.set(0, 0.25, 0.36); g.add(P);
+  const cord = std('#e8f4ff', { roughness: 0.6 });
+  const loop = mesh(new THREE.TorusGeometry(0.34, 0.012, 6, 32, Math.PI), cord, 0, 0.32, -0.12); loop.rotation.x = Math.PI / 2 + 0.6; loop.rotation.z = Math.PI; g.add(loop);
+  const crystM = new THREE.MeshPhysicalMaterial({ color, emissive: color, emissiveIntensity: 0.8, roughness: 0.05, transmission: 0.4, thickness: 0.2, flatShading: true });
+  const shard = new THREE.Mesh(new THREE.OctahedronGeometry(0.09, 0), crystM); shard.scale.set(0.8, 1.7, 0.8); P.add(shard);
+  const sides = [-1, 1].map(s => { const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.045, 0), crystM); m.scale.set(0.8, 1.6, 0.8); m.position.set(s * 0.07, -0.02, 0); m.rotation.z = s * 0.5; P.add(m); return m; });
+  const glow = _glowSprite(softDotTexture(), color, 0.5, 0.5); P.add(glow);
+  const light = new THREE.PointLight(color, 0.5, 1.8); P.add(light);
+  let t = 0;
+  g.userData.tick = (dt) => { t += dt; const f = 0.5 + 0.5 * Math.sin(t * 2.4);
+    crystM.emissiveIntensity = 0.5 + f * 1.1; glow.material.opacity = 0.25 + f * 0.45; glow.scale.setScalar(0.4 + f * 0.2); light.intensity = 0.3 + f * 0.5;
+    P.rotation.z = Math.sin(t * 1.5) * 0.12; shard.rotation.y += dt * 0.9; sides.forEach((m, i) => m.position.y = -0.02 + Math.sin(t * 3 + i * 3) * 0.01); };
+  g.userData.setColor = (c) => { crystM.color.set(c); crystM.emissive.set(c); glow.material.color.set(c); light.color.set(c); };
+  return { bone: 'torso', object: g };
+}
+
+function buildMeteorCape(color) {
+  const g = new THREE.Group();
+  const capeM = new THREE.MeshStandardMaterial({ color, roughness: 0.6, side: THREE.DoubleSide, emissive: color, emissiveIntensity: 0.15 });
+  const geo = new THREE.PlaneGeometry(0.7, 1.0, 8, 12); geo.translate(0, -0.5, 0);
+  const base = geo.attributes.position.array.slice();
+  const cape = new THREE.Mesh(geo, capeM); cape.position.set(0, 0.48, -0.28); g.add(cape);
+  const dot = softDotTexture(); const sparks = [];
+  for (let i = 0; i < 16; i++) { const sp = _glowSprite(dot, i % 2 ? '#ffffff' : '#ffd36a', 0.05, 0.8); sp.userData.u = Math.random(); sp.userData.v = Math.random(); sp.userData.ph = Math.random() * 6; cape.add(sp); sparks.push(sp); }
+  const pos = geo.attributes.position;
+  let t = 0;
+  g.userData.tick = (dt) => { t += dt;
+    for (let i = 0; i < pos.count; i++) { const x = base[i * 3], y = base[i * 3 + 1], d = -y; pos.setZ(i, -d * 0.18 - Math.sin(t * 2.5 + d * 4 + x * 2) * 0.05 * d); }
+    pos.needsUpdate = true; geo.computeVertexNormals();
+    for (const s of sparks) { const d = s.userData.v; s.position.set((s.userData.u - 0.5) * 0.6, -d, -d * 0.18 - 0.02 - Math.sin(t * 2.5 + d * 4) * 0.05 * d);
+      s.material.opacity = 0.3 + 0.6 * Math.max(0, Math.sin(t * 3 + s.userData.ph)); } };
+  g.userData.setColor = (c) => { capeM.color.set(c); capeM.emissive.set(c); };
+  return { bone: 'torso', object: g };
 }

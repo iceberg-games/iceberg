@@ -78,6 +78,48 @@ for (const c of [
     colorPresets: [['Red Scarf', '#d83a3f'], ['Sky Scarf', '#4aa8e8'], ['Sunny Scarf', '#f2c230'], ['Mint Scarf', '#4fc59a']],
     desc: 'A tiny penguin buddy who rides on your shoulder, flaps happily and wears a scarf you pick.',
   },
+  {
+    id: 'bubble_wand', name: 'Soap Bubble Wand', slot: 'hand', price: 240, icon: '🫧', rarity: 'rare',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#7ec8ff',
+    colorPresets: [['Glacier', '#7ec8ff'], ['Pink Soap', '#ff8fd0'], ['Lime Fizz', '#a8f06a'], ['Grape Pop', '#a98bff']],
+    desc: 'Swish it and shimmering rainbow soap bubbles drift out, wobble on the breeze and pop with a sparkle. Impossible to stop watching.',
+  },
+  {
+    id: 'sr_frost_goggles', name: 'Sled Rush Frost Goggles', slot: 'face', price: 180, icon: '🥽', rarity: 'rare',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#ff5fa8',
+    colorPresets: [['Bubblegum', '#ff5fa8'], ['Ice Blue', '#5fd0ff'], ['Lime Pop', '#9cf05a'], ['Sunset', '#ff9a3c']],
+    desc: 'Chunky candy-ice goggles with a shimmery lens, bouncy pom-poms and a glint that sweeps across as you ride.',
+  },
+  {
+    id: 'sr_runner_spray', name: 'Runner Sled Pack', slot: 'back', price: 260, icon: '🛷', rarity: 'rare',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#3cc8ff',
+    colorPresets: [['Glacier', '#3cc8ff'], ['Cherry', '#ff4f6d'], ['Mint', '#4fe0b0'], ['Grape', '#9a7bff']],
+    desc: 'A mini sled on your back with chrome runners that kick up a nonstop puff of sparkly snow spray.',
+  },
+  {
+    id: 'sf_star_halo', name: 'Starfall Twinkle Halo', slot: 'face', price: 300, icon: '✨', rarity: 'epic',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#ffd84a',
+    colorPresets: [['Starlight', '#ffd84a'], ['Lake Blue', '#6ad8ff'], ['Wish Pink', '#ff8fd8'], ['Moon Mint', '#8fffd0']],
+    desc: 'A ring of puffy stars circling your head, each one twinkling and spinning on its own beat.',
+  },
+  {
+    id: 'sf_star_net', name: 'Star-Catch Net', slot: 'hand', price: 220, icon: '🥅', rarity: 'rare',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#6ad8ff',
+    colorPresets: [['Lake Blue', '#6ad8ff'], ['Lilac', '#c49bff'], ['Peach', '#ffb38a'], ['Seafoam', '#7fffd4']],
+    desc: 'A swaying butterfly net with a few caught falling stars glowing and swirling inside.',
+  },
+  {
+    id: 'ah_glow_shard', name: 'Aurora Hollow Glow Shard', slot: 'neck', price: 280, icon: '💎', rarity: 'epic',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#5dffb0',
+    colorPresets: [['Aurora Green', '#5dffb0'], ['Frost Cyan', '#5fe8ff'], ['Violet Dusk', '#b18cff'], ['Rose Ice', '#ff8fb8']],
+    desc: 'A cluster of ice crystals on a cord that slowly breathes with a soft aurora glow.',
+  },
+  {
+    id: 'so_meteor_cape', name: 'Observatory Meteor Cape', slot: 'back', price: 380, icon: '☄️', rarity: 'epic',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#3a2f8f',
+    colorPresets: [['Night Sky', '#3a2f8f'], ['Nebula Pink', '#c03a8f'], ['Deep Teal', '#1f6f86'], ['Cosmic Black', '#1a1a2e']],
+    desc: 'A rippling night-sky cape sprinkled with meteor dust that flickers and twinkles as it flows.',
+  },
 ]) { COSMETICS.push(c); COSMETIC_BY_ID[c.id] = c; }
 
 // Wearable 3D outfit (kind 'model' in the shirt slot: knit body + sleeves over the torso/arms).
