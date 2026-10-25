@@ -431,6 +431,9 @@ export class Economy {
   itemAvailability(id, now = Date.now()) {
     const item = COSMETIC_BY_ID[id], ev = eventOfItem(item);
     if (!item) return { forSale: false, limited: false, state: 'unknown_item' };
+    // Iceberg Plus perks (wh_plus_*): locked until the membership flag exists and is set. Plus isn't built yet, so
+    // `this.isPlus` is never true today; the server-side is_plus check must land before these can be scheduled.
+    if ((item.plusOnly ?? id.startsWith('wh_plus_')) && !this.isPlus) return { forSale: false, limited: !!ev, eventId: ev || undefined, state: 'plus_only', hidden: true };
     if (!ev) return isGrantOnly(item) ? { forSale: false, limited: false, state: 'not_for_sale' } : { forSale: true, limited: false };
     let st, t = now;
     if (!this.remote) st = this.backend.eventStatus(ev, now);
