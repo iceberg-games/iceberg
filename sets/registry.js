@@ -4,4 +4,5 @@
 export const SETS = {
   winterhaven: () => import('./winterhaven/index.js'),
   'starfall-observatory': () => import('./starfall-observatory/index.js'),
+  'knockout-floes': () => import('./knockout-floes/index.js'),
 };
