@@ -6,5 +6,5 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 export default defineConfig({
   base: './',
   plugins: [viteSingleFile()],
-  build: { outDir: 'dist', chunkSizeWarningLimit: 2000 },
+  build: { outDir: 'dist', chunkSizeWarningLimit: 2000, sourcemap: false, minify: 'esbuild' },   // no source maps
 });

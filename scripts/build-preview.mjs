@@ -65,7 +65,8 @@ try {
     await build({
       configFile: false, root: ROOT, base: './', publicDir: false, logLevel: 'warn', envDir: resolve(OUT, '.noenv'),
       plugins: [viteSingleFile({ useRecommendedBuildConfig: false })],
-      build: { outDir, emptyOutDir: true, target: 'es2022', chunkSizeWarningLimit: 100000000, cssCodeSplit: false, assetsDir: '',
+      build: { outDir, emptyOutDir: true, sourcemap: false, minify: 'esbuild',   // never ship source maps (source protection)
+      target: 'es2022', chunkSizeWarningLimit: 100000000, cssCodeSplit: false, assetsDir: '',
         assetsInlineLimit: (file) => !BIG_MEDIA.test(file),
         rollupOptions: { input: resolve(ROOT, p.html), output: { inlineDynamicImports: true } } },
     });

@@ -55,6 +55,11 @@ jobs:
       - name: No preview folder if the preview build failed
         if: steps.preview.outcome != 'success'
         run: rm -rf dist-site/preview && echo "::warning::Dev preview build failed; deploying the main site without /preview/"
+      - name: Source protection (no source maps / raw sources in the published site)
+        run: |
+          if find dist-site -name '*.map' | grep -q .; then echo "::error::source map files in dist-site"; exit 1; fi
+          if grep -rlI --include='*.html' --include='*.js' 'sourceMappingURL=' dist-site | grep -q .; then echo "::error::sourceMappingURL in dist-site"; exit 1; fi
+          if find dist-site -path '*/src/*' -name '*.js' | grep -q .; then echo "::error::raw src/ files in dist-site"; exit 1; fi
       - uses: actions/upload-pages-artifact@v3
         with: { path: dist-site }
   deploy:

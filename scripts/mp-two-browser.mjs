@@ -143,7 +143,7 @@ try {
   // reconnect after dropping the network (A goes offline; sockets cut)
   await pa.ctx.setOffline(true);
   if (dev) dev.realtime.dropAll();
-  const despawned = await gone(pb, A, 20000);
+  const despawned = await gone(pb, A, LOCAL ? 20000 : 60000);   // real Realtime notices a dropped socket only after its own heartbeat timeout
   await pa.game.waitForTimeout(3000);
   await pa.ctx.setOffline(false);
   const back = await sees(pb, A, 40000);

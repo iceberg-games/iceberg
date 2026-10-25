@@ -39,7 +39,8 @@ for (const p of pages) {
   await build({
     configFile: false, root: ROOT, base: './', publicDir: false, logLevel: 'warn',
     plugins: [viteSingleFile({ useRecommendedBuildConfig: false })],
-    build: { outDir, emptyOutDir: true, chunkSizeWarningLimit: 100000000, cssCodeSplit: false, assetsDir: '',
+    build: { outDir, emptyOutDir: true, sourcemap: false, minify: 'esbuild',   // never ship source maps (source protection)
+      chunkSizeWarningLimit: 100000000, cssCodeSplit: false, assetsDir: '',
       assetsInlineLimit: (file) => !BIG_MEDIA.test(file),                    // everything else inlined (single file)
       rollupOptions: { input: resolve(ROOT, p.html), output: { inlineDynamicImports: true } } },
   });
