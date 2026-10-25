@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { COSMETIC_BY_ID } from '../data/cosmetics.js';
+import { getBodySlots, normalizeBodyType, loadBodyType, BONE_ANCHOR, CLOTHING_ANCHOR, DEFAULT_BODY_TYPE } from './bodyTypes.js';
+export { BODY_TYPES, BODY_TYPE_IDS, getBodySlots, loadBodyType, saveBodyType } from './bodyTypes.js';
 import WIND_MAIN_OGG from '../assets/audio/tornado_hat_wind_loop.ogg?url';
 import WIND_MAIN_MP3 from '../assets/audio/tornado_hat_wind_loop.mp3?url';
 import WIND_HIGH_OGG from '../assets/audio/tornado_hat_wind_loop_high.ogg?url';
@@ -2085,19 +2087,24 @@ export class Avatar {
     this._talkManual = false;  // setTalking(true)
     this._talkClock = 0; this._mouthFrame = 0; this._mouthSeq = 0; this._talkActive = false;
     this._mouthOverlay = null; // lazily built for face cosmetics that cover the mouth
-    const limb = new THREE.BoxGeometry(0.5, 1, 0.5);
-
-    this.bones = {};
-    const mk = (name, x, y) => { const p = new THREE.Group(); p.position.set(x, y, 0); this.root.add(p); this.bones[name] = p; return p; };
-    mk('legL', -0.25, 1).add(mesh(limb, this.mats.legs, 0, -0.5, 0));
-    mk('legR', 0.25, 1).add(mesh(limb, this.mats.legs, 0, -0.5, 0));
-    mk('torso', 0, 1.5).add(mesh(new THREE.BoxGeometry(1, 1, 0.5), this.mats.torso));
-    mk('armL', -0.75, 2).add(mesh(limb, this.mats.arms, 0, -0.5, 0));
-    mk('armR', 0.75, 2).add(mesh(limb, this.mats.arms, 0, -0.5, 0));
+    // rig: unit meshes scaled per body type (see bodyTypes.js); cosmetics hang off per-bone anchors
+    const unit = new THREE.BoxGeometry(1, 1, 1);
+    this.bones = {}; this.bodyMeshes = {}; this.anchors = {};
+    const mk = (name, mat) => {
+      const p = new THREE.Group(); p.name = name; this.root.add(p); this.bones[name] = p;
+      const m = Array.isArray(mat) ? mat : mat; const me = mesh(unit, m); p.add(me); this.bodyMeshes[name] = me;
+      const a = new THREE.Group(); a.name = name + 'Anchor'; p.add(a); this.anchors[name] = a;
+      const c = new THREE.Group(); c.name = name + 'ClothAnchor'; p.add(c); (this.clothAnchors ||= {})[name] = c;
+      return p;
+    };
+    mk('legL', this.mats.legs); mk('legR', this.mats.legs); mk('torso', this.mats.torso);
+    mk('armL', this.mats.arms); mk('armR', this.mats.arms);
     // head: face texture on +Z (material index 4)
     const hm = this.mats.skin;
-    this.headMesh = mesh(new THREE.BoxGeometry(0.62, 0.62, 0.62), [hm, hm, hm, hm, faceMat, hm], 0, 0.31, 0);
-    mk('head', 0, 2).add(this.headMesh);
+    mk('head', [hm, hm, hm, hm, faceMat, hm]);
+    this.headMesh = this.bodyMeshes.head;
+    this.bodyType = null;
+    this.setBodyType(DEFAULT_BODY_TYPE);
 
     this.attached = {}; // slot -> object
     this.custom = null;
@@ -2106,6 +2113,30 @@ export class Avatar {
     this.time = 0;
     this._initTrail();
   }
+
+  /** Switch body shape: 'classic' | 'tall' | 'stout'. Cosmetics follow via anchors (no rebuild). */
+  setBodyType(type) {
+    const t = normalizeBodyType(type);
+    const S = getBodySlots(t);
+    this.bodyType = t; this.bodySlots = S;
+    for (const [name, [x, y, z]] of Object.entries(S.bones)) this.bones[name].position.set(x, y, z);
+    const [aw, al, ad] = S.limbs.arm, [lw, ll, ld] = S.limbs.leg;
+    for (const n of ['armL', 'armR']) { const m = this.bodyMeshes[n]; m.scale.set(aw, al, ad); m.position.set(0, -al / 2, 0); }
+    for (const n of ['legL', 'legR']) { const m = this.bodyMeshes[n]; m.scale.set(lw, ll, ld); m.position.set(0, -ll / 2, 0); }
+    this.bodyMeshes.torso.scale.set(...S.torso);
+    const hs = S.head; this.bodyMeshes.head.scale.setScalar(hs); this.bodyMeshes.head.position.set(0, hs / 2, 0);
+    for (const [bone, slot] of Object.entries(BONE_ANCHOR)) {
+      const a = S.anchors[slot], g = this.anchors[bone];
+      g.position.set(...a.offset); g.scale.set(...a.scale);
+    }
+    for (const [bone, slot] of Object.entries(CLOTHING_ANCHOR)) {
+      const a = S.anchors[slot], g = this.clothAnchors[bone];
+      g.position.set(...a.offset); g.scale.set(...a.scale);
+    }
+    return this;
+  }
+  /** Bone-or-anchor parent for a cosmetic authored in classic space. */
+  _anchorFor(bone, clothing = false) { return (clothing && this.clothAnchors[bone]) || this.anchors[bone] || this.bones[bone] || this.root; }
 
   setColors({ skin, shirt, pants }) {
     this._lastColors = { skin, shirt, pants };
@@ -2254,7 +2285,7 @@ export class Avatar {
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
     const m = new THREE.Mesh(new THREE.PlaneGeometry(0.31, 0.31), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false }));
     m.position.set(0, 0.213, 0.4); m.renderOrder = 5; m.userData.ctx = c.getContext('2d'); m.visible = false;
-    this.bones.head.add(m); this._mouthOverlay = m;
+    this._anchorFor('head').add(m); this._mouthOverlay = m;
   }
   _updateTalk(dt) {
     const ms = Math.max(0, dt * 1000);
@@ -2273,6 +2304,7 @@ export class Avatar {
   }
 
   applyLoadout(profile) {
+    if (profile.bodyType) this.setBodyType(profile.bodyType);
     if (profile.rocketColors) this.rocketColors = { ...profile.rocketColors };
     if (profile.cosmeticColors) this.cosmeticColors = { ...profile.cosmeticColors };
     for (const slot of Object.keys(this.attached)) this._detach(slot);
@@ -2289,9 +2321,10 @@ export class Avatar {
       else if (BUILDERS[id]) {
         const { bone, object, extras } = BUILDERS[id](this.rocketColors, this.cosmeticColors[id] || item.defaultColor);
         object.traverse(o => { if (o.isMesh) o.castShadow = true; });
-        this.bones[bone].add(object);
+        const cloth = item.slot === 'shirt';
+        this._anchorFor(bone, cloth).add(object);
         // optional extra pieces on other bones (e.g. sweater sleeves); removed with the main object
-        object.userData.extras = (extras || []).map(e => { e.object.traverse(o => { if (o.isMesh) o.castShadow = true; }); this.bones[e.bone].add(e.object); return e.object; });
+        object.userData.extras = (extras || []).map(e => { e.object.traverse(o => { if (o.isMesh) o.castShadow = true; }); this._anchorFor(e.bone, cloth).add(e.object); return e.object; });
         object.userData.cosmeticId = id;
         this.attached[slot] = object;
       }

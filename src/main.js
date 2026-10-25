@@ -9,7 +9,7 @@ import { Economy } from './core/economy.js';
 import { bindQuests } from './core/quests.js';
 import { getAudioListener, setAudioCamera } from './core/audio.js';
 import { bus } from './core/events.js';
-import { Avatar } from './game/avatar.js';
+import { Avatar, loadBodyType } from './game/avatar.js';
 import { ModelLibrary } from './game/models.js';
 import { Music } from './audio/music.js';
 import { Engine } from './engine/engine.js';
@@ -50,6 +50,7 @@ async function boot() {
   await models.init();
 
   const avatar = new Avatar();
+  avatar.setBodyType(loadBodyType());
   avatar.applyLoadout(economy.profile);
   const wear = modelPrefs.loadWear();
   if (wear && models.has(wear.modelId)) avatar.setCustomWear(models.instance(wear.modelId), wear);

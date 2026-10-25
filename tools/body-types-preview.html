@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8"><title>Iceberg body types preview</title>
+<style>body{margin:0;background:#cfe8f7;font:14px system-ui}#l{position:fixed;top:8px;left:8px;background:#fffc;padding:6px 10px;border-radius:8px}</style>
+<div id="l">classic · tall · stout — hat/neck/back/hand cosmetics (?items=a,b,c)</div>
+<script type="module">
+import * as THREE from 'three';
+import { Avatar, BODY_TYPE_IDS } from '/src/game/avatar.js';
+const q = new URLSearchParams(location.search);
+const sets = (q.get('sets') || 'tophat,scarf,backpack,bubble_wand|earmuffs,penguin_pal,snowglobe_pack,cocoa_mug,cable_sweater|crown,icewings,frost_lantern,shades').split('|');
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(innerWidth, innerHeight); document.body.appendChild(r.domElement);
+const sc = new THREE.Scene(); sc.background = new THREE.Color('#cfe8f7');
+sc.add(new THREE.HemisphereLight('#ffffff', '#88aacc', 2.2)); const d = new THREE.DirectionalLight('#fff', 1.5); d.position.set(3, 6, 5); sc.add(d);
+const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 100);
+const rows = sets.length; cam.position.set(0, 1.6 + (rows - 1) * 1.6, 9 + rows * 3.2); cam.lookAt(0, 1.3 + (rows - 1) * 1.6, 0);
+const SKIP = { shirt: 1 };
+sets.forEach((s, ri) => BODY_TYPE_IDS.forEach((t, i) => {
+  const a = new Avatar(); const eq = {}; const C = Object.fromEntries((s.split(',')).map(id => [id, id]));
+  let n = 0; for (const id of s.split(',')) eq['s' + (n++)] = id;
+  a.setBodyType(t); a.applyLoadout({ equipped: eq }); a.root.position.set((i - 1) * 2.6, ri * 3.4, 0); a.root.rotation.y = 0.5; sc.add(a.root);
+}));
+r.render(sc, cam); window.__ready = true;
+</script>

@@ -10,6 +10,7 @@ import { PACKS, payments } from '../core/payments.js';
 import { plusCard } from '../core/plus.js';
 import { REWARDS } from '../core/economy.js';
 import { modelPrefs } from '../backend/LocalBackend.js';
+import { BODY_TYPES, saveBodyType } from '../game/bodyTypes.js';
 
 // Optional device-mode module (owned by Publisher). import.meta.glob resolves to {}
 // when the file doesn't exist, so the build never breaks on its absence.
@@ -343,6 +344,9 @@ export class UI {
         e.isEquipped(c.id) ? null : h('p.muted', 'Equip it to see the color on your avatar.')));
     }
     sections.push(this._wearSection());
+    sections.unshift(h('h4', '🧍 Body type'), h('div.locker-row.body-types', Object.values(BODY_TYPES).map(b => { const on = this.avatar.bodyType === b.id;
+      return h('button.locker-item' + (on ? '.on' : ''), { 'data-body': b.id, 'data-sfx': 'equip', title: `Switch to ${b.label} body`, onclick: () => { saveBodyType(b.id); this.avatar.setBodyType(b.id); this.toast(`${b.label} body`, b.icon); this.refreshDrawer(); } },
+        h('span.card-icon', b.icon), h('span', b.label), h('small', on ? 'Current' : 'Pick')); })));
     return this._frame('🎒 Locker', 'Your owned items. Click to equip/unequip.', ...sections);
   }
 
