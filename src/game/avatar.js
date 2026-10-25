@@ -2634,18 +2634,18 @@ function buildSledFrostGoggles(color) {
 }
 
 function buildSledRunnerSpray(color) {
-  const g = new THREE.Group(); const B = new THREE.Group(); B.position.set(0, -0.1, -0.32); g.add(B);
+  const g = new THREE.Group(); const B = new THREE.Group(); B.position.set(0, 0.05, -0.38); B.rotation.x = -0.12; g.add(B);
   const board = std(color, { roughness: 0.3, metalness: 0.2 }), runner = std('#e8f6ff', { metalness: 0.9, roughness: 0.15 });
-  const deck = new THREE.Mesh(new RoundedBoxGeometry(0.42, 0.75, 0.06, 4, 0.03), board); B.add(deck);
+  const deck = new THREE.Mesh(new RoundedBoxGeometry(0.5, 0.85, 0.07, 4, 0.03), board); B.add(deck);
   for (const s of [-1, 1]) { const r = mesh(new THREE.TorusGeometry(0.39, 0.018, 8, 24, Math.PI * 0.6), runner, s * 0.2, 0, -0.05); r.rotation.y = Math.PI / 2; r.rotation.z = Math.PI * 0.2; B.add(r); }
   const dot = softDotTexture(); const N = 18, ps = [];
-  for (let i = 0; i < N; i++) { const sp = _glowSprite(dot, i % 3 ? '#ffffff' : color, 0.06, 0.8); B.add(sp); ps.push({ sp, life: Math.random() * 1.2, vx: 0, vy: 0, vz: 0 }); }
-  const spawn = (p) => { p.life = 0; p.x = (Math.random() - 0.5) * 0.4; p.y = -0.38; p.z = -0.05; p.vx = (Math.random() - 0.5) * 0.6; p.vy = 0.3 + Math.random() * 0.4; p.vz = -0.3 - Math.random() * 0.3; };
+  for (let i = 0; i < N; i++) { const sp = _glowSprite(dot, i % 3 ? '#ffffff' : color, 0.09, 0.9); B.add(sp); ps.push({ sp, life: Math.random() * 1.2, vx: 0, vy: 0, vz: 0 }); }
+  const spawn = (p) => { p.life = 0; p.x = (Math.random() - 0.5) * 0.4; p.y = -0.36; p.z = -0.08; p.vx = (Math.random() - 0.5) * 0.7; p.vy = 0.15 + Math.random() * 0.3; p.vz = -0.35 - Math.random() * 0.35; };
   ps.forEach(spawn); ps.forEach(p => p.life = Math.random() * 1.2);
   let t = 0;
-  g.userData.tick = (dt) => { t += dt; B.rotation.z = Math.sin(t * 2.2) * 0.05; B.position.y = -0.1 + Math.sin(t * 4.4) * 0.01;
+  g.userData.tick = (dt) => { t += dt; B.rotation.z = Math.sin(t * 2.2) * 0.05; B.position.y = 0.05 + Math.sin(t * 4.4) * 0.01;
     for (const p of ps) { p.life += dt; if (p.life > 1.2) spawn(p); p.vy -= 0.8 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
-      p.sp.position.set(p.x, p.y, p.z); const k = p.life / 1.2; p.sp.material.opacity = 0.85 * (1 - k); p.sp.scale.setScalar(0.04 + k * 0.08); } };
+      p.sp.position.set(p.x, p.y, p.z); const k = p.life / 1.2; p.sp.material.opacity = 0.85 * (1 - k); p.sp.scale.setScalar(0.08 + k * 0.14); } };
   g.userData.setColor = (c) => { board.color.set(c); ps.forEach((p, i) => { if (!(i % 3)) p.sp.material.color.set(c); }); };
   return { bone: 'torso', object: g };
 }
