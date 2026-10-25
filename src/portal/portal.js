@@ -2,6 +2,7 @@
 // Safe Chat room, friends, settings. Shares the session + economy with the play page.
 import '../style.css';
 import './portal.css';
+import '../ui/iceSkin.css';
 import { h, clear } from '../ui/dom.js';
 import { plusBadge, plusCard, syncPlus, grantPlus } from '../core/plus.js';
 import { backend } from '../backend/LocalBackend.js';

@@ -1,0 +1,87 @@
+/* ICE skin: frosted panels, chunky springy buttons, crystalline accents. Layered over style.css / portal.css.
+   Storm theme (body.theme-storm) keeps its own look: portal-level rules are scoped :not(.theme-storm). */
+@import './iceTokens.css';
+
+/* ---- buttons: chunky lip + springy press ---- */
+.btn { position: relative; overflow: hidden; border-radius: var(--ice-radius); font-weight: 800; letter-spacing: .2px;
+  background: var(--ice-accent-grad); box-shadow: var(--ice-lip), 0 8px 18px rgba(63,157,224,.28), inset 0 1px 0 rgba(255,255,255,.55);
+  transition: transform var(--ice-dur-fast) var(--ice-spring), box-shadow var(--ice-dur-fast), filter var(--ice-dur); }
+.btn::before { content: ''; position: absolute; inset: 0; background: var(--ice-shimmer); background-size: 250% 100%; background-position: 130% 0;
+  pointer-events: none; transition: background-position .6s var(--ice-ease); }
+.btn:hover { transform: translateY(var(--ice-hover-lift)); filter: brightness(1.06); }
+.btn:hover::before { background-position: -30% 0; }
+.btn:active { transform: translateY(3px) scale(var(--ice-press-scale)); box-shadow: 0 1px 0 var(--ice-accent-lo), 0 3px 8px rgba(63,157,224,.25); }
+.btn.secondary { background: linear-gradient(180deg, #fff, #eef8ff); color: var(--ice-accent-deep); box-shadow: 0 4px 0 var(--ice-border-cool), var(--ice-shadow-sm), var(--ice-edge); }
+.btn.secondary:active { box-shadow: 0 1px 0 var(--ice-border-cool); }
+.btn.disabled, .btn.disabled:hover { background: #c3d3df; box-shadow: 0 3px 0 #9fb3c3; transform: none; filter: none; }
+.btn.disabled::before { display: none; }
+.icon-btn { border-radius: var(--ice-radius-sm); background: linear-gradient(180deg, #fff, #eaf6ff); box-shadow: 0 3px 0 var(--ice-border-cool), var(--ice-shadow-sm);
+  transition: transform var(--ice-dur-fast) var(--ice-spring); }
+.icon-btn:hover { transform: translateY(-1px) rotate(-3deg); } .icon-btn:active { transform: scale(.9); }
+
+/* ---- drawers (Shop / Locker / Store / Models): frosted glass with an icy edge ---- */
+.drawer { background: var(--ice-panel-grad); backdrop-filter: var(--ice-frost-blur); -webkit-backdrop-filter: var(--ice-frost-blur);
+  border-left: 3px solid var(--ice-border); box-shadow: -14px 0 40px rgba(14,42,69,.22), inset 1px 0 0 var(--ice-border-cool);
+  animation: ice-drawer-in .38s var(--ice-spring) both; }
+.drawer::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 6px; pointer-events: none;
+  background: linear-gradient(90deg, #bfe7ff, #fff, #a8dcff, #fff, #bfe7ff); opacity: .9; }
+@keyframes ice-drawer-in { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+.drawer-head { border-bottom: 2px dashed var(--ice-border-cool); }
+.drawer-head h2 { color: var(--ice-accent-deep); text-shadow: 0 2px 0 #fff, 0 0 14px rgba(108,200,255,.45); }
+.drawer-head h2::after { content: ' ❄'; font-size: .7em; color: var(--ice-accent-hi); }
+.drawer-body h4 { color: var(--ice-accent-deep); letter-spacing: .3px; }
+
+/* tabs */
+.tab { padding: 6px 13px; border-radius: var(--ice-radius-pill); background: rgba(255,255,255,.85); box-shadow: 0 2px 0 var(--ice-border-cool), var(--ice-edge);
+  transition: transform var(--ice-dur-fast) var(--ice-spring), background var(--ice-dur); }
+.tab:hover { transform: translateY(-1px); background: #fff; } .tab:active { transform: scale(.94); }
+.tab.sel { background: var(--ice-accent-grad); color: #fff; box-shadow: 0 3px 0 var(--ice-accent-lo), var(--ice-glow); }
+
+/* item cards: little ice blocks that pop on hover */
+.card, .pack, .locker-item { border-radius: var(--ice-radius); background: linear-gradient(170deg, #fff 0%, #f1faff 70%, #e3f3fd 100%);
+  box-shadow: 0 4px 0 var(--ice-border-cool), var(--ice-shadow-sm), var(--ice-edge);
+  transition: transform var(--ice-dur) var(--ice-spring), box-shadow var(--ice-dur); }
+.card:hover, .pack:hover, .locker-item:hover { transform: translateY(-3px) scale(1.02); box-shadow: 0 6px 0 var(--ice-border-cool), var(--ice-shadow), var(--ice-edge); }
+.card:hover .card-icon { animation: ice-bob .6s var(--ice-spring); }
+@keyframes ice-bob { 40% { transform: translateY(-4px) scale(1.12) rotate(-6deg); } 100% { transform: none; } }
+.card.owned { border-color: var(--ice-border-cool); }
+.card.premium { background: linear-gradient(135deg, #e3f5ff, #fff 45%, #dcecff); border: 2px solid var(--ice-accent-hi); box-shadow: 0 4px 0 #9fd3f5, var(--ice-glow); }
+.locker-item.on { border-color: var(--ice-accent); background: linear-gradient(180deg, #e8f6ff, #cfeaff); box-shadow: 0 3px 0 var(--ice-accent-lo), var(--ice-glow); }
+.btn.equip.on { background: linear-gradient(180deg, #fff, #e8f6ff); color: var(--ice-accent-deep); box-shadow: 0 3px 0 var(--ice-border-cool), inset 0 0 0 2px var(--ice-accent-hi); }
+.price { color: var(--ice-accent-lo); font-weight: 800; }
+.pack .tag { background: var(--ice-gold); box-shadow: 0 2px 0 #c99a1e; }
+.rocket-custom, .wear, .empty { background: var(--ice-panel); box-shadow: var(--ice-edge); }
+
+/* HUD buttons (menu chrome) */
+.hud-btn { border-radius: 16px; background: linear-gradient(180deg, #fff, #eaf6ff); box-shadow: 0 4px 0 var(--ice-border-cool), var(--ice-shadow-sm);
+  transition: transform var(--ice-dur-fast) var(--ice-spring), background var(--ice-dur); }
+.hud-btn:hover { transform: translateY(-3px); } .hud-btn:active { transform: translateY(2px) scale(var(--ice-press-scale)); }
+.hud-btn.active { background: var(--ice-accent-grad); box-shadow: 0 4px 0 var(--ice-accent-lo), var(--ice-glow); }
+
+/* toasts + modals: frost */
+.ib-toast { background: var(--ice-panel-strong); box-shadow: var(--ice-shadow-lg), var(--ice-edge); border-radius: var(--ice-radius); }
+.ib-modal { background: var(--ice-panel-grad); backdrop-filter: var(--ice-frost-blur); box-shadow: 0 24px 70px rgba(5,20,35,.45), var(--ice-edge); }
+.ev-modal.ib-modal { backdrop-filter: none; }
+
+/* ---- portal (not during storm theme) ---- */
+body.portal-page:not(.theme-storm) { background: var(--ice-bg) fixed; }
+body.portal-page:not(.theme-storm)::before { content: ''; position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background: radial-gradient(circle at 12% 8%, rgba(255,255,255,.9), transparent 28%), radial-gradient(circle at 88% 92%, rgba(168,220,255,.5), transparent 35%); }
+body.portal-page:not(.theme-storm) .p-header { background: var(--ice-panel); backdrop-filter: var(--ice-frost-blur); border-radius: var(--ice-radius-lg);
+  box-shadow: var(--ice-shadow), var(--ice-edge); }
+body.portal-page:not(.theme-storm) .p-tab { border-radius: var(--ice-radius); background: rgba(255,255,255,.8); box-shadow: 0 3px 0 var(--ice-border-cool), var(--ice-edge); }
+body.portal-page:not(.theme-storm) .p-tab:active { transform: translateY(2px) scale(var(--ice-press-scale)); box-shadow: 0 1px 0 var(--ice-border-cool); }
+body.portal-page:not(.theme-storm) .p-tab.on { background: var(--ice-accent-grad); box-shadow: 0 4px 0 var(--ice-accent-lo), var(--ice-glow); }
+body.portal-page:not(.theme-storm) .p-card { background: var(--ice-panel-grad); box-shadow: var(--ice-shadow), var(--ice-edge); }
+body.portal-page:not(.theme-storm) .p-grid .game-card { box-shadow: 0 5px 0 var(--ice-border-cool), var(--ice-shadow), var(--ice-edge); }
+body.portal-page:not(.theme-storm) .p-grid .game-card:hover { box-shadow: 0 7px 0 var(--ice-border-cool), var(--ice-shadow-lg), 0 0 0 3px rgba(108,200,255,.45); }
+body.portal-page:not(.theme-storm) .p-user { background: var(--ice-panel-strong); box-shadow: var(--ice-shadow-sm), var(--ice-edge); border-radius: var(--ice-radius-pill); }
+body.portal-page:not(.theme-storm) .p-friend { background: var(--ice-panel-strong); box-shadow: 0 3px 0 var(--ice-border-cool), var(--ice-edge); }
+.p-grid .game-card .btn.play { box-shadow: 0 4px 0 var(--ice-success-lip), 0 8px 16px rgba(47,191,113,.3); background: var(--ice-success-grad); }
+
+@media (hover: none) { .card:hover, .pack:hover, .locker-item:hover, .btn:hover, .hud-btn:hover { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .drawer, .card:hover .card-icon { animation: none !important; }
+  .btn, .btn::before, .tab, .card, .pack, .locker-item, .hud-btn, .icon-btn { transition: none !important; }
+  .btn:hover, .card:hover, .pack:hover, .locker-item:hover, .hud-btn:hover, .icon-btn:hover, .tab:hover { transform: none; }
+}

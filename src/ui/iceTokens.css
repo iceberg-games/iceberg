@@ -1,0 +1,29 @@
+/* ICE design tokens: shared by portal, menus, shop/locker, and game HUDs (e.g. Sled Rush).
+   import '../ui/iceTokens.css' (or the path relative to you) and use var(--ice-*). Pure variables, no selectors beyond :root. */
+:root {
+  /* palette (keeps the existing --ice-50..900 scale from style.css) */
+  --ice-bg-top: #eef8ff; --ice-bg-mid: #d9eefc; --ice-bg-bottom: #c7e3f7;
+  --ice-bg: linear-gradient(180deg, var(--ice-bg-top) 0%, var(--ice-bg-mid) 55%, var(--ice-bg-bottom) 100%);
+  --ice-panel: rgba(244, 251, 255, .78); --ice-panel-strong: rgba(250, 254, 255, .94);
+  --ice-panel-grad: linear-gradient(160deg, rgba(255,255,255,.92) 0%, rgba(232,246,255,.86) 60%, rgba(214,238,252,.9) 100%);
+  --ice-frost-blur: blur(14px) saturate(1.25);
+  --ice-border: rgba(255, 255, 255, .85); --ice-border-cool: #bfe2f8; --ice-edge: inset 0 1px 0 rgba(255,255,255,.95), inset 0 0 0 1px rgba(159,211,245,.55);
+  --ice-accent: #3f9de0; --ice-accent-hi: #6cc8ff; --ice-accent-lo: #1f6fae; --ice-accent-deep: #18466e;
+  --ice-accent-grad: linear-gradient(180deg, var(--ice-accent-hi) 0%, var(--ice-accent) 55%, #2f86cc 100%);
+  --ice-glow: 0 0 0 4px rgba(108, 200, 255, .28), 0 6px 22px rgba(63, 157, 224, .38);
+  --ice-shimmer: linear-gradient(115deg, transparent 30%, rgba(255,255,255,.75) 48%, transparent 62%);
+  --ice-text: #0e2a45; --ice-text-soft: #4b6d8c; --ice-text-on-accent: #fff;
+  --ice-success: #2fbf71; --ice-success-grad: linear-gradient(180deg, #5fe09b, #23a35e); --ice-success-lip: #17703f;
+  --ice-danger: #e0435f; --ice-danger-grad: linear-gradient(180deg, #f2667d, #c9304b); --ice-danger-lip: #8f1f33;
+  --ice-warn: #f0a630; --ice-gold: #ffcf4d;
+  /* shape + depth: chunky, friendly */
+  --ice-radius-sm: 10px; --ice-radius: 14px; --ice-radius-lg: 20px; --ice-radius-pill: 999px;
+  --ice-lip: 0 4px 0 var(--ice-accent-lo);           /* chunky button "lip" */
+  --ice-shadow-sm: 0 2px 8px rgba(14, 42, 69, .10);
+  --ice-shadow: 0 8px 24px rgba(14, 42, 69, .14);
+  --ice-shadow-lg: 0 18px 44px rgba(14, 42, 69, .22);
+  /* motion */
+  --ice-ease: cubic-bezier(.22, 1, .36, 1); --ice-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --ice-dur-fast: .12s; --ice-dur: .22s; --ice-dur-slow: .45s;
+  --ice-press-scale: .95; --ice-hover-lift: -2px;
+}

@@ -19,18 +19,24 @@
 // another one (e.g. window.iceberg.getAudioListener().context). Mute follows the platform's
 // mute (window.iceberg.music.muted, or the saved 'iceberg:v1:settings'.muted on the portal).
 
+// ICE UI skin: Sound Designer's frost-glass-ui pack (/workspace/iceberg-audio/frost-glass-ui/). Filenames live ONLY here.
+// equip / unequip / tab / buy play instead of click (via data-sfx). buy is NOT bound to pointerdown: ui.js plays it after
+// the purchase is confirmed (rejections -> error). reward: panel_open then success_ding ~150 ms later (playReward()).
 const NAMES = {
-  click: ['ui_click_1', 'ui_click_2', 'ui_click_3'], hover: ['ui_hover'], play: ['ui_play_button'],
-  popup_open: ['ui_popup_open'], popup_close: ['ui_popup_close'], notification: ['ui_notification'],
-  toast: ['ui_toast'], error: ['ui_error'],
+  click: ['soft_click', 'soft_click_2', 'soft_click_3'], hover: ['hover_chime'], play: ['ui_play_button'],
+  popup_open: ['panel_open'], popup_close: ['panel_close'], notification: ['ui_notification'],
+  toast: ['ui_toast'], error: ['ui_error'], pop: ['soft_pop'], unequip: ['soft_pop'], tab: ['tab_switch'],
+  equip: ['equip'], buy: ['buy'], success: ['success_ding'],
 };
-const GAIN = { click: 0.9, hover: 0.6, play: 1.0, popup_open: 0.85, popup_close: 0.8, notification: 0.9, toast: 0.85, error: 0.9 };
-const MIN_GAP = { click: 35, hover: 90, play: 250, popup_open: 80, popup_close: 80, notification: 300, toast: 120, error: 250 };
+const GAIN = { click: 0.85, hover: 0.6, play: 1.0, popup_open: 0.85, popup_close: 0.8, notification: 0.9, toast: 0.85, error: 0.9,
+  pop: 0.8, unequip: 0.6, tab: 0.8, equip: 0.85, buy: 0.9, success: 0.85 };
+const MIN_GAP = { click: 35, hover: 90, play: 250, popup_open: 80, popup_close: 80, notification: 300, toast: 120, error: 250,
+  pop: 60, unequip: 80, tab: 60, equip: 120, buy: 200, success: 250 };
 const CLICKABLE = 'button, [role="button"], [role="tab"], [role="menuitem"], a[href], a, .clickable, [data-sfx], summary, '
   + 'input[type="button"], input[type="submit"], input[type="reset"], input[type="checkbox"], input[type="radio"], select, label.toggle';
 // Detected Play buttons (data-sfx="play" always wins): portal + menu cards, featured banner, title Start, studio Test.
 const PLAY = '.btn.play:not(.create):not(.studio-entry), .fb-play, #start-btn, #test-game';
-const MAX_VOICES = 8;
+const MAX_VOICES = 6;
 
 let S = null;   // state singleton
 
@@ -108,7 +114,7 @@ export function initUiSounds(o = {}) {
       }, { capture: true, passive: true });
     }
   }
-  const api = { playUi, setVolume, ready, context: ctx, isMuted: () => S.isMuted(), stats: S.stats };
+  const api = { playUi, playReward, setVolume, ready, context: ctx, isMuted: () => S.isMuted(), stats: S.stats };
   window.icebergUi = api;                               // for games without imports
   return (S.api = api);
 }
@@ -125,6 +131,9 @@ function sfxFor(target) {
   if (el.matches(PLAY)) return 'play';
   return 'click';
 }
+
+/** Reward modal cue: panel_open, then success_ding ~150 ms later. */
+export function playReward() { playUi('popup_open'); setTimeout(() => playUi('success'), 150); }
 
 /** Play a UI sound by name: click | hover | play | popup_open | popup_close | notification | toast | error */
 export function playUi(name = 'click', { volume = 1 } = {}) {
