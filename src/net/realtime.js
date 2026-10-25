@@ -96,8 +96,9 @@ class Channel {
     if (m.join_ref && this.joinRef && m.join_ref !== this.joinRef && m.event !== 'broadcast') return;   // stale join
     if (m.event === 'broadcast') { const p = m.payload || {}; (this.handlers.broadcast.get(p.event) || []).forEach(f => { try { f(p.payload); } catch (e) { console.warn(e); } }); return; }
     if (m.event === 'presence_state') {
+      const prev = Object.keys(this.presence);
       this.presence = {}; for (const [k, v] of Object.entries(m.payload || {})) this.presence[k] = (v.metas || []);
-      this._emitPresence(Object.keys(this.presence), []); return;
+      this._emitPresence(Object.keys(this.presence), prev.filter(k => !this.presence[k])); return;   // full snapshot (e.g. after rejoin): diff out who is gone
     }
     if (m.event === 'presence_diff') {
       const { joins = {}, leaves = {} } = m.payload || {};

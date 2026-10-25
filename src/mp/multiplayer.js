@@ -56,7 +56,13 @@ export function plainJSON(value, max = MAX_VALUE) {
   return { ok: true, json, value: JSON.parse(json) };
 }
 
-const PROXIMITY_MS = 200;                 // avatar.updateProximity ~5x/s (not every frame)
+const PROXIMITY_MS = 200;
+// Liveness: a hard network drop on live Supabase can leave the peer in presence for 30 s+ (server
+// presence timeout), so an avatar that stops sending is despawned client-side. Peers with anyone
+// to show resend at least every KEEPALIVE_MS, so 3 missed keepalives = gone. It reappears on its
+// next state broadcast or a fresh presence join.
+export const STALE_MS = 12000;
+const LIVENESS_MS = 1000;                 // avatar.updateProximity ~5x/s (not every frame)
 
 export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, AvatarClass = Avatar, RealtimeImpl = RealtimeClient, now = () => performance.now(), getListener = null, wallNow = () => Date.now(), localName = () => 'You', bus = defaultBus }) {
   let rt = null, s = null, raf = 0;
@@ -237,7 +243,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     if (res.serverNow) syncClock(res.serverNow, t0, wallNow());
     const sess = s = {
       gameId, instance: res.instance, topic: res.topic, room: `game:${gameId}:${res.instance}`, cap: res.cap, note: res.note,
-      sendHz: Math.min(MAX_HZ, Number(res.sendHz) || 1), roster: new Map(), present: new Set([me.username]), others: new Map(),
+      sendHz: Math.min(MAX_HZ, Number(res.sendHz) || 1), roster: new Map(), present: new Set([me.username]), others: new Map(), stale: new Set(),
       remote, me, lastSent: 0, lastState: null, timers: [], token: remote.accessToken, rosterAt: 0, wantSend: false,
       immediate: [], prevGround: null, prevPos: null, lastSnap: 0, gotSnapshot: false,
     };
@@ -249,6 +255,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
       sess.present = new Set([me.username, ...Object.keys(pres)]);
       for (const k of leaves) removeOther(k);
       const fresh = joins.filter(k => k !== me.username);
+      for (const k of fresh) sess.stale.delete(k);
       if (fresh.some(k => !sess.roster.has(k))) refreshRoster();
       syncOthers();
       if (fresh.length) { sess.wantSend = true; if (isHost() && state.size) scheduleSnapshot(); }   // late joiners: snapshot
@@ -258,11 +265,12 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     ch.onBroadcast('st', onStateMsg);
     ch.onBroadcast('sq', onSnapReq);
     ch.onBroadcast('ev', onEventMsg);
+    ch.onBroadcast('l', (p) => { if (s === sess && p && typeof p.u === 'string' && p.u !== me.username && sess.roster.has(p.u)) { sess.stale.add(p.u); removeOther(p.u); } });   // "bye": don't wait for presence
     ch.onBroadcast('c', (p) => { if (s === sess && p && sess.roster.has(p.u) && sess.present.has(p.u)) chatHint?.(); });
     try { await ch.subscribe(); }
     catch (e) { stats.rejected++; if (s === sess) s = null; await remote.mpLeave().catch(() => {}); console.warn('multiplayer join refused', e.message); return done(null); }
     ch.track({ u: me.username });
-    sess.timers.push(setInterval(sendTick, 50), setInterval(heartbeat, 20000), setInterval(proximityTick, PROXIMITY_MS),
+    sess.timers.push(setInterval(sendTick, 50), setInterval(heartbeat, 20000), setInterval(proximityTick, PROXIMITY_MS), setInterval(livenessTick, LIVENESS_MS),
       setInterval(() => { if (s === sess && isHost() && sess.others.size && state.size && now() - sess.lastSnap >= SNAPSHOT_EVERY_MS) scheduleSnapshot(0); }, 1000));
     // late joiner: ask the host for the snapshot (twice, in case the first ask races presence)
     for (const ms of [600, 2000, 5000]) sess.timers.push(setTimeout(() => { if (s === sess && !isHost() && !sess.gotSnapshot) ch.send('sq', { u: me.username }); }, ms));
@@ -303,7 +311,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
   // other players appear only when they are BOTH in the trusted roster and present on the socket
   function syncOthers() {
     if (!s) return;
-    for (const k of s.present) if (k !== s.me.username && s.roster.has(k) && !s.others.has(k)) addOther(k);
+    for (const k of s.present) if (k !== s.me.username && s.roster.has(k) && !s.others.has(k) && !s.stale.has(k)) addOther(k);
     for (const k of [...s.others.keys()]) if (!s.present.has(k)) removeOther(k);
   }
   function addOther(k) {
@@ -315,7 +323,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     avatar.root.userData.remotePlayer = k;          // visuals only: never engine.player, never collides or triggers
     scene.add(avatar.root);
     try { const l = getListener?.(); if (l) avatar.attachWindAudio?.(l); } catch (e) { console.warn(e); }   // shared listener (core/audio.js)
-    const o = { avatar, look: JSON.stringify([p.equipped, p.rocketColors, p.cosmeticColors]), samples: [], recv: [], gap: 100, lastT: 0, seq: -1, displayName: p.displayName || k,
+    const o = { avatar, look: JSON.stringify([p.equipped, p.rocketColors, p.cosmeticColors]), samples: [], recv: [], gap: 100, lastT: 0, addedAt: now(), seq: -1, displayName: p.displayName || k,
       anim: 0, animsSeen: new Set(), events: { j: 0, l: 0, t: 0 }, snaps: 0 };
     s.others.set(k, o);
     bubbles?.track(k, avatar.bones?.head || avatar.root, { name: p.displayName || k, offsetY: 1.1 });
@@ -335,6 +343,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     const ok = p && typeof p.u === 'string' && p.u !== s.me.username && s.roster.has(p.u) && s.present.has(p.u)
       && vecOk(p.p, BOUND) && Number.isFinite(p.r) && Number.isInteger(p.a) && p.a >= 0 && p.a < 8 && Number.isInteger(p.s)
       && (p.v == null || vecOk(p.v, 200)) && (p.e == null || ['j', 'l', 't'].includes(p.e));
+    if (ok && s.stale.has(p.u)) { s.stale.delete(p.u); addOther(p.u); }   // came back
     const o = ok && s.others.get(p.u);
     if (!o) { stats.dropped++; return; }
     const t = now();
@@ -410,6 +419,12 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     return out.sort((a, b) => a.d - b.d).map(({ d, ...rest }) => rest);
   }
 
+  function livenessTick() {
+    if (!s) return;
+    const t = now();
+    for (const [k, o] of [...s.others]) if (t - (o.lastT || o.addedAt) > STALE_MS) { s.stale.add(k); removeOther(k); }
+  }
+
   // Proximity for cosmetics (e.g. Frost Tornado Hat spin + wind): each avatar gets the positions of
   // everyone else (interpolated remote positions + the local player). ~5 Hz.
   function proximityTick() {
@@ -467,6 +482,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     state.clear();                                                  // shared state belongs to that instance
     joinedFor = null;
     checkRoles();
+    try { sess.channel?.send('l', { u: sess.me.username }); } catch { /* */ }   // sync socket send: survives page unload better than phx_leave round-trip
     await sess.channel?.unsubscribe().catch(() => {});
     await sess.remote.mpLeave().catch(() => {});
   }
@@ -485,6 +501,8 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     hintChat() { if (s) s.channel.send('c', { u: s.me.username }); },
     onChatHint(fn) { chatHint = fn; },
     /** Debug/test: the live Avatar object drawn for a remote player (null when not present). */
+    /** Debug/test: run the liveness check now. */
+    _livenessTick: () => livenessTick(),
     _avatarOf(username) { return s?.others.get(username)?.avatar ?? null; },
     get info() {
       if (!s) return null;
