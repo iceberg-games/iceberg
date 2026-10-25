@@ -3,7 +3,7 @@
 import '../style.css';
 import './portal.css';
 import { h, clear } from '../ui/dom.js';
-import { plusBadge, plusCard } from '../core/plus.js';
+import { plusBadge, plusCard, syncPlus, grantPlus } from '../core/plus.js';
 import { backend } from '../backend/LocalBackend.js';
 import { Economy } from '../core/economy.js';
 import { bus } from '../core/events.js';
@@ -84,9 +84,12 @@ function banPanel() {
   };
   return h('div.p-dev-row', { id: 'ban-panel', style: 'gap:6px;align-items:center' }, inp,
     h('button.btn.secondary', { id: 'ban-btn', onclick: act(banUser, 'Banned') }, 'Ban'),
-    h('button.btn.secondary', { id: 'unban-btn', onclick: act(unbanUser, 'Unbanned') }, 'Unban'));
+    h('button.btn.secondary', { id: 'unban-btn', onclick: act(unbanUser, 'Unbanned') }, 'Unban'),
+    h('button.btn.secondary', { id: 'grant-plus-btn', title: 'Dev comp grant: 30 days of Iceberg Plus (not a payment)', onclick: act((r, u) => grantPlus(r, u, 30, 'dev portal grant'), 'Granted Plus (30d) to') }, '❄️ Grant Plus'),
+    h('button.btn.secondary', { id: 'revoke-plus-btn', onclick: act((r, u) => grantPlus(r, u, 0, 'dev portal revoke'), 'Revoked Plus for') }, 'Revoke Plus'));
 }
-async function refreshDev() { const d = remote ? await isDev(remote) : false; if (d !== dev) { dev = d; render(); } }
+let plusNow = null;
+async function refreshDev() { const p = await syncPlus(remote); const d = remote ? await isDev(remote) : false; if (d !== dev || p !== plusNow) { dev = d; plusNow = p; render(); } }
 function nav() {
   const tab = (id, label) => h('button.p-tab' + (view === id ? '.on' : ''), { 'data-view': id, onclick: () => go(id) }, label);
   return h('nav.p-nav', tab('games', '🎮 Games'), tab('chat', '💬 Chat'), tab('friends', '🤝 Friends'), tab('settings', '⚙️ Settings'),

@@ -220,3 +220,10 @@ Rate limiting and trust:
 - Flag is local/demo only (`src/core/plus.js`, localStorage `iceberg:v1:plus`). Future server field (additive, NOT applied): `profiles.plus_until timestamptz NULL`, set only by a verified payment webhook.
 - Planned economics: **$1 per purchase held for App Store / Google Play fees; remainder to cadavis84@gmail.com.**
 - **Colin must re-confirm before any payment account (Stripe or otherwise) is set up.** Free/demo for now; no Stripe.
+
+### Iceberg Plus — server-backed (migration 0015)
+- Apply order: 0014 (`20261025000014_plus_only.sql`, already on main) then **`20261025000015_plus_membership.sql`**. Additive only: adds `profiles.plus_until` (NULL for all), `plus_grants` audit table, replaces `is_plus()` stub, adds `plus_status()` and dev-only `grant_plus()`. No player data changed.
+- Deploy the SQL **before** the client: on an older server `plus_status` is missing and the client silently falls back to the local demo flag (guests only behaviour).
+- Grant (comp/demo, not a payment): a dev/admin (`is_dev()`) uses Portal dev row → username → **❄️ Grant Plus** (30 days) / **Revoke Plus**, or SQL: `select public.grant_plus('username', 30, 'note');` while signed in as a dev. Service-role/SQL editor: `update profiles set plus_until = now() + interval '30 days' where username = '...';`. Clients cannot write `plus_until` (no update grant on profiles).
+- Real purchases: **none**. $9/mo stays "Coming soon"; no Stripe. Colin must re-confirm before any payment account. Note: $1/purchase held for App Store/Play fees; rest to cadavis84@gmail.com.
+- `economy.isPlus` (shop listing of wh_plus_* items) is still false client-side; server `buy_cosmetic` now honours real `is_plus()`.
