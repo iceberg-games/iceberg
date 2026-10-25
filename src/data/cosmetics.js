@@ -258,3 +258,12 @@ for (const c of [
     colorPresets: [['Red Scarf', '#c0392b'], ['Blue Scarf', '#3f6fd8'], ['Green Scarf', '#2e8a4a'], ['Gold Scarf', '#e0a82e']],
     desc: 'A fluffy snow-wolf pup in a tiny scarf who rides on your shoulder, wagging and bobbing. Earned at Snowdrift Outskirts in Winterhaven.' },
 ]) { const item = { ...WH, ...c }; COSMETICS.push(item); COSMETIC_BY_ID[item.id] = item; }
+
+// ---- Sled Rush: earnOnly finish/3-star reward (Game Maker quest; mesh TBD).
+const SR = { price: 0, earnOnly: true, kind: 'model', winter: true, customizable: true, earnIn: 'Sled Rush' };
+for (const c of [
+  { id: 'sr_powder_scarf', unlock: 'sr_quest_finish', name: 'Powder-Day Scarf', slot: 'neck', rarity: 'epic', icon: '🧣', defaultColor: '#e8f4ff',
+    colorPresets: [['Fresh Powder', '#e8f4ff'], ['Trail Blaze', '#ff6b3d'], ['Alpine Teal', '#2a9d8f'], ['Night Run', '#2b3f6b']],
+    desc: 'A wind-whipped powder-day scarf that streams behind you on the sled run. Finish Sled Rush (or hit 3 stars) to earn it.' },
+]) { const item = { ...SR, ...c }; COSMETICS.push(item); COSMETIC_BY_ID[item.id] = item; }
+
