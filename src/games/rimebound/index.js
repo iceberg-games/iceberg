@@ -7,6 +7,8 @@ import { createLobbyState, pickRole, pickKit, setReady } from './lobby.js';
 import { playEmote } from './emotes.js';
 import { RimeUI } from './ui.js';
 import { RimeAudio } from './audio.js';
+import { createEffects } from './effects.js';
+import { buildKitMesh } from './kits/mesh/index.js';
 
 function loadSave(economy) { return { ...C.DEFAULT_SAVE, ...((economy.profile?.gameData || {})[C.GAME_ID] || {}) }; }
 function persist(economy, save) {
@@ -65,7 +67,36 @@ export default {
     }
     const collision = new Collision({ floorY: 0, bounds: { minX: -30, maxX: 30, minZ: -30, maxZ: 30 } });
 
-    let lobby = createLobbyState();
+    
+    const bannerEl = document.createElement('div');
+    Object.assign(bannerEl.style, {
+      position: 'fixed', top: '64px', left: '50%', transform: 'translateX(-50%)',
+      zIndex: 70, padding: '8px 14px', borderRadius: '10px',
+      background: 'rgba(8,18,32,.9)', border: '1px solid #7ec8ff',
+      color: '#e8f4ff', fontWeight: 700, fontSize: '14px', opacity: 0, transition: 'opacity .15s',
+      pointerEvents: 'none',
+    });
+    document.body.appendChild(bannerEl);
+    let bannerTimer = 0;
+    const banner = (msg) => {
+      bannerEl.textContent = msg;
+      bannerEl.style.opacity = '1';
+      clearTimeout(bannerTimer);
+      bannerTimer = setTimeout(() => { bannerEl.style.opacity = '0'; }, 1400);
+    };
+
+    const fx = createEffects({
+      scene, player, engine, audio: (c) => audio.play(c), banner,
+    });
+
+    let kitMesh = null;
+    function spawnKitMesh(kitId) {
+      if (kitMesh) { scene.remove(kitMesh); kitMesh = null; }
+      kitMesh = buildKitMesh(kitId);
+      if (kitMesh) { kitMesh.position.set(0, 0, -3); scene.add(kitMesh); }
+    }
+
+let lobby = createLobbyState();
     let kit = null;
     const cds = Object.create(null);
     const cdUntil = Object.create(null);
@@ -74,8 +105,8 @@ export default {
       onCd: (id) => (cdUntil[id] || 0) > performance.now() / 1000,
       setCd: (id, sec) => { cdUntil[id] = performance.now() / 1000 + sec; cds[id] = sec; },
       audio: (cue) => audio.play(cue),
-      fx: () => {},
-      applyPassive: () => {},
+      fx,
+      applyPassive: (id) => fx[id]?.(),
     };
 
     const ui = new RimeUI({
@@ -83,6 +114,7 @@ export default {
       onKit: (id) => {
         lobby = pickKit(lobby, id);
         kit = getKit(id);
+        spawnKitMesh(id);
         kit?.passive?.apply?.(abilityCtx);
         save.picks[id] = (save.picks[id] || 0) + 1;
         persist(economy, save);
@@ -132,6 +164,8 @@ export default {
       dispose() {
         window.removeEventListener('keydown', onKey);
         ui.destroy();
+        bannerEl.remove();
+        if (kitMesh) scene.remove(kitMesh);
       },
       // GM1 hooks
       getSelectedKit: () => kit,
