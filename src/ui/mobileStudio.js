@@ -35,6 +35,7 @@ export class MobileStudio {
     root.append(this.el);
     bus.on('game:loaded', ({ game }) => { if (game.editing && isMobile()) this.show(game); else this.hide(); });
     bus.on('game:unloaded', () => this.hide());
+    bus.on('plus:changed', () => { if (this.active) this.renderPalette(); });
     bus.on('studio:changed', (what) => { if (this.active && what !== 'animtime' && what !== 'bonepose') this.renderBar(); });
     bus.on('device:changed', () => { const g = this.engine.game; if (g?.editing) (isMobile() ? this.show(g) : this.hide()); });
     const canvas = () => this.engine.renderer.domElement;

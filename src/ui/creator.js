@@ -28,6 +28,7 @@ export class CreatorPanel {
     onDeviceChange(() => { const g = this.engine.game; if (g?.editing) (isMobile() ? this.hide() : this.show(g)); });
     bus.on('game:unloaded', () => this.hide());
     bus.on('models:changed', () => this.ed && this.renderLeft());
+    bus.on('plus:changed', () => this.ed && this.renderLeft());
     bus.on('studio:changed', (what) => this._onChange(what));
     addEventListener('keydown', (e) => this._onKey(e), true);
   }
@@ -178,7 +179,7 @@ export class CreatorPanel {
   // Iceberg Plus perk: save the selected instance as a reusable prefab (local-only). Gated on the Plus flag.
   prefabSection() {
     const ed = this.ed, KEY = 'iceberg:v1:prefabs';
-    if (!hasPerk('studioCustomPrefab')) return h('p.st-hint.plus-lock#prefab-locked', '🔒 Custom prefabs are an Iceberg Plus perk (coming soon, $9/mo). Try it via Settings → Iceberg Plus (demo).');
+    if (!hasPerk('studioCustomPrefab')) return h('p.st-hint.plus-lock#prefab-locked', '🔒 Custom prefabs are an Iceberg Plus perk. Members with Plus (granted, or the Settings → Iceberg Plus demo) unlock it instantly — no payments yet.');
     const list = (() => { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } })();
     const save = () => {
       if (!hasPerk('studioCustomPrefab')) return;
