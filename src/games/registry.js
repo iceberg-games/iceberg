@@ -11,6 +11,7 @@ import starfallLake from './starfallLake/index.js';
 import sledRush from './sled-rush/index.js';
 import knockoutFloes from './knockoutFloes/index.js';
 import lumenTag from './lumenTag/index.js';
+import rimebound from './rimebound/index.js';
 import { withEventQuest, frostQuest, hqQuest, obbyQuest } from './_event/hooks.js'; // Natural Disasters event quests (remove to end the event)
 import { creatorDef, customGameDef } from './customGame.js';
 import { backend } from '../backend/LocalBackend.js';
@@ -26,6 +27,7 @@ export const BUILTIN_GAMES = [
   sledRush,
   knockoutFloes,
   lumenTag,
+  rimebound,
 ];
 export const CREATOR = creatorDef;
 
