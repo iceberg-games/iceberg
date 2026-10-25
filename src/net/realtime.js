@@ -1,10 +1,14 @@
 // Minimal, dependency-free client for Supabase Realtime (Phoenix channels, vsn 1.0.0):
 // broadcast + presence on private channels (Realtime Authorization via the user's JWT).
-// Reconnects with backoff and rejoins; sends heartbeats every 25 s.
+// Reconnects with backoff and rejoins. Heartbeats every 15 s with a reply check: a missed reply = dead socket
+// (silent network drop, no close event) -> close it, which triggers the normal reconnect + rejoin.
+const HEARTBEAT_MS = 15000;
 export class RealtimeClient {
   constructor(supabaseUrl, anonKey, { getToken = () => null, WebSocketImpl = globalThis.WebSocket } = {}) {
     this.url = `${supabaseUrl.replace(/^http/, 'ws').replace(/\/+$/, '')}/realtime/v1/websocket?apikey=${encodeURIComponent(anonKey)}&vsn=1.0.0`;
     this.anonKey = anonKey; this.getToken = getToken; this.WS = WebSocketImpl;
+    this.hbPending = null;
+    if (typeof globalThis.addEventListener === 'function') globalThis.addEventListener('online', () => this.probe());
     this.ws = null; this.ref = 0; this.channels = new Map(); this.pending = new Map(); this.backoff = 500; this.closed = false; this.hb = null;
   }
   _ref() { return String(++this.ref); }
@@ -13,7 +17,7 @@ export class RealtimeClient {
     this.closed = false;
     this._open = new Promise((ok, bad) => {
       const ws = this.ws = new this.WS(this.url);
-      ws.onopen = () => { this.backoff = 500; ok(); clearInterval(this.hb); this.hb = setInterval(() => this._push({ topic: 'phoenix', event: 'heartbeat', payload: {} }), 25000); for (const ch of this.channels.values()) if (ch.state !== 'closed') ch._rejoin(); };
+      ws.onopen = () => { this.backoff = 500; this.hbPending = null; ok(); clearInterval(this.hb); this.hb = setInterval(() => this._beat(), HEARTBEAT_MS); for (const ch of this.channels.values()) if (ch.state !== 'closed') ch._rejoin(); };
       ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch { return; } this._onMessage(m); };
       ws.onerror = () => bad(new Error('realtime connect failed'));
       ws.onclose = () => {
@@ -25,6 +29,19 @@ export class RealtimeClient {
     });
     return this._open;
   }
+  /** Heartbeat with reply check: if the previous one was never answered, the socket is dead. */
+  _beat() {
+    const ws = this.ws; if (!ws || ws.readyState !== 1) return;
+    if (this.hbPending) { this.hbPending = null; try { ws.close(); } catch { /* */ } return; }   // onclose -> reconnect
+    this.hbPending = this._ref(); this._push({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: this.hbPending });
+  }
+  /** Network came back: check the socket now (zombie sockets look open) instead of waiting for the next beat. */
+  probe(ms = 4000) {
+    if (this.closed) return;
+    if (!this.ws || this.ws.readyState > 1) { this.backoff = 500; this.connect().catch(() => {}); return; }
+    const ws = this.ws; this.hbPending = null; this._beat();
+    const ref = this.hbPending; setTimeout(() => { if (this.ws === ws && this.hbPending === ref) { this.hbPending = null; try { ws.close(); } catch { /* */ } } }, ms);
+  }
   disconnect() { this.closed = true; clearInterval(this.hb); try { this.ws?.close(); } catch { /* */ } this.ws = null; }
   _push(msg, wantReply = false) {
     const ref = msg.ref || this._ref(); msg.ref = ref;
@@ -34,6 +51,7 @@ export class RealtimeClient {
     return new Promise((ok, bad) => { this.pending.set(ref, { ok, bad }); setTimeout(() => { if (this.pending.delete(ref)) bad(new Error('timeout')); }, 10000); });
   }
   _onMessage(m) {
+    if (m.topic === 'phoenix' && m.event === 'phx_reply') { if (m.ref === this.hbPending) this.hbPending = null; return; }
     if (m.event === 'phx_reply' && this.pending.has(m.ref)) { const p = this.pending.get(m.ref); this.pending.delete(m.ref); m.payload?.status === 'ok' ? p.ok(m.payload.response) : p.bad(Object.assign(new Error(m.payload?.response?.reason || 'error'), { response: m.payload?.response })); return; }
     const ch = this.channels.get(m.topic); if (ch) ch._onMessage(m);
   }
