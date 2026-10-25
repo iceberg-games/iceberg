@@ -190,6 +190,7 @@ export default {
     let chaseName = '';
     let hudAcc = 0;
     let starting = false;
+    let useHeld = false;
 
     const abilityCtx = {
       onCd: (id) => (cdUntil[id] || 0) > performance.now() / 1000,
@@ -201,6 +202,24 @@ export default {
       get engine() { return engine; },
       get role() { return role; },
     };
+
+    function backToLobby() {
+      phase = 'lobby'; result = ''; useHeld = false;
+      lobby = setReady(createLobbyState(), false);
+      if (kit) lobby = pickKit(pickRole(lobby, role), kit.id);
+      audio.clearBed(); audio.setBed('bgm_rimebound-lobby', 0.45);
+      while (scene.children.length) scene.remove(scene.children[0]);
+      scene.background = new THREE.Color('#071421');
+      scene.fog = new THREE.FogExp2('#071421', 0.018);
+      scene.add(new THREE.HemisphereLight(0x9ec9ff, 0x0a1520, 0.85));
+      const d2 = new THREE.DirectionalLight(0xcfe9ff, 0.55); d2.position.set(8, 20, 6); scene.add(d2);
+      const g2 = new THREE.Mesh(new THREE.CircleGeometry(28, 48), new THREE.MeshStandardMaterial({ color: '#1b3348', roughness: 0.95 }));
+      g2.rotation.x = -Math.PI / 2; scene.add(g2);
+      collision = new Collision({ floorY: 0, bounds: { minX: -30, maxX: 30, minZ: -30, maxZ: 30 } });
+      player.pos.set(0, 0, 0);
+      if (kit) spawnKitMesh(kit.id);
+      ui.renderLobby(lobby);
+    }
 
     const ui = new RimeUI({
       onRole: (r) => { lobby = pickRole(lobby, r); ui.renderLobby(lobby); },
@@ -224,6 +243,8 @@ export default {
         const a = kit.actives.find(x => x.id === id);
         a?.use?.(abilityCtx);
       },
+      onUse: (on) => { useHeld = !!on; },
+      onLobby: () => backToLobby(),
     });
 
     function dist2(ax, az, bx, bz) { const dx = ax - bx, dz = az - bz; return Math.hypot(dx, dz); }
@@ -320,24 +341,7 @@ export default {
     }
 
     function onKey(e) {
-      if (phase === 'results' && e.key === 'Enter') {
-        phase = 'lobby'; result = '';
-        lobby = setReady(createLobbyState(), false);
-        if (kit) lobby = pickKit(pickRole(lobby, role), kit.id);
-        audio.clearBed(); audio.setBed('bgm_rimebound-lobby', 0.45);
-        while (scene.children.length) scene.remove(scene.children[0]);
-        scene.background = new THREE.Color('#071421');
-        scene.fog = new THREE.FogExp2('#071421', 0.018);
-        scene.add(new THREE.HemisphereLight(0x9ec9ff, 0x0a1520, 0.85));
-        const d2 = new THREE.DirectionalLight(0xcfe9ff, 0.55); d2.position.set(8, 20, 6); scene.add(d2);
-        const g2 = new THREE.Mesh(new THREE.CircleGeometry(28, 48), new THREE.MeshStandardMaterial({ color: '#1b3348', roughness: 0.95 }));
-        g2.rotation.x = -Math.PI / 2; scene.add(g2);
-        collision = new Collision({ floorY: 0, bounds: { minX: -30, maxX: 30, minZ: -30, maxZ: 30 } });
-        player.pos.set(0, 0, 0);
-        if (kit) spawnKitMesh(kit.id);
-        ui.renderLobby(lobby);
-        return;
-      }
+      if (phase === 'results' && e.key === 'Enter') { backToLobby(); return; }
       if (phase !== 'match' || !kit || frozen) return;
       const key = e.key.toUpperCase();
       const a = kit.actives.find(x => x.key === key);
@@ -365,7 +369,7 @@ export default {
         hitCd = Math.max(0, hitCd - dt);
         const px = player.pos.x, pz = player.pos.z;
         const input = engine.input;
-        const holding = input?.down?.('KeyE') || input?.down?.('KeyF') || input?.down?.('Space');
+        const holding = useHeld || input?.down?.('KeyE') || input?.down?.('KeyF') || input?.down?.('Space');
 
         // cores
         let coresDone = cores.filter(c => c.done).length;

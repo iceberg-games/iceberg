@@ -11,7 +11,7 @@
 import { getDeviceMode, onDeviceChange } from '../core/device.js';
 
 const CSS = `
-.touch-ui{position:fixed;inset:0;pointer-events:none;z-index:40;user-select:none;-webkit-user-select:none}
+.touch-ui{position:fixed;inset:0;pointer-events:none;z-index:90;user-select:none;-webkit-user-select:none}
 .touch-ui.hidden{display:none}
 .touch-stick{position:absolute;left:24px;bottom:28px;width:130px;height:130px;border-radius:50%;
   background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.45);pointer-events:auto;touch-action:none}
@@ -68,10 +68,18 @@ export function mountTouchControls(engine, { root = document.body } = {}) {
   jump.addEventListener('pointercancel', jumpOn(false));
   jump.addEventListener('pointerleave', jumpOn(false));
 
+  function touchHardware() {
+    try {
+      return (navigator.maxTouchPoints > 0) || ('ontouchstart' in window)
+        || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    } catch { return false; }
+  }
   function sync() {
-    const mobile = getDeviceMode() === 'mobile';
-    ui.classList.toggle('hidden', !mobile);
-    if (!mobile) { release(); setKey('Space', false); jump.classList.remove('on'); }
+    // Show on Mobile mode always; also keep visible on touch hardware in Computer
+    // mode ("developer" / desktop UI on a phone) so joysticks don't vanish.
+    const show = getDeviceMode() === 'mobile' || touchHardware();
+    ui.classList.toggle('hidden', !show);
+    if (!show) { release(); setKey('Space', false); jump.classList.remove('on'); }
   }
   const off = onDeviceChange(sync);
   sync();
