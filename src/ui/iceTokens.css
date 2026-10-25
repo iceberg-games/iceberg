@@ -25,5 +25,10 @@
   /* motion */
   --ice-ease: cubic-bezier(.22, 1, .36, 1); --ice-spring: cubic-bezier(.34, 1.56, .64, 1);
   --ice-dur-fast: .12s; --ice-dur: .22s; --ice-dur-slow: .45s;
+  /* selected / chosen glow (body types, any "current" pick) */
+  --ice-select-glow: 0 0 0 3px rgba(108, 200, 255, .55), 0 0 18px 4px rgba(108, 200, 255, .45);
+  --ice-select-grad: linear-gradient(180deg, #f4fbff 0%, #d6efff 60%, #bfe4ff 100%);
+  --ice-frost-card: linear-gradient(170deg, #ffffff 0%, #eef9ff 55%, #dcf1fd 100%);
+  --ice-lip-cool: 0 5px 0 var(--ice-border-cool);
   --ice-press-scale: .95; --ice-hover-lift: -2px;
 }

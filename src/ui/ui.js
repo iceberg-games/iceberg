@@ -345,8 +345,8 @@ export class UI {
     }
     sections.push(this._wearSection());
     sections.unshift(h('h4', '🧍 Body type'), h('div.locker-row.body-types', Object.values(BODY_TYPES).map(b => { const on = this.avatar.bodyType === b.id;
-      return h('button.locker-item' + (on ? '.on' : ''), { 'data-body': b.id, 'data-sfx': 'equip', title: `Switch to ${b.label} body`, onclick: () => { saveBodyType(b.id); this.avatar.setBodyType(b.id); this.toast(`${b.label} body`, b.icon); this.refreshDrawer(); } },
-        h('span.card-icon', b.icon), h('span', b.label), h('small', on ? 'Current' : 'Pick')); })));
+      return h('button.locker-item.body-type-card' + (on ? '.on' : ''), { 'data-body': b.id, 'data-sfx': 'equip', title: `Switch to ${b.label} body`, onclick: () => { saveBodyType(b.id); this.avatar.setBodyType(b.id); this.toast(`${b.label} body`, b.icon); this.refreshDrawer(); } },
+        h('span.card-icon.body-type-icon', b.icon), h('span.body-type-label', b.label), b.blurb ? h('span.body-type-blurb', b.blurb) : '', h('small.body-type-state' + (on ? '.current' : ''), on ? '✓ Current' : 'Pick')); })));
     return this._frame('🎒 Locker', 'Your owned items. Click to equip/unequip.', ...sections);
   }
 
