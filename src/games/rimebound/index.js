@@ -202,7 +202,19 @@ export default {
       get role() { return role; },
     };
 
-    const ui = new RimeUI({
+    let ui;
+    const backToLobby = () => {
+      phase = 'lobby'; result = '';
+      audio.clearBed();
+      audio.setBed('bgm_rimebound-lobby', 0.45);
+      lobby = createLobbyState();
+      kit = null;
+      ui?.renderLobby(lobby);
+    };
+
+    ui = new RimeUI({
+      engine,
+      onLobby: () => backToLobby(),
       onRole: (r) => { lobby = pickRole(lobby, r); ui.renderLobby(lobby); },
       onKit: (id) => {
         lobby = pickKit(lobby, id);
@@ -321,7 +333,8 @@ export default {
 
     function onKey(e) {
       if (phase === 'results' && e.key === 'Enter') {
-        phase = 'lobby'; result = '';
+        backToLobby();
+        return;
         lobby = setReady(createLobbyState(), false);
         if (kit) lobby = pickKit(pickRole(lobby, role), kit.id);
         audio.clearBed(); audio.setBed('bgm_rimebound-lobby', 0.45);
@@ -365,7 +378,7 @@ export default {
         hitCd = Math.max(0, hitCd - dt);
         const px = player.pos.x, pz = player.pos.z;
         const input = engine.input;
-        const holding = input?.down?.('KeyE') || input?.down?.('KeyF') || input?.down?.('Space');
+        const holding = input?.down?.('KeyE') || input?.down?.('KeyF') || input?.down?.('Space') || !!ui.interactHeld;
 
         // cores
         let coresDone = cores.filter(c => c.done).length;
@@ -508,7 +521,7 @@ export default {
           ui.renderHud({
             role, coresDone, coresTotal: cores.length, hp, downed: downed > 0 ? downed : 0,
             exitOpen, timer, result,
-            prompt: phase === 'match' && role === 'survivor' && !downed ? 'Hold E near cyan cores to thaw · Exits after all cores' : (role === 'killer' ? 'Hold E/F near survivors to strike' : ''),
+            prompt: phase === 'match' && role === 'survivor' && !downed ? (ui.mobile ? 'Hold USE near cyan cores · exits after all' : 'Hold E near cyan cores to thaw · Exits after all cores') : (role === 'killer' ? (ui.mobile ? 'Hold USE near survivors to strike' : 'Hold E/F near survivors to strike') : ''),
           });
         }
       },
