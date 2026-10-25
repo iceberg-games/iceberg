@@ -735,7 +735,13 @@ await t('bans (0012): dev-only ban/unban, cannot ban a dev, is_banned, chat/mp/e
   assert.equal((await rpc(db, D, 'unban_user', { p_username: 'zz_ban_victim' })).ok, true);
   assert.equal(await rpc(db, V, 'is_banned'), false);
   assert.equal((await rpc(db, V, 'game_earn', { p_source: 'coin', p_amount: 5 })).granted, 5);
-  await denied(as(db, V, tx => tx.query('select * from public.bans')));
+  // RLS: a player sees only their own ban rows; a dev sees all; a player cannot insert
+  assert.equal((await as(db, V, tx => tx.query('select username from public.bans').then(r => r.rows))).length, 1);
+  assert.equal((await as(db, O, tx => tx.query('select username from public.bans').then(r => r.rows))).length, 0);
+  assert.ok((await as(db, D, tx => tx.query('select username from public.bans').then(r => r.rows))).length >= 1);
+  await denied(as(db, O, tx => tx.query(`insert into public.bans (username) values ('x')`)));
+  if (!(await su(db, `select 1 from public.profiles where username = 'gooberr478'`)).length) await createUser(db, { username: 'gooberr478' });
+  assert.equal((await rpc(db, D, 'ban_user', { p_username: 'gooberr478' })).reason, 'cannot_ban_dev');
 });
 
 await db.close();
