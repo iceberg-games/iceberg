@@ -1,5 +1,7 @@
 // Blocky Roblox-style avatar + 3D cosmetics. Shared across every game.
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+const _bodyGlb = {};
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { COSMETIC_BY_ID } from '../data/cosmetics.js';
 import { getBodySlots, normalizeBodyType, loadBodyType, BONE_ANCHOR, CLOTHING_ANCHOR, DEFAULT_BODY_TYPE } from './bodyTypes.js';
@@ -2114,7 +2116,7 @@ export class Avatar {
     this._initTrail();
   }
 
-  /** Switch body shape: 'classic' | 'tall' | 'stout'. Cosmetics follow via anchors (no rebuild). */
+  /** Switch body shape (see BODY_TYPE_IDS). Cosmetics follow via anchors (no rebuild). */
   setBodyType(type) {
     const t = normalizeBodyType(type);
     const S = getBodySlots(t);
@@ -2125,6 +2127,7 @@ export class Avatar {
     for (const n of ['legL', 'legR']) { const m = this.bodyMeshes[n]; m.scale.set(lw, ll, ld); m.position.set(0, -ll / 2, 0); }
     this.bodyMeshes.torso.scale.set(...S.torso);
     const hs = S.head; this.bodyMeshes.head.scale.setScalar(hs); this.bodyMeshes.head.position.set(0, hs / 2, 0);
+    this._applyBodyMesh(S);
     for (const [bone, slot] of Object.entries(BONE_ANCHOR)) {
       const a = S.anchors[slot], g = this.anchors[bone];
       g.position.set(...a.offset); g.scale.set(...a.scale);
@@ -2134,6 +2137,24 @@ export class Avatar {
       g.position.set(...a.offset); g.scale.set(...a.scale);
     }
     return this;
+  }
+  /** Blender body overlay (S.mesh .glb): 'torso' node replaces the torso box, 'head' node rides the head. */
+  _applyBodyMesh(S) {
+    for (const o of this._bodyOverlay || []) o.parent?.remove(o);
+    this._bodyOverlay = []; this.bodyMeshes.torso.visible = true;
+    if (!S.mesh) return;
+    const want = S.id;
+    (_bodyGlb[S.mesh] ||= new GLTFLoader().loadAsync(S.mesh)).then(gltf => {
+      if (this.bodyType !== want) return;
+      const tw = S.torso, hs = S.head / 0.62;
+      for (const [node, bone, sc] of [['torso', 'torso', [tw[0], tw[1], tw[2] / 0.5]], ['head', 'head', [hs, hs, hs]]]) {
+        const src = gltf.scene.getObjectByName(node); if (!src) continue;
+        const o = src.clone(true); o.position.set(0, 0, 0); o.scale.set(...sc);
+        o.traverse(m => { if (m.isMesh) { m.castShadow = true; if (m.material?.name === 'body_torso') m.material = this.mats.torso; } });
+        this.bones[bone].add(o); this._bodyOverlay.push(o);
+      }
+      this.bodyMeshes.torso.visible = false;
+    }).catch(e => console.warn('body mesh failed, using boxes', e));
   }
   /** Bone-or-anchor parent for a cosmetic authored in classic space. */
   _anchorFor(bone, clothing = false) { return (clothing && this.clothAnchors[bone]) || this.anchors[bone] || this.bones[bone] || this.root; }
