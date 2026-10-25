@@ -93,6 +93,7 @@ export function normalizeQuest(qd) {
 export const RARITIES = ['common', 'uncommon', 'rare', 'epic', 'legendary'];
 export const eventOf = (c) => (c && (c.event ?? c.eventId)) || null;   // limited-time item: sold only while that event is live
 export const isGrantOnly = (c) => !!(c && (c.earnOnly || c.eventOnly || c.grantOnly || c.unlock === 'quest'));
+export const isPlusOnly = (c) => !!(c && (c.plusOnly || /^wh_plus_/.test(c.id || '')));   // Iceberg Plus perks (0014)
 const priceOf = (c) => (isGrantOnly(c) && c.price == null ? 0 : c.price);
 
 export function validate({ items, phrases, gears = [], games = [], featured = [], consumables = [], quests = [] }) {
@@ -161,7 +162,7 @@ export function validate({ items, phrases, gears = [], games = [], featured = []
 const q = (s) => "'" + String(s).replace(/'/g, "''") + "'";
 
 export function toSQL({ items, phrases, gears = [], games = [], featured = [], consumables = [], quests = [] }) {
-  const rows = items.map(c => `  (${q(c.id)}, ${q(c.name)}, ${q(c.slot)}, ${priceOf(c)}, ${!!c.premium}, ${!!c.customizable}, ${isGrantOnly(c)}, ${eventOf(c) ? q(eventOf(c)) : 'null'}, true)`);
+  const rows = items.map(c => `  (${q(c.id)}, ${q(c.name)}, ${q(c.slot)}, ${priceOf(c)}, ${!!c.premium}, ${!!c.customizable}, ${isGrantOnly(c)}, ${eventOf(c) ? q(eventOf(c)) : 'null'}, ${isPlusOnly(c)}, true)`);
   const eventIds = [...new Set([...quests.map(x => x.eventId), ...items.map(eventOf)].filter(Boolean))];
   const ts = (v) => (v == null ? 'null' : q(new Date(v).toISOString()));
   const games_sql = games.length ? `
@@ -178,12 +179,12 @@ ${eventIds.length ? `-- events referenced by items/quests exist (unscheduled unt
 insert into public.game_events (id, title) values
 ${eventIds.map(e => `  (${q(e)}, ${q(e.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))})`).join(',\n')}
 on conflict (id) do nothing;
-` : ''}insert into public.catalog_items (id, name, slot, price, premium, customizable, grant_only, event_id, active) values
+` : ''}insert into public.catalog_items (id, name, slot, price, premium, customizable, grant_only, event_id, plus_only, active) values
 ${rows.join(',\n')}
 on conflict (id) do update set name = excluded.name, slot = excluded.slot, price = excluded.price,
-  premium = excluded.premium, customizable = excluded.customizable, grant_only = excluded.grant_only, event_id = excluded.event_id, active = true, updated_at = now()
-  where (catalog_items.name, catalog_items.slot, catalog_items.price, catalog_items.premium, catalog_items.customizable, catalog_items.grant_only, catalog_items.event_id, catalog_items.active)
-    is distinct from (excluded.name, excluded.slot, excluded.price, excluded.premium, excluded.customizable, excluded.grant_only, excluded.event_id, true);
+  premium = excluded.premium, customizable = excluded.customizable, grant_only = excluded.grant_only, event_id = excluded.event_id, plus_only = excluded.plus_only, active = true, updated_at = now()
+  where (catalog_items.name, catalog_items.slot, catalog_items.price, catalog_items.premium, catalog_items.customizable, catalog_items.grant_only, catalog_items.event_id, catalog_items.plus_only, catalog_items.active)
+    is distinct from (excluded.name, excluded.slot, excluded.price, excluded.premium, excluded.customizable, excluded.grant_only, excluded.event_id, excluded.plus_only, true);
 update public.catalog_items set active = false, updated_at = now()
   where active and id not in (${items.map(c => q(c.id)).join(', ')});
 

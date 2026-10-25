@@ -453,6 +453,23 @@ await t('event: fixture validates + syncs (grant-only cosmetics, ND gear + consu
   assert.match(errs, /must be grant-only/); assert.match(errs, /unknown gameId/);
 });
 
+await t('plus only (0014): wh_plus_* perks refused by buy_cosmetic until Plus exists, even while the event is live', async () => {
+  const { eventWindowSQL } = await import(resolve(ROOT, 'scripts/event-window.mjs'));
+  await db.exec(eventWindowSQL('winterhaven', { start: new Date(Date.now() - 3600e3).toISOString(), days: 7 }));
+  try {
+    assert.deepEqual((await su(db, `select id from public.catalog_items where plus_only order by id`)).map(r => r.id), ['wh_plus_aurora_crown', 'wh_plus_crystal_scepter', 'wh_plus_frost_wings']);
+    assert.equal((await su(db, `select public.is_plus() p`))[0].p, false);
+    const u = await createUser(db, { username: 'plus_buyer' });
+    await su(db, `update public.profiles set coins = 20000 where id = $1`, [u]);
+    for (const id of ['wh_plus_frost_wings', 'wh_plus_aurora_crown', 'wh_plus_crystal_scepter']) {
+      const r = await rpc(db, u, 'buy_cosmetic', { p_item_id: id });
+      assert.equal(r.reason, 'plus_only'); assert.equal(r.coins, 20000);
+    }
+    assert.equal((await su(db, `select count(*)::int n from public.inventory where user_id = $1`, [u]))[0].n, 0);
+    assert.equal((await rpc(db, u, 'buy_cosmetic', { p_item_id: 'wh_gift_bow' })).ok, true);   // normal event buyables still sell while live
+  } finally { await db.exec(`update public.game_events set starts_at = null, ends_at = null where id = 'winterhaven'`); }
+});
+
 await t('event: event cosmetics cannot be bought or imported from a guest save', async () => {
   const u = await createUser(db, { username: 'ev_buyer' });
   await su(db, `update public.profiles set coins = 5000 where id = $1`, [u]);

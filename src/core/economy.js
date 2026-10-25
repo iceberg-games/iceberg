@@ -36,7 +36,7 @@ const LOADOUT_DEBOUNCE_MS = 600;
 /** Event cosmetics (earnOnly / eventOnly / unlock: 'quest') are granted by quests and never sold. Same rule as the server sync. */
 /** Limited-time shop item (Cosmetics' `event: '<id>'`): buyable only while that event is live. */
 export const eventOfItem = (item) => (item && (item.event ?? item.eventId)) || null;
-const EVENT_SALE_MSG = { event_not_started: 'On sale when the Natural Disasters event starts', event_ended: 'This was a limited-time item: the event has ended' };
+const EVENT_SALE_MSG = { event_not_started: 'On sale when the event starts', event_ended: 'This was a limited-time item: the event has ended', plus_only: 'Iceberg Plus perk: coming soon' };
 export const isGrantOnly = (item) => !!(item && (item.earnOnly || item.eventOnly || item.grantOnly || item.unlock === 'quest'));
 
 export class Economy {
@@ -201,7 +201,7 @@ export class Economy {
   buy(id) {
     const item = COSMETIC_BY_ID[id];
     if (!item) return { ok: false, reason: 'Unknown item' };
-    if (isGrantOnly(item)) return { ok: false, reason: 'Earn this in the Natural Disasters event' };
+    if (isGrantOnly(item)) return { ok: false, reason: item.event === 'natural_disasters' ? 'Earn this in the Natural Disasters event' : item.earnIn ? `Earn this in ${item.earnIn}` : 'Earn this in the event' };
     if (!this.owns(id)) {                                        // owned copies are kept forever; only new sales are gated
       const av = this.itemAvailability(id);
       if (!av.forSale) return { ok: false, reason: EVENT_SALE_MSG[av.state] || 'Not for sale', code: av.state };
