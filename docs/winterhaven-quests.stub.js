@@ -13,4 +13,9 @@ export const QUESTS = [
   { id: 'wh_quest_carol',     gameId: 'winterhaven', title: 'Sing a Carol',       goal: 1, event: 'winterhaven', rewardItemId: 'wh_carol_bells' },
   { id: 'wh_quest_pass',      gameId: 'winterhaven', title: 'The Mountain Pass',  goal: 1, event: 'winterhaven', rewardItemId: 'wh_pass_goggles' },
   { id: 'wh_quest_outskirts', gameId: 'winterhaven', title: 'The Outskirts',      goal: 1, event: 'winterhaven', rewardItemId: 'wh_snowball_sack' },
+  { id: 'wh_quest_baker',     gameId: 'winterhaven', title: 'Help the Baker',     goal: 1, event: 'winterhaven', rewardItemId: 'wh_baker_hat' },
+  { id: 'wh_quest_fisher',    gameId: 'winterhaven', title: 'Ice Fishing',        goal: 1, event: 'winterhaven', rewardItemId: 'wh_fishing_lure' },
+  { id: 'wh_quest_courier',   gameId: 'winterhaven', title: 'Snow Courier',       goal: 1, event: 'winterhaven', rewardItemId: 'wh_parcel_satchel' },
+  { id: 'wh_quest_ranger',    gameId: 'winterhaven', title: 'Forest Ranger',      goal: 1, event: 'winterhaven', rewardItemId: 'wh_ranger_badge' },
+  { id: 'wh_quest_pup',       gameId: 'winterhaven', title: 'Find the Wolf Pup',  goal: 1, event: 'winterhaven', rewardItemId: 'wh_wolf_pup_pal' },
 ];
