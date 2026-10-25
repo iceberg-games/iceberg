@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { h } from '../ui/dom.js';
 import './chat.css';
+export { nameTagOffset } from './nameTag.js';
 
 const v = new THREE.Vector3();
 
@@ -38,7 +39,7 @@ export class BubbleLayer {
     const now = performance.now();
     for (const it of this.items.values()) {
       if (!it.anchor?.getWorldPosition) continue;
-      it.anchor.getWorldPosition(v); v.y += it.offsetY; v.project(camera);
+      it.anchor.getWorldPosition(v); v.y += typeof it.offsetY === 'function' ? it.offsetY() : it.offsetY; v.project(camera);
       const behind = v.z > 1 || v.z < -1;
       const x = (v.x * 0.5 + 0.5) * width, y = (-v.y * 0.5 + 0.5) * height;
       const show = !behind && now < it.until;

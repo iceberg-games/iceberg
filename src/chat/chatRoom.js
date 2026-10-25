@@ -2,6 +2,7 @@
 // wearing their cosmetics. Posted phrases appear as speech bubbles over the
 // speaker, whose mouth animates via avatar.talk?.(ms). Leaving -> avatar.dispose?.().
 import * as THREE from 'three';
+import { nameTagOffset } from './bubbles.js';
 import { Avatar } from '../game/avatar.js';
 import { h } from '../ui/dom.js';
 import { BubbleLayer } from './bubbles.js';
@@ -58,7 +59,7 @@ export function mountChatRoom(container, { remote, room = 'lobby', me = null, Av
       scene.add(avatar.root);
       m = { avatar, look: null };
       members.set(p.username, m);
-      bubbles.track(p.username, avatar.bones?.head || avatar.root, { name: p.me ? `${p.displayName} (you)` : p.displayName, offsetY: 1.1 });
+      bubbles.track(p.username, avatar.bones?.head || avatar.root, { name: p.me ? `${p.displayName} (you)` : p.displayName, offsetY: () => nameTagOffset(avatar.bodyType) });
     }
     if (m.look !== look) { try { m.avatar.applyLoadout?.({ equipped: p.equipped || {}, rocketColors: p.rocketColors, cosmeticColors: p.cosmeticColors || {} }); } catch (e) { console.warn(e); } m.look = look; }
   }

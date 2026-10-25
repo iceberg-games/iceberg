@@ -2,6 +2,8 @@
 // collision resolution, and an orbit camera that avoids walls.
 import * as THREE from 'three';
 
+import { getBodySlots } from '../game/bodyTypes.js';
+const CLASSIC_H = getBodySlots('classic').height;
 const HW = 0.42, HEIGHT = 2.6, STEP = 0.8;
 const GRAVITY = 32, JUMP = 11.5, SPEED = 9, ROCKET_THRUST = 55, ROCKET_MAX_UP = 9;
 
@@ -105,7 +107,7 @@ export class PlayerController {
   }
 
   updateCamera() {
-    const target = this.pos.clone().add(new THREE.Vector3(0, 2.2, 0));
+    const target = this.pos.clone().add(new THREE.Vector3(0, 2.2 * (getBodySlots(this.avatar?.bodyType).height / CLASSIC_H), 0));   // eye tracks body height; classic exact
     const dir = new THREE.Vector3(Math.sin(this.camYaw) * Math.cos(this.camPitch), Math.sin(this.camPitch), Math.cos(this.camYaw) * Math.cos(this.camPitch));
     let dist = this.camDist;
     if (this.occluders.length) {

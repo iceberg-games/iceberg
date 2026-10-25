@@ -4,6 +4,7 @@
 // appear in a small log, and (with multiplayer) as bubbles over the speaker's avatar via
 // opts.speak(username, text, ms). Text always comes from the server (phrase ids only).
 import { h } from '../ui/dom.js';
+import { nameTagOffset } from './bubbles.js';
 import { BubbleLayer } from './bubbles.js';
 import { ChatChannel } from './channel.js';
 import { createSafeChatMenu, bubbleMs, avatarTalk } from './safeChatMenu.js';
@@ -12,7 +13,7 @@ import './chat.css';
 
 export function mountGameChat({ engine, avatar, remote, me, root = document.body, speak = null, onSent = null }) {
   const bubbles = new BubbleLayer(root);
-  bubbles.track('me', avatar.bones?.head || avatar.root, { offsetY: 1.1 });
+  bubbles.track('me', avatar.bones?.head || avatar.root, { offsetY: () => nameTagOffset(avatar.bodyType) });
   const log = h('div.chat-log.hidden#game-chat-log');
   const menu = createSafeChatMenu({ onPick: (p) => say(p) });
   const btn = h('button.btn.game-chat-btn.hidden#game-chat-btn', { type: 'button', title: 'Safe Chat (Enter)', onclick: () => menu.toggle() }, '💬');
