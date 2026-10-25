@@ -12,6 +12,7 @@ export const GAME_META = {
   'corner-bakery':      { publishedAt: '2026-10-17T22:26:50-07:00', mobile: true },  // publishedAt added on the release merge (Game Maker's commit time)
   //                     tap buttons for every station action (cbr mobile HUD) + shared joystick
   'natural-disaster-survival': { publishedAt: '2026-10-18T00:00:00-07:00', mobile: true },  // event start; tap HUD (items, Hunt), joystick + jump
+  'winterhaven':        { publishedAt: '2026-10-25T13:00:00-07:00', mobile: true },  // Winterhaven event game; joystick + jump, big Talk/Accept/Turn-in taps
   'rainbow-obby':       { publishedAt: '2026-10-16T22:11:58-07:00', retired: true },  // replaced by Giant Rainbow Obby
 };
 
