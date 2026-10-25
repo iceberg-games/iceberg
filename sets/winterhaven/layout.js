@@ -144,3 +144,4 @@ export function groundHeight(x, z) {
   if (distToPolyline(x, z, CREEK) < 4.5) h = Math.max(h, 0.2);
   return h;
 }
+export { NPCS } from './npcs.js';

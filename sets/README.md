@@ -118,3 +118,40 @@ Everything is scenery only, with no NPCs or mechanics. Walk mode (`G`) already w
 | Frostbite Pass | south, z 122→260 | Trail up between the ridges. The flyover comes in here |
 | Glimmer Cave | (-40,205) | Rock cave mouth with glowing crystals, on a spur off the pass |
 | Snowdrift Outskirts | east/south edge | Scattered cabins |
+
+**NPCs** (`sets/winterhaven/npcs.js`, re-exported from `layout.js` as `NPCS`; pure data with x/z/facing/note; placement only, not rendered yet):
+
+| id | name | area | role |
+|---|---|---|---|
+| merchant-holloway | Merchant Holloway Frost | market | Shop merchant / quest hub |
+| vendor-pim | Pim Tinselbright | market | Second vendor (trinkets & ornaments) |
+| baker-marzie | Marzie Gingerloaf | market | Baker (cocoa buns, gingerbread) |
+| gift-wrapper-ribbon | Ribbon Quillwick | square | Gift wrapper |
+| town-crier-bellamy | Bellamy Chime | square | Town crier / event announcer |
+| carolers-frostnotes | The Frostnotes | square | Carolers (trio, ambient) |
+| innkeeper-hearth | Hettie Hearthwell | lane | Innkeeper (rest, rumours) |
+| tinker-cogsworth | Brannick Cogsworth | lane | Blacksmith / tinker (upgrades, repairs) |
+| kids-snowpack | Tuck & Wren | lane | Kids playing (snowball mini-quests) |
+| lamplighter-olin | Olin Wickflame | lane | Lamp lighter (light-the-lanterns quest) |
+| skate-coach-sela | Coach Sela Glidewell | lake | Skate coach (skating trials) |
+| ice-fisher-gruff | Old Gruff Pikeby | lake | Ice fisherman (decorative) |
+| cocoa-seller-mallow | Mallow Brewbank | lake | Hot-cocoa seller |
+| bridge-keeper-tollan | Tollan Rimehold | creek | Bridge keeper |
+| castle-steward-aurelle | Steward Aurelle Vane | castle | Castle steward (story quests) |
+| ice-mage-isolde | Isolde Frostweaver | castle | Ice mage / architect |
+| guard-halvard | Sentinel Halvard | castle | Castle guard (left) |
+| guard-brynja | Sentinel Brynja | castle | Castle guard (right) |
+| ranger-fennick | Ranger Fennick Moss | forest | Forest ranger (tracking quests) |
+| woodcutter-bram | Bram Axeholt | forest | Woodcutter (gather logs) |
+| lost-traveler-nimbly | Nimbly Wanderfoot | forest | Lost traveler (escort/find quest) |
+| spirit-whisperwisp | Whisperwisp | forest | Friendly forest spirit (hints, riddles) |
+| portal-keeper-quinn | Gatewarden Quinn | portal | Portal keeper / minigame greeter |
+| mountain-guide-sorrel | Sorrel Peakstride | pass | Mountain guide |
+| crystal-miner-dunk | Dunk Glimmerpick | cave | Crystal miner (mining quests) |
+| cave-hermit-orrin | Hermit Orrin | cave | Cave hermit (lore, rare trades) |
+| farmer-tilda | Tilda Frostfield | outskirts | Farmer (winter crops, deliveries) |
+| sledder-zip | Zip Runnerton | outskirts | Sledder (race challenges) |
+| snowman-builder-poppy | Poppy Coalbutton | outskirts | Snowman builder |
+| pet-pip-owl | Pip the Snow Owl | outskirts | Pet companion (owl) |
+| courier-dash | Dash Parcelwing | outskirts | Courier (delivery quests) |
+| guard-ewan | Watchman Ewan | outskirts | Outskirts guard |
