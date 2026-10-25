@@ -36,6 +36,7 @@ export class UI {
     bus.on('models:changed', () => this.refreshDrawer());
     // Limited-time shop items: re-render when server time / event status arrives, and tick countdowns.
     bus.on('shop:availability', () => this.refreshDrawer());
+    bus.on('plus:changed', () => this.refreshDrawer());   // Plus on/off: show/hide wh_plus_* listings
     setInterval(() => { if (this.drawerName === 'shop') this.refreshDrawer(); }, 30000);
     bus.on('game:loaded', ({ def, game }) => this._onGameLoaded(def, game));
     bus.on('game:unloaded', () => { this.hud.classList.add('hidden'); this.closeDrawer(); this.setBuild(false); });

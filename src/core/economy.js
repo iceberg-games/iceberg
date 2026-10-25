@@ -11,6 +11,7 @@
 import { bus } from './events.js';
 import { COSMETIC_BY_ID } from '../data/cosmetics.js';
 import { demoBucksAllowed } from '../net/config.js';
+import { isPlus } from './plus.js';
 
 export const REWARDS = {
   coinPickup: 5,
@@ -36,10 +37,12 @@ const LOADOUT_DEBOUNCE_MS = 600;
 /** Event cosmetics (earnOnly / eventOnly / unlock: 'quest') are granted by quests and never sold. Same rule as the server sync. */
 /** Limited-time shop item (Cosmetics' `event: '<id>'`): buyable only while that event is live. */
 export const eventOfItem = (item) => (item && (item.event ?? item.eventId)) || null;
-const EVENT_SALE_MSG = { event_not_started: 'On sale when the event starts', event_ended: 'This was a limited-time item: the event has ended', plus_only: 'Iceberg Plus perk: coming soon' };
+const EVENT_SALE_MSG = { event_not_started: 'On sale when the event starts', event_ended: 'This was a limited-time item: the event has ended', plus_only: 'Iceberg Plus members only' };
 export const isGrantOnly = (item) => !!(item && (item.earnOnly || item.eventOnly || item.grantOnly || item.unlock === 'quest'));
 
 export class Economy {
+  /** Live Plus membership (core/plus.js); refreshed on 'plus:changed'. */
+  get isPlus() { return isPlus(); }
   constructor(backend) {
     this.backend = backend;           // LocalBackend (always: local cache / guest storage)
     this.remote = null;               // SupabaseBackend once connect() succeeds
@@ -431,8 +434,8 @@ export class Economy {
   itemAvailability(id, now = Date.now()) {
     const item = COSMETIC_BY_ID[id], ev = eventOfItem(item);
     if (!item) return { forSale: false, limited: false, state: 'unknown_item' };
-    // Iceberg Plus perks (wh_plus_*): locked until the membership flag exists and is set. Plus isn't built yet, so
-    // `this.isPlus` is never true today; the server-side is_plus check must land before these can be scheduled.
+    // Iceberg Plus perks (wh_plus_* / plusOnly): listed only for Plus members (core/plus.js isPlus(): server plus_status
+    // when signed in, demo flag for guests). Client visibility only; server buy_cosmetic still enforces is_plus().
     if ((item.plusOnly ?? id.startsWith('wh_plus_')) && !this.isPlus) return { forSale: false, limited: !!ev, eventId: ev || undefined, state: 'plus_only', hidden: true };
     if (!ev) return isGrantOnly(item) ? { forSale: false, limited: false, state: 'not_for_sale' } : { forSale: true, limited: false };
     let st, t = now;
