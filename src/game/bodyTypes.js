@@ -13,7 +13,7 @@
 export const BODY_TYPE_IDS = ['classic', 'tall', 'stout'];
 export const DEFAULT_BODY_TYPE = 'classic';
 
-function make({ id, label, icon, arm, leg, torso, head }) {
+function make({ id, label, icon, blurb = '', arm, leg, torso, head }) {
   const [tw, th, td] = torso, legLen = leg[1], armLen = arm[1];
   const hipY = legLen, torsoY = hipY + th / 2, shoulderY = hipY + th;
   const armX = tw / 2 + arm[0] / 2, legX = tw / 4;
@@ -21,7 +21,7 @@ function make({ id, label, icon, arm, leg, torso, head }) {
   const ts = [tw / 1, th / 1, td / 0.5];          // torso scale vs classic 1x1x0.5
   const handDrop = -(armLen - 1);                 // hand items authored at classic arm end (-1)
   return {
-    id, label, icon, height: shoulderY + head,
+    id, label, icon, blurb, height: shoulderY + head,
     bones: { legL: [-legX, hipY, 0], legR: [legX, hipY, 0], torso: [0, torsoY, 0], armL: [-armX, shoulderY, 0], armR: [armX, shoulderY, 0], head: [0, shoulderY, 0] },
     limbs: { arm, leg }, torso, head,
     anchors: {
@@ -40,9 +40,9 @@ function make({ id, label, icon, arm, leg, torso, head }) {
 }
 
 export const BODY_TYPES = {
-  classic: make({ id: 'classic', label: 'Classic', icon: '🧊', arm: [0.5, 1, 0.5], leg: [0.5, 1, 0.5], torso: [1, 1, 0.5], head: 0.62 }),
-  tall:    make({ id: 'tall', label: 'Tall', icon: '🗼', arm: [0.42, 1.3, 0.42], leg: [0.44, 1.4, 0.44], torso: [0.88, 1.15, 0.44], head: 0.6 }),
-  stout:   make({ id: 'stout', label: 'Stout', icon: '⛄', arm: [0.56, 0.78, 0.56], leg: [0.62, 0.68, 0.6], torso: [1.24, 0.9, 0.66], head: 0.7 }),
+  classic: make({ id: 'classic', label: 'Classic', icon: '🧊', blurb: 'Blocky & balanced', arm: [0.5, 1, 0.5], leg: [0.5, 1, 0.5], torso: [1, 1, 0.5], head: 0.62 }),
+  tall:    make({ id: 'tall', label: 'Tall', icon: '🗼', blurb: 'Lanky & long-legged', arm: [0.42, 1.3, 0.42], leg: [0.44, 1.4, 0.44], torso: [0.88, 1.15, 0.44], head: 0.6 }),
+  stout:   make({ id: 'stout', label: 'Stout', icon: '⛄', blurb: 'Short & sturdy', arm: [0.56, 0.78, 0.56], leg: [0.62, 0.68, 0.6], torso: [1.24, 0.9, 0.66], head: 0.7 }),
 };
 
 /** bone name -> anchor id used when parenting a cosmetic built for that bone. */
