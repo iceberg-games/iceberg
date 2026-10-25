@@ -206,7 +206,7 @@ export class UI {
   _shop() {
     const e = this.economy;
     const filter = (c) => this.shopCat === 'all' || c.slot === this.shopCat || (this.shopCat === 'acc' && ['neck', 'back', 'hand'].includes(c.slot)) || (this.shopCat === 'winter' && c.winter) || (this.shopCat === 'premium' && c.premium);
-    const tabs = h('div.tabs', CATS.map(([id, label]) => h('button.tab' + (this.shopCat === id ? '.sel' : ''), { onclick: () => { this.shopCat = id; this.refreshDrawer(); } }, label)));
+    const tabs = h('div.tabs', CATS.map(([id, label]) => h('button.tab' + (this.shopCat === id ? '.sel' : ''), { 'data-sfx': 'tab', onclick: () => { this.shopCat = id; this.refreshDrawer(); } }, label)));
     // Release A (Colin): event items stay hidden until their event starts (economy.shopVisible; owned items always show).
     const listed = (c) => {
       if (typeof e.shopVisible === 'function') return e.shopVisible(c.id);
@@ -219,10 +219,10 @@ export class UI {
       let action;
       const av = c.earnOnly ? null : this._availability(c);
       let limitBadge = null;
-      if (owned) action = h('button.btn.equip' + (eq ? '.on' : ''), { onclick: () => { e.toggleEquip(c.id); this.toast(`${eq ? 'Unequipped' : 'Equipped'} ${c.name}`, c.icon); } }, eq ? 'Unequip' : 'Equip');
+      if (owned) action = h('button.btn.equip' + (eq ? '.on' : ''), { 'data-sfx': eq ? 'unequip' : 'equip', onclick: () => { e.toggleEquip(c.id); this.toast(`${eq ? 'Unequipped' : 'Equipped'} ${c.name}`, c.icon); } }, eq ? 'Unequip' : 'Equip');
       else if (c.earnOnly) action = this._earnBadge(c);
       else if (av && av.state === 'event_ended') action = h('button.btn.disabled.event-ended', { disabled: true }, 'Event ended');
-      else action = h('button.btn.buy' + (afford ? '' : '.disabled'), { onclick: () => this._buy(c) }, afford ? 'Buy' : `Need ${(c.price - e.coins).toLocaleString()}`);
+      else action = h('button.btn.buy' + (afford ? '' : '.disabled'), { 'data-sfx': 'none', onclick: () => this._buy(c) }, afford ? 'Buy' : `Need ${(c.price - e.coins).toLocaleString()}`);
       if (av && av.limited && av.forSale && !owned) limitBadge = h('div.limited-badge', { style: 'display:inline-block;margin:2px auto 4px;padding:2px 8px;border-radius:999px;background:linear-gradient(90deg,#ff7a1a,#ff3d6e);color:#fff;font-size:11px;font-weight:700' }, `⏳ Limited time${av.msLeft > 0 ? ' · ' + this._fmtLeft(av.msLeft) + ' left' : ''}`);
       return h('div.card' + (c.premium ? '.premium' : '') + (owned ? '.owned' : '') + (av?.state === 'event_ended' && !owned ? '.ended' : ''), { 'data-id': c.id, style: av?.state === 'event_ended' && !owned ? 'opacity:0.6' : null },
         limitBadge,
@@ -299,10 +299,11 @@ export class UI {
   }
   _buy(c) {
     const r = this.economy.buy(c.id) || { ok: false, reason: 'Could not buy right now' };
-    if (r && typeof r.then === 'function') { r.then((x) => this._buyResult(c, x || {}), () => this.toast('Could not buy right now. Try again soon.', '⚠️')); return; }
+    if (r && typeof r.then === 'function') { r.then((x) => this._buyResult(c, x || {}), () => playUi('error') || this.toast('Could not buy right now. Try again soon.', '⚠️')); return; }
     this._buyResult(c, r);
   }
   _buyResult(c, r) {
+    if (r.ok) playUi('buy'); else playUi('error');
     if (!r.ok && (r.code === 'event_ended' || r.code === 'event_not_started')) { this.toast(r.reason || (r.code === 'event_ended' ? `${c.name}: event has ended` : `${c.name}: coming soon`), '⏳'); this.refreshDrawer(); return; }
     if (r.ok) { this.economy.equip(c.id); this.toast(`Bought & equipped ${c.name}!`, c.icon); }
     else if (r.reason === 'Not enough coins') { this.toast(`Not enough ${CURRENCY.name} for ${c.name}`, '😕'); }
@@ -317,7 +318,7 @@ export class UI {
     const bySlot = {};
     owned.forEach(c => (bySlot[c.slot] ||= []).push(c));
     for (const [slot, items] of Object.entries(bySlot)) {
-      sections.push(h('h4', SLOT_NAMES[slot]), h('div.locker-row', items.map(c => h('button.locker-item' + (e.isEquipped(c.id) ? '.on' : ''), { 'data-id': c.id, onclick: () => e.toggleEquip(c.id), title: e.isEquipped(c.id) ? 'Click to unequip' : 'Click to equip' }, h('span.card-icon', c.icon), h('span', c.name), h('small', e.isEquipped(c.id) ? 'Equipped' : 'Equip')))));
+      sections.push(h('h4', SLOT_NAMES[slot]), h('div.locker-row', items.map(c => h('button.locker-item' + (e.isEquipped(c.id) ? '.on' : ''), { 'data-id': c.id, 'data-sfx': e.isEquipped(c.id) ? 'unequip' : 'equip', onclick: () => e.toggleEquip(c.id), title: e.isEquipped(c.id) ? 'Click to unequip' : 'Click to equip' }, h('span.card-icon', c.icon), h('span', c.name), h('small', e.isEquipped(c.id) ? 'Equipped' : 'Equip')))));
     }
     if (e.owns('icerocket')) {
       const rc = p.rocketColors;

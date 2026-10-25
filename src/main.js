@@ -2,6 +2,7 @@
 // models, music) to the engine, the Games menu, the HUD and the creator.
 import { isBanned, showBanned } from './net/ban.js';
 import './style.css';
+import './ui/iceSkin.css';
 import { backend, modelStore, modelPrefs } from './backend/LocalBackend.js';
 import { Economy } from './core/economy.js';
 import { bindQuests } from './core/quests.js';
