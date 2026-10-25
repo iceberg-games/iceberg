@@ -1,0 +1,153 @@
+{
+ "_about": "Iceberg FEEL pack (E major, icy/tactile). Files are pre-levelled (one-shots peak -3.5 to -6 dBTP, whoosh -10). 'gain' = suggested playback gain on an SFX bus at 1.0. 'pitch' = random playbackRate jitter (+/-). 'replaces' = starter-kit name in ../ogg this supersedes.",
+ "sounds": {
+  "jump": {
+   "files": [
+    "jump_1",
+    "jump_2"
+   ],
+   "gain": 0.7,
+   "pitch": 0.03,
+   "minIntervalMs": 80,
+   "replaces": "jump"
+  },
+  "land_snow": {
+   "files": [
+    "land_snow_1",
+    "land_snow_2",
+    "land_snow_3"
+   ],
+   "gain": 0.8,
+   "pitch": 0.04,
+   "minIntervalMs": 90,
+   "scaleByImpact": true,
+   "replaces": "land_snow"
+  },
+  "footstep_snow": {
+   "files": [
+    "footstep_snow_1",
+    "footstep_snow_2",
+    "footstep_snow_3",
+    "footstep_snow_4",
+    "footstep_snow_5",
+    "footstep_snow_6"
+   ],
+   "gain": 0.45,
+   "pitch": 0.06,
+   "noRepeat": true,
+   "replaces": "footstep_snow_1..4"
+  },
+  "coin_collect": {
+   "files": [
+    "coin_collect"
+   ],
+   "gain": 0.7,
+   "pitch": 0.0,
+   "comboPitchSemitones": [
+    0,
+    2,
+    4,
+    5,
+    7
+   ],
+   "minIntervalMs": 40,
+   "replaces": "coin_collect",
+   "note": "v2: B6->E7 two-note ding + pop + sparkle cascade (850 ms)"
+  },
+  "move_whoosh": {
+   "files": [
+    "move_whoosh"
+   ],
+   "gain": 0.6,
+   "pitch": 0.08,
+   "minIntervalMs": 250
+  },
+  "milestone_ding": {
+   "files": [
+    "milestone_ding"
+   ],
+   "gain": 0.8,
+   "duckMusicDb": -4,
+   "replaces": "checkpoint"
+  },
+  "ui_confirm": {
+   "files": [
+    "ui_confirm"
+   ],
+   "gain": 0.75,
+   "minIntervalMs": 120,
+   "note": "v2 chunky press + upward E->B 'yes'; important buttons"
+  },
+  "heal": {
+   "files": [
+    "heal"
+   ],
+   "gain": 0.7,
+   "minIntervalMs": 300
+  },
+  "ui_click_soft": {
+   "files": [
+    "ui_click_soft_1",
+    "ui_click_soft_2",
+    "ui_click_soft_3"
+   ],
+   "gain": 0.8,
+   "pitch": 0.01,
+   "noRepeat": true,
+   "minIntervalMs": 35,
+   "note": "v2 cozy pop (thock+pop+sparkle), 140ms; default for ordinary buttons/links/tabs"
+  },
+  "ui_hover_tick": {
+   "files": [
+    "ui_hover_tick"
+   ],
+   "gain": 0.55,
+   "minIntervalMs": 90,
+   "note": "mouse only, once per element"
+  },
+  "menu_open": {
+   "files": [
+    "menu_open"
+   ],
+   "gain": 0.8,
+   "minIntervalMs": 80
+  },
+  "menu_close": {
+   "files": [
+    "menu_close"
+   ],
+   "gain": 0.75,
+   "minIntervalMs": 80
+  },
+  "ui_pop": {
+   "files": [
+    "ui_pop"
+   ],
+   "gain": 0.75,
+   "pitch": 0.03,
+   "minIntervalMs": 60,
+   "note": "toggles, small rewards, equip/unequip"
+  },
+  "toast_blip": {
+   "files": [
+    "toast_blip"
+   ],
+   "gain": 0.7,
+   "minIntervalMs": 250,
+   "note": "toast notifications"
+  }
+ },
+ "layers": {
+  "jump_takeoff": [
+   "jump",
+   "move_whoosh@0.5"
+  ],
+  "sprint_start": [
+   "move_whoosh"
+  ],
+  "hard_landing": [
+   "land_snow@1.0",
+   "footstep_snow@0.6"
+  ]
+ }
+}
