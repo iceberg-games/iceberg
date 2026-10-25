@@ -446,7 +446,7 @@ await t('event: fixture validates + syncs (grant-only cosmetics, ND gear + consu
   assert.equal((await rpc(db, null, 'event_status', { p_event_id: 'natural_disasters' })).active, true);
   assert.deepEqual((await su(db, `select id from public.catalog_items where grant_only order by id`)).map(r => r.id), ['blizzard_hat', 'lightning_back', 'meteor_pet', 'tornado_hat',
     'wh_aurora_scarf', 'wh_baker_hat', 'wh_blizzard_back', 'wh_bridge_badge', 'wh_carol_bells', 'wh_carrot_nose', 'wh_crystal_pet', 'wh_fishing_lure', 'wh_frostspire_crown', 'wh_lantern_hat', 'wh_parcel_satchel', 'wh_pass_goggles', 'wh_pine_cloak', 'wh_ranger_badge', 'wh_snowball_sack', 'wh_wolf_pup_pal']);
-  assert.equal((await su(db, `select count(*)::int n from public.quest_defs where active`))[0].n, 4);
+  assert.equal((await su(db, `select count(*)::int n from public.quest_defs where active`))[0].n, 20);   // 4 ND + 16 Winterhaven (event-gated)
   // validation catches a buyable reward and an unknown game
   const bad = { ...src, quests: [{ ...src.quests.at(-1), id: 'zz_bad', rewardItemId: 'earmuffs', gameId: 'nope' }] };
   const errs = validate(bad).join('\n');
