@@ -13,6 +13,7 @@ export const GAME_META = {
   //                     tap buttons for every station action (cbr mobile HUD) + shared joystick
   'natural-disaster-survival': { publishedAt: '2026-10-18T00:00:00-07:00', mobile: true },  // event start; tap HUD (items, Hunt), joystick + jump
   'winterhaven':        { publishedAt: '2026-10-25T15:24:00-07:00', mobile: true },  // Winterhaven event game; joystick + jump, big Talk/Accept/Turn-in taps
+  'sled-rush':          { publishedAt: '2026-10-25T16:00:00-07:00', mobile: true },  // joystick lean + shared Jump; tap Start/One more run (Publisher sets real publishedAt on release)
   'rainbow-obby':       { publishedAt: '2026-10-16T22:11:58-07:00', retired: true },  // replaced by Giant Rainbow Obby
 };
 
