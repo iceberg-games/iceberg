@@ -6,6 +6,7 @@ import birgHQ from './birgHQ.js';
 import giantRainbowObby from './giantObby/index.js';
 import cornerBakery from './cornerBakery/index.js';
 import naturalDisasterSurvival from './disasterSurvival/index.js';
+import winterhaven from './winterhaven/index.js';
 import { withEventQuest, frostQuest, hqQuest, obbyQuest } from './_event/hooks.js'; // Natural Disasters event quests (remove to end the event)
 import { creatorDef, customGameDef } from './customGame.js';
 import { backend } from '../backend/LocalBackend.js';
@@ -16,6 +17,7 @@ export const BUILTIN_GAMES = [
   withEventQuest(giantRainbowObby, ...obbyQuest),
   cornerBakery,
   naturalDisasterSurvival,
+  winterhaven,
 ];
 export const CREATOR = creatorDef;
 
