@@ -344,10 +344,10 @@ export class UI {
         e.isEquipped(c.id) ? null : h('p.muted', 'Equip it to see the color on your avatar.')));
     }
     sections.push(this._wearSection());
-    sections.unshift(h('h4', '🧍 Body type'), h('div.locker-row.body-types', Object.values(BODY_TYPES).map(b => { const on = this.avatar.bodyType === b.id;
-      return h('button.locker-item.body-type-card' + (on ? '.on' : ''), { 'data-body': b.id, 'data-sfx': 'equip', title: `Switch to ${b.label} body`, onclick: () => { saveBodyType(b.id); this.avatar.setBodyType(b.id); this.toast(`${b.label} body`, b.icon); this.refreshDrawer(); } },
+    sections.unshift(h('h4.body-packages-title', '🧍 Body packages'), h('p.body-packages-hint', 'Free · tap Classic, Tall, or Stout to switch'), h('div.locker-row.body-types', Object.values(BODY_TYPES).map(b => { const on = this.avatar.bodyType === b.id;
+      return h('button.locker-item.body-type-card' + (on ? '.on' : ''), { 'data-body': b.id, 'data-sfx': 'equip', title: `Switch to ${b.label} body`, onclick: () => { saveBodyType(b.id); this.avatar.setBodyType(b.id); this.toast(`${b.label} body equipped`, b.icon); this.refreshDrawer(); } },
         h('span.card-icon.body-type-icon', b.icon), h('span.body-type-label', b.label), b.blurb ? h('span.body-type-blurb', b.blurb) : '', h('small.body-type-state' + (on ? '.current' : ''), on ? '✓ Current' : 'Pick')); })));
-    return this._frame('🎒 Locker', 'Your owned items. Click to equip/unequip.', ...sections);
+    return this._frame('🎒 Locker', 'Pick a body package, then equip items.', ...sections);
   }
 
   _wearSection() {

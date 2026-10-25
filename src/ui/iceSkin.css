@@ -111,3 +111,13 @@ body.portal-page:not(.theme-storm) .p-friend { background: var(--ice-panel-stron
 @keyframes ice-select-pop { 0% { transform: scale(.92); } 60% { transform: scale(1.06); } 100% { transform: none; } }
 @media (hover: none) { .body-type-card:hover { transform: none; } }
 @media (prefers-reduced-motion: reduce) { .body-type-card, .body-type-card::after, .body-type-icon { transition: none !important; animation: none !important; } .body-type-card:hover, .body-type-card:active { transform: none; } }
+
+/* body packages: large + unmissable */
+.body-packages-title { font-size: 1.25rem; margin: 4px 0 2px; color: var(--ice-accent-deep); }
+.body-packages-hint { margin: 0 0 8px; font-size: .85rem; color: var(--ice-text-soft); }
+.locker-row.body-types { grid-template-columns: repeat(3, 1fr); gap: 14px; padding: 14px; margin-bottom: 18px; border: 2px solid var(--ice-accent-hi); }
+.body-type-card { min-height: 150px; padding: 18px 10px 14px; cursor: pointer; }
+.body-type-icon { font-size: 3.2rem; }
+.body-type-label { font-size: 1.2rem; }
+.body-type-state { font-size: .85rem; padding: 4px 14px; }
+@media (max-width: 520px) { .locker-row.body-types { grid-template-columns: 1fr; } .body-type-card { flex-direction: row; min-height: 72px; gap: 12px; justify-content: flex-start; } .body-type-state { margin: 0 0 0 auto; } }
