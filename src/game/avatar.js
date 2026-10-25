@@ -41,6 +41,16 @@ function mesh(geo, mat, x = 0, y = 0, z = 0) {
 // ---------- cosmetic model builders ----------
 // Each returns { bone: 'head'|'torso'|'armR', object }
 const BUILDERS = {
+  wh_carrot_nose(_rc, color) { return buildCarrotNose(color); },
+  wh_bridge_badge(_rc, color) { return buildBridgeBadge(color); },
+  wh_carol_bells(_rc, color) { return buildCarolBells(color); },
+  wh_pass_goggles(_rc, color) { return buildPassGoggles(color); },
+  wh_snowball_sack(_rc, color) { return buildSnowballSack(color); },
+  wh_baker_hat(_rc, color) { return buildBakerHat(color); },
+  wh_fishing_lure(_rc, color) { return buildFishingLure(color); },
+  wh_parcel_satchel(_rc, color) { return buildParcelSatchel(color); },
+  wh_ranger_badge(_rc, color) { return buildRangerBadge(color); },
+  wh_wolf_pup_pal(_rc, color) { return buildWolfPup(color); },
   wh_wool_mittens(_rc, color) { return buildWoolMittens(color); },
   wh_puffer_vest(_rc, color) { return buildPufferVest(color); },
   wh_jingle_hat(_rc, color) { return buildJingleHat(color); },
@@ -1521,6 +1531,309 @@ function buildJingleHat(color) {
   g.userData.tick();
   g.userData.setColor = (c) => knit.color.set(c);
   return { bone: 'head', object: g };
+}
+
+// ---- Winterhaven quest rewards (batch 2) ----
+function emblemTexture(draw, bg = '#e9eef3', rim = '#8a97a6') {
+  const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
+  x.fillStyle = rim; x.beginPath(); x.arc(64, 64, 63, 0, Math.PI * 2); x.fill();
+  x.fillStyle = bg; x.beginPath(); x.arc(64, 64, 55, 0, Math.PI * 2); x.fill();
+  draw(x);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
+function buildCarrotNose(color) {
+  const g = new THREE.Group();
+  const carrot = std(color, { roughness: 0.6 });
+  const ridge = std(_tint(color, '#000000', 0.25), { roughness: 0.7 });
+  const nose = new THREE.Group(); nose.position.set(0, 0.31, 0.31); g.add(nose);
+  const cone = mesh(new THREE.ConeGeometry(0.06, 0.3, 14), carrot, 0, 0, 0.15); cone.rotation.x = Math.PI / 2; nose.add(cone);
+  for (let i = 0; i < 4; i++) { const r = mesh(new THREE.TorusGeometry(0.052 - i * 0.011, 0.004, 4, 16), ridge, 0, 0, 0.05 + i * 0.055); nose.add(r); }
+  nose.add(rotated(mesh(new THREE.CylinderGeometry(0.062, 0.062, 0.02, 14), carrot, 0, 0, 0.005), 'x', Math.PI / 2));
+  // coal-button cheeks
+  const coal = std('#1c1c1f', { roughness: 0.85, flatShading: true });
+  for (const sx of [-1, 1]) for (let i = 0; i < 3; i++) g.add(mesh(new THREE.DodecahedronGeometry(0.022, 0), coal, sx * (0.16 + i * 0.035), 0.24 - i * 0.03 + (i === 2 ? 0.035 : 0), 0.32));
+  g.userData.tick = () => { const t = performance.now() / 1000; nose.rotation.z = Math.sin(t * 1.3) * 0.04; nose.rotation.x = Math.sin(t * 2.1) * 0.03; };
+  g.userData.setColor = (c) => { carrot.color.set(c); ridge.color.copy(_tint(c, '#000000', 0.25)); };
+  return { bone: 'head', object: g };
+}
+
+function medalRibbon(g, ribbonM, stripeM, y0 = 0.53, dropY = 0.12) {
+  // V-shaped ribbon from around the collar down to the medal
+  for (const sx of [-1, 1]) {
+    const r = mesh(new THREE.BoxGeometry(0.09, 0.42, 0.015), ribbonM, sx * 0.1, (y0 + dropY) / 2 + 0.02, 0.27); r.rotation.z = sx * 0.42; g.add(r);
+    const s = mesh(new THREE.BoxGeometry(0.025, 0.42, 0.017), stripeM, sx * 0.1, (y0 + dropY) / 2 + 0.02, 0.272); s.rotation.z = sx * 0.42; g.add(s);
+  }
+  const back = mesh(new THREE.TorusGeometry(0.3, 0.02, 6, 32), ribbonM, 0, y0 - 0.02, -0.01); back.rotation.x = Math.PI / 2; back.scale.set(1.1, 0.85, 1); g.add(back);
+}
+
+function buildBridgeBadge(color) {
+  const g = new THREE.Group();
+  const ribbon = std(color, { roughness: 0.6 }), stripe = std('#f4f1ea', { roughness: 0.6 });
+  medalRibbon(g, ribbon, stripe);
+  const silver = std('#dfe6ee', { metalness: 0.6, roughness: 0.25 });
+  const tex = emblemTexture((x) => {
+    x.strokeStyle = '#4b6a8a'; x.lineWidth = 6; x.beginPath(); x.arc(64, 92, 38, Math.PI * 1.1, Math.PI * 1.9); x.stroke();   // arch
+    x.lineWidth = 4; x.beginPath(); x.moveTo(20, 80); x.lineTo(108, 80); x.stroke();
+    for (let i = 30; i <= 98; i += 12) { x.beginPath(); x.moveTo(i, 80); x.lineTo(i, 92 - Math.sqrt(Math.max(0, 38 * 38 - (i - 64) ** 2)) + 6); x.stroke(); }
+    x.fillStyle = '#7fc4ef'; x.fillRect(20, 84, 88, 10);    // icy creek
+    x.fillStyle = '#4b6a8a'; x.font = 'bold 14px sans-serif'; x.textAlign = 'center'; x.fillText('ICE BRIDGE', 64, 36);
+  }, '#eef4f9', '#9aa8b6');
+  const medal = new THREE.Group(); medal.position.set(0, 0.06, 0.29); g.add(medal);
+  medal.add(rotated(mesh(new THREE.CylinderGeometry(0.11, 0.11, 0.025, 32), silver), 'x', Math.PI / 2));
+  medal.add(mesh(new THREE.CircleGeometry(0.1, 32), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.35, metalness: 0.3 }), 0, 0, 0.014));
+  medal.add(mesh(new THREE.TorusGeometry(0.105, 0.008, 6, 32), silver, 0, 0, 0.012));
+  medal.add(mesh(new THREE.BoxGeometry(0.1, 0.03, 0.02), silver, 0, 0.12, 0));
+  const flake = snowflakeCharm(0.025); flake.position.set(0.085, 0.085, 0.02); medal.add(flake);
+  g.userData.tick = () => { medal.rotation.z = Math.sin(performance.now() / 700) * 0.06; };
+  g.userData.setColor = (c) => ribbon.color.set(c);
+  return { bone: 'torso', object: g };
+}
+
+function buildCarolBells(color) {
+  const g = new THREE.Group(); g.position.set(0, -0.92, 0.27);
+  const metal = std(color, { metalness: 0.75, roughness: 0.22, emissive: _tint(color, '#000000', 0.7), emissiveIntensity: 0.6 });
+  const wood = std('#6b3f22', { roughness: 0.6 });
+  const swing = new THREE.Group(); g.add(swing);
+  // handle in the fist
+  swing.add(mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.24, 14), wood, 0, 0.08, 0));
+  swing.add(mesh(new THREE.SphereGeometry(0.05, 14, 10), wood, 0, 0.22, 0));
+  swing.add(mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.04, 14), metal, 0, -0.06, 0));
+  // bell (lathe profile), opening downward
+  const pts = [[0.0, 0], [0.05, -0.005], [0.075, -0.04], [0.085, -0.1], [0.11, -0.17], [0.14, -0.2], [0.135, -0.21]].map(([r, y]) => new THREE.Vector2(r, y));
+  const bellGeo = new THREE.LatheGeometry(pts, 32); const bell = mesh(bellGeo, metal, 0, -0.07, 0); bell.material = metal; bell.material.side = THREE.DoubleSide; swing.add(bell);
+  const clapper = mesh(new THREE.SphereGeometry(0.03, 10, 8), std('#3a3a3a', { metalness: 0.5 }), 0, -0.26, 0); swing.add(clapper);
+  swing.add(rotated(mesh(new THREE.TorusGeometry(0.138, 0.008, 6, 32), metal, 0, -0.275, 0), 'x', Math.PI / 2));
+  // holly sprig with ribbon at the collar
+  const leaf = std('#1f6b3c', { roughness: 0.5 }), berry = std('#d0242c', { roughness: 0.3 });
+  for (const [a, x] of [[0.6, 0.05], [-0.6, -0.05]]) { const l = mesh(new THREE.SphereGeometry(0.04, 8, 6), leaf, x, -0.04, 0.045); l.scale.set(1.6, 0.5, 0.25); l.rotation.z = a; swing.add(l); }
+  for (const [x, y] of [[0, -0.03], [0.02, -0.05], [-0.02, -0.05]]) swing.add(mesh(new THREE.SphereGeometry(0.016, 8, 6), berry, x, y, 0.06));
+  // little musical sparkles
+  const N = 10, pos = new Float32Array(N * 3), life = new Float32Array(N); for (let i = 0; i < N; i++) life[i] = Math.random();
+  const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const sp = new THREE.Points(pg, new THREE.PointsMaterial({ map: softDotTexture(), size: 0.06, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); g.add(sp);
+  g.userData.tick = (dt = 0) => { const t = performance.now() / 1000; const ring = Math.sin(t * 5);
+    swing.rotation.z = ring * 0.35; clapper.position.x = -ring * 0.06;
+    for (let i = 0; i < N; i++) { life[i] += dt * 0.6; if (life[i] > 1) life[i] -= 1; const l = life[i], a = i * 2.4;
+      pos[i * 3] = Math.cos(a) * (0.12 + l * 0.2); pos[i * 3 + 1] = -0.3 + l * 0.1 + Math.sin(a) * 0.05; pos[i * 3 + 2] = Math.sin(a) * (0.12 + l * 0.2); }
+    pg.attributes.position.needsUpdate = true; };
+  g.userData.tick(0);
+  g.userData.setColor = (c) => { metal.color.set(c); metal.emissive.copy(_tint(c, '#000000', 0.7)); sp.material.color.set(c); };
+  return { bone: 'armR', object: g };
+}
+
+function buildPassGoggles(color) {
+  const g = new THREE.Group();
+  const EX = 0.12, EY = 0.37, Z = 0.345, R = 0.085;
+  const brass = std('#a8823a', { metalness: 0.75, roughness: 0.3 });
+  const leather = std('#5a3a22', { roughness: 0.8 });
+  const lens = new THREE.MeshPhysicalMaterial({ color, metalness: 0.9, roughness: 0.08, iridescence: 1, iridescenceIOR: 1.6, emissive: color, emissiveIntensity: 0.2, clearcoat: 1 });
+  const frost = std('#f4faff', { roughness: 0.9 });
+  for (const s of [-1, 1]) {
+    const cup = mesh(new THREE.CylinderGeometry(R + 0.012, R + 0.025, 0.06, 28, 1, true), leather, s * EX, EY, Z - 0.03); cup.rotation.x = Math.PI / 2; cup.material.side = THREE.DoubleSide; g.add(cup);
+    g.add(mesh(new THREE.TorusGeometry(R + 0.008, 0.014, 8, 28), brass, s * EX, EY, Z));
+    const l = mesh(new THREE.SphereGeometry(R, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), lens, s * EX, EY, Z - 0.005); l.rotation.x = Math.PI / 2; l.scale.set(1, 0.35, 1); g.add(l);
+    // side shield vents
+    for (let i = 0; i < 3; i++) g.add(mesh(new THREE.BoxGeometry(0.006, 0.05, 0.012), brass, s * (EX + R + 0.022), EY - 0.03 + i * 0.03, Z - 0.03));
+    // frost rime on the rims
+    for (let i = 0; i < 6; i++) { const a = Math.PI * (0.15 + i * 0.13) * (s > 0 ? 1 : -1) + (s > 0 ? 0 : Math.PI); g.add(mesh(new THREE.IcosahedronGeometry(0.009, 0), frost, s * EX + Math.cos(a) * (R + 0.015), EY + Math.abs(Math.sin(a)) * (R + 0.015), Z + 0.006)); }
+    // strap to the back of the head
+    g.add(mesh(new THREE.BoxGeometry(0.02, 0.05, 0.64), leather, s * 0.325, EY, 0.0));
+  }
+  g.add(mesh(new THREE.BoxGeometry(0.66, 0.05, 0.02), leather, 0, EY, -0.325));
+  g.add(mesh(new THREE.BoxGeometry(0.06, 0.03, 0.03), brass, 0, EY, -0.335));
+  const bridge = mesh(new THREE.TorusGeometry(0.035, 0.01, 6, 12, Math.PI), brass, 0, EY + 0.005, Z); g.add(bridge);
+  // glint sweep
+  const glint = new THREE.Sprite(new THREE.SpriteMaterial({ map: softDotTexture(), color: '#ffffff', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending })); glint.scale.setScalar(0.07); g.add(glint);
+  g.userData.tick = () => { const t = (performance.now() / 1000) % 3.5; const k = Math.min(1, t / 0.6);
+    glint.position.set(-EX - R + k * 2 * (EX + R), EY + 0.03, Z + 0.02); glint.material.opacity = t < 0.6 ? Math.sin(k * Math.PI) * 0.9 : 0; };
+  g.userData.setColor = (c) => { lens.color.set(c); lens.emissive.set(c); };
+  return { bone: 'head', object: g };
+}
+
+function buildSnowballSack(color) {
+  const g = new THREE.Group();
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+  x.fillStyle = '#ffffff'; x.fillRect(0, 0, 64, 64); x.fillStyle = 'rgba(0,0,0,0.18)';
+  for (let i = 0; i < 64; i += 4) { x.fillRect(i, 0, 1, 64); x.fillRect(0, i, 64, 1); }
+  const weave = new THREE.CanvasTexture(c); weave.wrapS = weave.wrapT = THREE.RepeatWrapping; weave.repeat.set(4, 4);
+  const sackM = std(color, { map: weave, bumpMap: weave, bumpScale: 1, roughness: 1 });
+  const rope = std('#d8c08a', { roughness: 0.9 });
+  const snow = std('#ffffff', { roughness: 0.75 });
+  // strap diagonally across the chest
+  const strap = mesh(new THREE.BoxGeometry(0.08, 1.25, 0.025), rope, 0, 0, 0.27); strap.rotation.z = 0.78; g.add(strap);
+  const strapB = mesh(new THREE.BoxGeometry(0.08, 1.25, 0.025), rope, 0, 0, -0.27); strapB.rotation.z = -0.78; g.add(strapB);
+  const sack = new THREE.Group(); sack.position.set(0.05, -0.1, -0.5); g.add(sack);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.3, 24, 16), sackM); body.scale.set(1.05, 1.25, 0.75); sack.add(body);
+  const neck = mesh(new THREE.CylinderGeometry(0.12, 0.2, 0.14, 18), sackM, 0, 0.36, 0); sack.add(neck);
+  const lip = mesh(new THREE.CylinderGeometry(0.2, 0.13, 0.08, 18, 1, true), sackM, 0, 0.46, 0); lip.material = sackM.clone(); lip.material.side = THREE.DoubleSide; sack.add(lip);
+  sack.add(rotated(mesh(new THREE.TorusGeometry(0.125, 0.018, 6, 24), rope, 0, 0.38, 0), 'x', Math.PI / 2));
+  for (const sx of [-1, 1]) { const end = mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.16, 6), rope, sx * 0.07, 0.3, 0.12); end.rotation.z = sx * 0.3; sack.add(end); }
+  // snowballs heaped in the mouth
+  const balls = [];
+  for (const [bx, by, bz, r] of [[0, 0.52, 0, 0.09], [-0.09, 0.49, 0.03, 0.075], [0.09, 0.5, -0.02, 0.08], [0.02, 0.6, 0.04, 0.07], [-0.04, 0.5, -0.08, 0.07]]) {
+    const b = mesh(new THREE.IcosahedronGeometry(r, 2), snow, bx, by, bz); sack.add(b); balls.push(b);
+  }
+  // patch
+  sack.add(mesh(new RoundedBoxGeometry(0.16, 0.14, 0.02, 2, 0.01), std(_tint(color, '#ffffff', 0.35), { roughness: 1 }), 0.12, -0.05, -0.23));
+  g.userData.tick = () => { const t = performance.now() / 1000; sack.rotation.z = Math.sin(t * 1.6) * 0.05; balls.forEach((b, i) => b.position.y += Math.sin(t * 4 + i) * 0.0004); };
+  g.userData.setColor = (c) => { sackM.color.set(c); lip.material.color.set(c); };
+  return { bone: 'torso', object: g };
+}
+
+function buildBakerHat(color) {
+  const g = new THREE.Group();
+  const cloth = std('#fbfaf6', { roughness: 0.9 });
+  const ribbonM = std(color, { roughness: 0.5 });
+  g.add(mesh(new THREE.CylinderGeometry(0.47, 0.47, 0.22, 4, 1, false, Math.PI / 4), cloth, 0, 0.6, 0));
+  for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; g.add(mesh(new THREE.BoxGeometry(0.01, 0.2, 0.01), std('#e8e4da'), Math.cos(a) * 0.33, 0.6, Math.sin(a) * 0.33)); }
+  // puffy toque top: cluster of soft spheres
+  const puff = new THREE.Group(); puff.position.y = 0.9; g.add(puff);
+  puff.add(mesh(new THREE.SphereGeometry(0.3, 20, 14), cloth, 0, 0, 0));
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; puff.add(mesh(new THREE.SphereGeometry(0.2, 16, 12), cloth, Math.cos(a) * 0.22, -0.05, Math.sin(a) * 0.22)); }
+  puff.scale.set(1.1, 0.8, 1.1);
+  // ribbon band + bow
+  g.add(mesh(new THREE.CylinderGeometry(0.476, 0.476, 0.07, 4, 1, false, Math.PI / 4), ribbonM, 0, 0.56, 0));
+  for (const sx of [-1, 1]) { const loop = mesh(new THREE.SphereGeometry(0.05, 10, 8), ribbonM, sx * 0.05, 0.57, 0.35); loop.scale.set(1.3, 0.8, 0.5); g.add(loop); }
+  g.add(mesh(new THREE.SphereGeometry(0.025, 8, 6), ribbonM, 0, 0.57, 0.36));
+  // gingerbread cookie tucked in the band
+  const cookie = new THREE.Group(); cookie.position.set(0.22, 0.66, 0.34); cookie.rotation.z = -0.25; g.add(cookie);
+  const ginger = std('#b5652b', { roughness: 0.8 }), icing = std('#ffffff', { roughness: 0.5 });
+  cookie.add(mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.025, 14), ginger, 0, 0.07, 0).rotateX(Math.PI / 2));
+  cookie.add(mesh(new RoundedBoxGeometry(0.07, 0.07, 0.025, 2, 0.01), ginger, 0, 0.01, 0));
+  for (const sx of [-1, 1]) { const arm = mesh(new RoundedBoxGeometry(0.06, 0.025, 0.025, 2, 0.01), ginger, sx * 0.05, 0.025, 0); arm.rotation.z = sx * 0.3; cookie.add(arm); const leg = mesh(new RoundedBoxGeometry(0.025, 0.06, 0.025, 2, 0.01), ginger, sx * 0.02, -0.045, 0); cookie.add(leg); }
+  for (const y of [0.025, 0.0]) cookie.add(mesh(new THREE.SphereGeometry(0.007, 6, 4), icing, 0, y, 0.014));
+  for (const sx of [-1, 1]) cookie.add(mesh(new THREE.SphereGeometry(0.006, 6, 4), std('#3a2010'), sx * 0.012, 0.075, 0.018));
+  g.userData.tick = () => { puff.rotation.z = Math.sin(performance.now() / 900) * 0.03; };
+  g.userData.setColor = (c) => ribbonM.color.set(c);
+  return { bone: 'head', object: g };
+}
+
+function buildFishingLure(color) {
+  const g = new THREE.Group(); g.position.set(0, -0.92, 0.27);
+  const cork = std('#c89a62', { roughness: 0.9 }), rodM = std('#2d3a4a', { roughness: 0.4, metalness: 0.3 });
+  const reelM = std('#c9ced4', { metalness: 0.8, roughness: 0.3 });
+  const rod = new THREE.Group(); rod.rotation.x = 0.9; g.add(rod);
+  rod.add(mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.2, 12), cork, 0, 0, 0));
+  rod.add(mesh(new THREE.CylinderGeometry(0.012, 0.02, 0.6, 8), rodM, 0, 0.4, 0));
+  rod.add(mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.035, 18), reelM, 0.05, 0.1, 0).rotateZ(Math.PI / 2));
+  rod.add(mesh(new THREE.BoxGeometry(0.01, 0.04, 0.01), reelM, 0.08, 0.13, 0));
+  for (let i = 0; i < 3; i++) rod.add(mesh(new THREE.TorusGeometry(0.012, 0.003, 4, 10), reelM, 0, 0.25 + i * 0.15, 0.02));
+  const tipLocal = new THREE.Vector3(0, 0.7, 0);
+  // line + bobber + lure dangling from the tip (world-down)
+  const hang = new THREE.Group(); g.add(hang);
+  const tipPos = tipLocal.clone().applyEuler(rod.rotation); hang.position.copy(tipPos);
+  const lineM = new THREE.LineBasicMaterial({ color: '#e8eef4' });
+  const lineGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, -0.45, 0)]);
+  hang.add(new THREE.Line(lineGeo, lineM));
+  const bobber = new THREE.Group(); bobber.position.y = -0.2; hang.add(bobber);
+  const bobTop = std(color, { roughness: 0.35 });
+  bobber.add(mesh(new THREE.SphereGeometry(0.04, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), bobTop));
+  bobber.add(mesh(new THREE.SphereGeometry(0.04, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), std('#ffffff', { roughness: 0.35 })));
+  bobber.add(mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.03, 6), bobTop, 0, 0.05, 0));
+  const lure = new THREE.Group(); lure.position.y = -0.45; hang.add(lure);
+  const fishM = std('#dfe8f0', { metalness: 0.9, roughness: 0.15, emissive: color, emissiveIntensity: 0.15 });
+  const body = mesh(new THREE.SphereGeometry(0.03, 12, 8), fishM); body.scale.set(0.6, 1.6, 0.4); lure.add(body);
+  lure.add(mesh(new THREE.ConeGeometry(0.025, 0.04, 4), fishM, 0, -0.06, 0).rotateX(Math.PI));
+  lure.add(mesh(new THREE.TorusGeometry(0.012, 0.003, 4, 10, Math.PI * 1.4), reelM, 0, -0.09, 0));
+  g.userData.tick = () => { const t = performance.now() / 1000; hang.rotation.z = Math.sin(t * 1.7) * 0.15; hang.rotation.x = Math.sin(t * 1.2) * 0.08; bobber.position.y = -0.2 + Math.sin(t * 3) * 0.01; lure.rotation.y = t * 2; };
+  g.userData.setColor = (c) => { bobTop.color.set(c); fishM.emissive.set(c); };
+  return { bone: 'armR', object: g };
+}
+
+function buildParcelSatchel(color) {
+  const g = new THREE.Group();
+  const leather = std(color, { roughness: 0.55 });
+  const dark = std(_tint(color, '#000000', 0.35), { roughness: 0.6 });
+  const brass = std('#c8a045', { metalness: 0.8, roughness: 0.3 });
+  // cross-body strap (front + back) with buckle
+  for (const z of [0.27, -0.27]) { const s = mesh(new THREE.BoxGeometry(0.09, 1.3, 0.02), dark, 0, 0, z); s.rotation.z = z > 0 ? -0.8 : 0.8; g.add(s); }
+  g.add(mesh(new RoundedBoxGeometry(0.1, 0.08, 0.02, 2, 0.01), brass, -0.12, 0.12, 0.285));
+  // satchel on the back, slung low on one side
+  const bag = new THREE.Group(); bag.position.set(-0.12, -0.25, -0.42); bag.rotation.z = 0.08; g.add(bag);
+  bag.add(mesh(new RoundedBoxGeometry(0.7, 0.46, 0.26, 3, 0.06), leather, 0, 0, 0));
+  const flap = mesh(new RoundedBoxGeometry(0.72, 0.28, 0.03, 3, 0.012), dark, 0, 0.1, -0.14); bag.add(flap);
+  for (const sx of [-0.2, 0.2]) { bag.add(mesh(new THREE.BoxGeometry(0.05, 0.22, 0.012), dark, sx, -0.06, -0.158)); bag.add(mesh(new RoundedBoxGeometry(0.06, 0.05, 0.015, 2, 0.006), brass, sx, -0.14, -0.164)); }
+  // stitching
+  for (let i = 0; i < 14; i++) bag.add(mesh(new THREE.BoxGeometry(0.025, 0.005, 0.004), std('#f0e2c0'), -0.33 + i * 0.05, -0.02, -0.158));
+  // parcels poking out the top: wrapped boxes with string + a rolled letter
+  const paper = [std('#e9d9b5', { roughness: 0.9 }), std('#c94a3a', { roughness: 0.7 }), std('#4a7ab0', { roughness: 0.7 })];
+  const twine = std('#7a5a3a');
+  [[-0.18, 0.28, 0.02, 0.2, 0.18, 0.16, 0], [0.06, 0.3, 0.0, 0.17, 0.22, 0.14, 1], [0.24, 0.26, 0.03, 0.15, 0.14, 0.13, 2]].forEach(([x, y, z, w, h, d, k]) => {
+    const p = mesh(new THREE.BoxGeometry(w, h, d), paper[k], x, y, z); p.rotation.z = (k - 1) * 0.15; bag.add(p);
+    p.add(mesh(new THREE.BoxGeometry(w + 0.004, 0.012, d + 0.004), twine)); p.add(mesh(new THREE.BoxGeometry(0.012, h + 0.004, d + 0.004), twine));
+  });
+  const letter = mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.26, 12), std('#f6efe0'), -0.02, 0.32, 0.08); letter.rotation.z = 1.1; bag.add(letter);
+  bag.add(mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.02, 12), std('#b3242a', { roughness: 0.4 }), -0.02, 0.32, 0.08).rotateZ(1.1));
+  // postal emblem on the flap
+  const em = emblemTexture((x) => { x.fillStyle = '#b3242a'; x.font = 'bold 60px serif'; x.textAlign = 'center'; x.fillText('✉', 64, 86); }, '#f3ead6', '#c8a045');
+  bag.add(mesh(new THREE.CircleGeometry(0.07, 24), new THREE.MeshStandardMaterial({ map: em, roughness: 0.6 }), 0, 0.12, -0.157).rotateY(Math.PI));
+  g.userData.tick = () => { bag.rotation.z = 0.08 + Math.sin(performance.now() / 650) * 0.04; };
+  g.userData.setColor = (c) => { leather.color.set(c); dark.color.copy(_tint(c, '#000000', 0.35)); };
+  return { bone: 'torso', object: g };
+}
+
+function buildRangerBadge(color) {
+  const g = new THREE.Group();
+  const cord = std(color, { roughness: 0.7 }), stripe = std('#d8c08a', { roughness: 0.7 });
+  medalRibbon(g, cord, stripe, 0.53, 0.18);
+  const brass = std('#c8a045', { metalness: 0.75, roughness: 0.28 });
+  // shield shape
+  const sh = new THREE.Shape(); sh.moveTo(0, 0.13); sh.quadraticCurveTo(0.1, 0.12, 0.11, 0.09); sh.lineTo(0.1, -0.02); sh.quadraticCurveTo(0.07, -0.1, 0, -0.14); sh.quadraticCurveTo(-0.07, -0.1, -0.1, -0.02); sh.lineTo(-0.11, 0.09); sh.quadraticCurveTo(-0.1, 0.12, 0, 0.13);
+  const badge = new THREE.Group(); badge.position.set(0, 0.08, 0.28); g.add(badge);
+  badge.add(mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.02, bevelEnabled: true, bevelSize: 0.008, bevelThickness: 0.006, bevelSegments: 2 }), brass));
+  const inner = new THREE.Shape(sh.getPoints(24).map(p => p.clone().multiplyScalar(0.78)));
+  const enamel = std(color, { roughness: 0.3 });
+  badge.add(mesh(new THREE.ShapeGeometry(inner), enamel, 0, 0, 0.031));
+  // pine tree emblem
+  const pine = std('#f3ead6', { roughness: 0.5 });
+  for (let i = 0; i < 3; i++) badge.add(mesh(new THREE.ConeGeometry(0.05 - i * 0.012, 0.05, 3), pine, 0, -0.02 + i * 0.035, 0.035).rotateY(Math.PI / 6));
+  badge.add(mesh(new THREE.BoxGeometry(0.012, 0.02, 0.006), pine, 0, -0.06, 0.035));
+  for (const sx of [-1, 1]) badge.add(mesh(new THREE.OctahedronGeometry(0.012, 0), brass, sx * 0.065, 0.075, 0.035));
+  // compass charm hanging beside it
+  const comp = new THREE.Group(); comp.position.set(0.15, 0.1, 0.285); g.add(comp);
+  comp.add(rotated(mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.015, 20), brass), 'x', Math.PI / 2));
+  comp.add(mesh(new THREE.CircleGeometry(0.032, 20), std('#f6f2e6'), 0, 0, 0.009));
+  const needle = mesh(new THREE.BoxGeometry(0.006, 0.05, 0.003), std('#c0392b'), 0, 0, 0.012); comp.add(needle);
+  g.userData.tick = () => { const t = performance.now() / 1000; needle.rotation.z = Math.sin(t * 0.9) * 0.6; badge.rotation.z = Math.sin(t * 1.1) * 0.04; comp.rotation.z = Math.sin(t * 1.4 + 1) * 0.08; };
+  g.userData.setColor = (c) => { cord.color.set(c); enamel.color.set(c); };
+  return { bone: 'torso', object: g };
+}
+
+function buildWolfPup(color) {
+  const g = new THREE.Group();
+  const P = new THREE.Group(); P.position.set(-0.75, 0.5, 0.02); P.rotation.y = 0.4; g.add(P);
+  const furW = std('#eef2f6', { roughness: 1 }), furG = std('#a9b4c2', { roughness: 1 }), dark = std('#2a2f38', { roughness: 0.5 });
+  const scarfM = std(color, { roughness: 0.95 });
+  // body (sitting), chest fluff
+  const body = mesh(new THREE.SphereGeometry(0.15, 18, 14), furG, 0, 0.14, -0.02); body.scale.set(1, 1.05, 1.2); P.add(body);
+  P.add(mesh(new THREE.SphereGeometry(0.1, 14, 10), furW, 0, 0.12, 0.09));
+  for (const sx of [-1, 1]) { P.add(mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.14, 10), furW, sx * 0.06, 0.05, 0.09)); P.add(mesh(new THREE.SphereGeometry(0.045, 10, 8), furW, sx * 0.06, -0.01, 0.11)); P.add(mesh(new THREE.SphereGeometry(0.06, 10, 8), furG, sx * 0.1, 0.03, -0.06)); }
+  // head
+  const H = new THREE.Group(); H.position.set(0, 0.34, 0.04); P.add(H);
+  H.add(mesh(new THREE.SphereGeometry(0.12, 18, 14), furG));
+  const muzzle = mesh(new THREE.SphereGeometry(0.065, 14, 10), furW, 0, -0.03, 0.1); muzzle.scale.set(1, 0.8, 1.2); H.add(muzzle);
+  H.add(mesh(new THREE.SphereGeometry(0.02, 10, 8), dark, 0, -0.01, 0.175));
+  for (const sx of [-1, 1]) {
+    H.add(mesh(new THREE.SphereGeometry(0.075, 10, 8), furW, sx * 0.07, -0.02, 0.06));   // cheek fluff
+    H.add(mesh(new THREE.SphereGeometry(0.022, 10, 8), dark, sx * 0.05, 0.03, 0.1));
+    H.add(mesh(new THREE.SphereGeometry(0.007, 6, 4), std('#ffffff', { emissive: '#ffffff' }), sx * 0.05 + 0.007, 0.04, 0.12));
+    const ear = mesh(new THREE.ConeGeometry(0.045, 0.1, 4), furG, sx * 0.07, 0.12, -0.01); ear.rotation.z = -sx * 0.3; H.add(ear);
+    H.add(mesh(new THREE.ConeGeometry(0.025, 0.06, 4), std('#f2c4c8', { roughness: 1 }), sx * 0.068, 0.115, 0.012).rotateZ(-sx * 0.3));
+  }
+  // fluffy tail
+  const tail = new THREE.Group(); tail.position.set(0, 0.1, -0.17); P.add(tail);
+  const t1 = mesh(new THREE.SphereGeometry(0.06, 12, 10), furG, 0, 0.05, -0.04); t1.scale.set(1, 1.6, 1); tail.add(t1);
+  tail.add(mesh(new THREE.SphereGeometry(0.045, 10, 8), furW, 0, 0.14, -0.06));
+  // scarf
+  const sc = mesh(new THREE.TorusGeometry(0.095, 0.03, 8, 20), scarfM, 0, 0.25, 0.03); sc.rotation.x = Math.PI / 2 - 0.2; P.add(sc);
+  const tailS = mesh(new RoundedBoxGeometry(0.05, 0.12, 0.02, 2, 0.008), scarfM, 0.05, 0.18, 0.13); tailS.rotation.z = 0.2; P.add(tailS);
+  g.userData.tick = () => { const t = performance.now() / 1000;
+    P.position.y = 0.5 + Math.abs(Math.sin(t * 2.6)) * 0.03; H.rotation.z = Math.sin(t * 1.3) * 0.12; H.rotation.x = Math.sin(t * 0.9) * 0.08;
+    tail.rotation.z = Math.sin(t * 8) * 0.5; tailS.rotation.x = Math.sin(t * 2.6) * 0.15; };
+  g.userData.tick();
+  g.userData.setColor = (c) => scarfM.color.set(c);
+  return { bone: 'torso', object: g };
 }
 
 function buildIceSkates(color) {
