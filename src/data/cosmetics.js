@@ -120,6 +120,30 @@ for (const c of [
     colorPresets: [['Night Sky', '#3a2f8f'], ['Nebula Pink', '#c03a8f'], ['Deep Teal', '#1f6f86'], ['Cosmic Black', '#1a1a2e']],
     desc: 'A rippling night-sky cape sprinkled with meteor dust that flickers and twinkles as it flows.',
   },
+  {
+    id: 'fz_jelly_dome', name: 'Wobbly Ice Jelly Dome', slot: 'hat', price: 240, icon: '🍮', rarity: 'rare',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#6fe0ff',
+    colorPresets: [['Ice Blue', '#6fe0ff'], ['Cherry Jelly', '#ff5f8a'], ['Lime Jelly', '#9cf05a'], ['Grape Jelly', '#b08cff']],
+    desc: 'A see-through ice jelly dome that boings, squishes and jiggles on your head, with a gummy cube bobbing inside.',
+  },
+  {
+    id: 'fz_cube_balloon', name: 'Ice Cube Balloon Buddy', slot: 'back', price: 200, icon: '🎈', rarity: 'rare',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#7ad8ff',
+    colorPresets: [['Glacier', '#7ad8ff'], ['Bubblegum', '#ff7fc8'], ['Sunny', '#ffd84a'], ['Minty', '#6fffc0']],
+    desc: 'A smiley ice-cube balloon on a string that bobs, sways and blinks at everyone behind you.',
+  },
+  {
+    id: 'fz_pocket_globe', name: 'Pocket Snow Globe', slot: 'hand', price: 260, icon: '🔮', rarity: 'epic',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#4fb8ff',
+    colorPresets: [['Night Blue', '#4fb8ff'], ['Candy Pink', '#ff8fd0'], ['Emerald', '#4fe0a0'], ['Gold', '#ffc83a']],
+    desc: 'A tiny glowing snow globe with a mini iceberg inside. Snow swirls up in a flurry and slowly settles, forever.',
+  },
+  {
+    id: 'fz_bling_chain', name: 'Ice Bling Chain', slot: 'neck', price: 320, icon: '🧊', rarity: 'epic',
+    kind: 'model', winter: true, customizable: true, defaultColor: '#bff4ff',
+    colorPresets: [['Diamond Ice', '#bff4ff'], ['Gold Ice', '#ffd86a'], ['Pink Ice', '#ffa8e0'], ['Toxic Ice', '#a8ff6a']],
+    desc: 'Old-school chunky bling: a sparkly ice-cube pendant that spins and throws a star-flash glint every few seconds.',
+  },
 ]) { COSMETICS.push(c); COSMETIC_BY_ID[c.id] = c; }
 
 // Wearable 3D outfit (kind 'model' in the shirt slot: knit body + sleeves over the torso/arms).
