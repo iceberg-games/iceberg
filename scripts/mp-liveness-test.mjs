@@ -2,6 +2,7 @@
 // node scripts/mp-liveness-test.mjs
 globalThis.requestAnimationFrame = () => 0; globalThis.cancelAnimationFrame = () => {};
 globalThis.document = { visibilityState: 'visible' };
+await import('node:module').then(m => m.register('../tools/asset-stub-loader.mjs', import.meta.url));   // .ogg/.glb stubs (rebase onto main)
 const { createMultiplayer, STALE_MS } = await import('../src/mp/multiplayer.js');
 const { RealtimeClient } = await import('../src/net/realtime.js');
 let T = 0; const now = () => T;
@@ -9,7 +10,7 @@ const results = []; const check = (n, ok, d = '') => { results.push(ok); console
 let ch;
 class FakeRT { channel() { return ch = { b: {}, p: [], sent: [], onPresence(f) { this.p.push(f); }, onBroadcast(e, f) { this.b[e] = f; }, async subscribe() {}, track() {}, send(e, x) { this.sent.push([e, x]); return true; }, async unsubscribe() {},
   presence(keys, joins = [], leaves = []) { const state = Object.fromEntries(keys.map(k => [k, [{}]])); this.p.forEach(f => f({ state, joins, leaves })); } }; } }
-class FakeAvatar { constructor() { this.root = { visible: true, position: { set() {}, toArray: () => [0, 0, 0] }, rotation: {}, parent: null }; } applyLoadout() {} dispose() {} }
+class FakeAvatar { constructor() { this.root = { userData: {}, visible: true, position: { set() {}, toArray: () => [0, 0, 0] }, rotation: {}, parent: null }; } applyLoadout() {} dispose() {} }
 const scene = { add(r) { r.parent = this; }, remove(r) { r.parent = null; } };
 const roster = [{ username: 'me' }, { username: 'a' }];
 const remote = { signedIn: true, realtimeConfig: {}, mpJoin: async () => ({ ok: true, instance: 1, topic: 't', sendHz: 5, roster }), mpHeartbeat: async () => ({ ok: true, roster }), mpLeave: async () => {} };
