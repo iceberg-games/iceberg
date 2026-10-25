@@ -17,6 +17,8 @@
 // travels over broadcast: bubbles come from server-validated post_chat/get_chat (phrase ids).
 // Economy is untouched (RPC only).
 import { Avatar } from '../game/avatar.js';
+import { normalizeBodyType, BODY_TYPE_IDS } from '../game/bodyTypes.js';
+import { nameTagOffset } from '../chat/nameTag.js';
 import { RealtimeClient } from '../net/realtime.js';
 import { bus as defaultBus } from '../core/events.js';
 
@@ -326,7 +328,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     const o = { avatar, look: JSON.stringify([p.equipped, p.rocketColors, p.cosmeticColors]), samples: [], recv: [], gap: 100, lastT: 0, addedAt: now(), seq: -1, displayName: p.displayName || k,
       anim: 0, animsSeen: new Set(), events: { j: 0, l: 0, t: 0 }, snaps: 0 };
     s.others.set(k, o);
-    bubbles?.track(k, avatar.bones?.head || avatar.root, { name: p.displayName || k, offsetY: 1.1 });
+    bubbles?.track(k, avatar.bones?.head || avatar.root, { name: p.displayName || k, offsetY: () => nameTagOffset(avatar.bodyType) });
   }
   function removeOther(k) {
     const o = s?.others.get(k); if (!o) return;
@@ -342,7 +344,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     stats.recv++;
     const ok = p && typeof p.u === 'string' && p.u !== s.me.username && s.roster.has(p.u) && s.present.has(p.u)
       && vecOk(p.p, BOUND) && Number.isFinite(p.r) && Number.isInteger(p.a) && p.a >= 0 && p.a < 8 && Number.isInteger(p.s)
-      && (p.v == null || vecOk(p.v, 200)) && (p.e == null || ['j', 'l', 't'].includes(p.e));
+      && (p.v == null || vecOk(p.v, 200)) && (p.e == null || ['j', 'l', 't'].includes(p.e)) && (p.b == null || typeof p.b === 'string');
     if (ok && s.stale.has(p.u)) { s.stale.delete(p.u); addOther(p.u); }   // came back
     const o = ok && s.others.get(p.u);
     if (!o) { stats.dropped++; return; }
@@ -354,6 +356,9 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     if (o.lastT && !p.e) o.gap = o.gap * 0.8 + Math.min(2000, t - o.lastT) * 0.2;
     o.lastT = t;
     const last = o.samples[o.samples.length - 1];
+    // body type rides the movement packet (cosmetic only, like pose); unknown ids -> classic
+    const bt = p.b == null ? null : (BODY_TYPE_IDS.includes(p.b) ? p.b : normalizeBodyType(null));
+    if (bt && o.bodyType !== bt) { try { o.avatar.setBodyType?.(bt); } catch (e) { console.warn(e); } o.bodyType = bt; }
     const sample = { t, x: p.p[0], y: p.p[1], z: p.p[2], r: p.r, a: p.a, v: p.v || [0, 0, 0] };
     if (p.e) o.events[p.e]++;
     if (!o.avatar.root.visible || p.e === 't' || (last && Math.hypot(sample.x - last.x, sample.y - last.y, sample.z - last.z) > TELEPORT_DIST * 2)) {
@@ -370,7 +375,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
   }
   function localState() {
     const pl = engine.player, av = engine.avatar;
-    return { p: [r2(pl.pos.x), r2(pl.pos.y), r2(pl.pos.z)], r: r2(av.root.rotation.y), a: localAnim(), v: [r2(pl.vel.x), r2(pl.vel.y), r2(pl.vel.z)] };
+    return { p: [r2(pl.pos.x), r2(pl.pos.y), r2(pl.pos.z)], r: r2(av.root.rotation.y), a: localAnim(), v: [r2(pl.vel.x), r2(pl.vel.y), r2(pl.vel.z)], b: normalizeBodyType(av.bodyType) };
   }
   let seq = 0;
   function sendMove(st, e) {
@@ -384,7 +389,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     const t = now(), minGap = 1000 / Math.min(MAX_HZ, s.sendHz);
     if (t - s.lastSent < minGap) return;
     const st = localState(), prev = s.lastState;
-    const changed = !prev || prev.a !== st.a || Math.abs(prev.r - st.r) > 0.02 || st.p.some((v, i) => Math.abs(v - prev.p[i]) > 0.02);
+    const changed = !prev || prev.a !== st.a || prev.b !== st.b || Math.abs(prev.r - st.r) > 0.02 || st.p.some((v, i) => Math.abs(v - prev.p[i]) > 0.02);
     if (!changed && !s.wantSend && t - s.lastSent < KEEPALIVE_MS) return;
     sendMove(st);
   }
@@ -510,7 +515,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
         present: [...s.present], roster: [...s.roster.keys()], host: hostId(), clockOffset: Math.round(clockOffset), stateKeys: [...state.keys()],
         others: [...s.others].map(([k, o]) => ({ username: k, wind: !!o.avatar._wind, audio: !!o.avatar._audioListener, visible: o.avatar.root.visible, pos: o.avatar.root.position.toArray().map(r2),
           inScene: !!o.avatar.root.parent && o.avatar.root.parent === engine.game?.scene, anim: ANIM_NAME[o.anim], animsSeen: [...o.animsSeen].map(a => ANIM_NAME[a]), events: { ...o.events }, snaps: o.snaps, yaw: r2(o.avatar.root.rotation.y),
-          talking: !!o.avatar.isTalking?.(), equipped: o.avatar.attached ? Object.values(o.avatar.attached).map(x => x.userData.cosmeticId) : [] })) };
+          talking: !!o.avatar.isTalking?.(), bodyType: o.avatar.bodyType ?? null, equipped: o.avatar.attached ? Object.values(o.avatar.attached).map(x => x.userData.cosmeticId) : [] })) };
     },
   };
 }

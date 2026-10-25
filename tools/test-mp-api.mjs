@@ -34,7 +34,7 @@ function makeRemote(username) {
     async mpHeartbeat() { return { ok: true, sendHz: 10, roster: members.slice(), serverNow: new Date(Date.now() + 5000).toISOString() }; },
     async mpLeave() { const i = members.findIndex(m => m.username === username); if (i >= 0) members.splice(i, 1); } };
 }
-class FakeAvatar { constructor() { this.root = { visible: false, position: { x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; }, toArray() { return [this.x, this.y, this.z]; } }, rotation: { y: 0 }, userData: {}, parent: null }; this.attached = {}; } applyLoadout() {} animate() {} dispose() {} }
+class FakeAvatar { constructor() { this.root = { visible: false, position: { x: 0, y: 0, z: 0, set(x, y, z) { this.x = x; this.y = y; this.z = z; }, toArray() { return [this.x, this.y, this.z]; } }, rotation: { y: 0 }, userData: {}, parent: null }; this.attached = {}; } applyLoadout() {} setBodyType(t) { this.bodyType = t; this.bodyTypeCalls = (this.bodyTypeCalls || 0) + 1; } animate() {} dispose() {} }
 const busHandlers = {}; const bus = { on: (e, f) => (busHandlers[e] ||= []).push(f), emit: (e, x) => (busHandlers[e] || []).forEach(f => f(x)) };
 function client(username) {
   const scene = { add(o) { o.parent = scene; }, remove() {} };
@@ -74,6 +74,17 @@ await A.mp.join('g'); await B.mp.join('g'); await sleep(2700);
 assert.equal(A.mp.isHost(), true); assert.equal(B.mp.isHost(), false);
 assert.deepEqual(B.mp.players().map(p => [p.id, p.name, p.isLocal, p.isHost]), [['ana', 'ANA', false, true], ['ben', 'BEN', true, false]]);
 assert.equal(B.mp.localId(), 'ben');
+// body type rides movement packets: remote avatar follows, unknown ids coerce to classic
+assert.equal(B.mp._avatarOf('ana')?.bodyType, 'classic', 'default classic body for remote');
+A.engine.avatar.bodyType = 'tall'; await sleep(250);
+assert.equal(B.mp._avatarOf('ana').bodyType, 'tall', 'remote picks up tall');
+A.engine.avatar.bodyType = 'stout'; await sleep(250);
+assert.equal(B.mp._avatarOf('ana').bodyType, 'stout', 'remote picks up change to stout');
+const calls = B.mp._avatarOf('ana').bodyTypeCalls; await sleep(250);
+assert.equal(B.mp._avatarOf('ana').bodyTypeCalls, calls, 'no re-apply when unchanged');
+A.engine.avatar.bodyType = 'giraffe'; await sleep(250);
+assert.equal(B.mp._avatarOf('ana').bodyType, 'classic', 'unknown id -> classic');
+A.engine.avatar.bodyType = undefined;
 assert.ok(Math.abs(B.mp.now() - (Date.now() + 5000)) < 100, 'server clock offset');
 assert.equal(B.mp.setState('round', 1).reason, 'not_host');
 const seenB = []; B.mp.onState('round', (val, m) => seenB.push([val, m.from]));
