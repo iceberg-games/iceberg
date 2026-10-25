@@ -3,4 +3,5 @@
 // Add a set: create sets/<id>/index.js exporting a set definition (see README.md), then add one line here.
 export const SETS = {
   winterhaven: () => import('./winterhaven/index.js'),
+  'starfall-observatory': () => import('./starfall-observatory/index.js'),
 };
