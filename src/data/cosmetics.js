@@ -176,6 +176,37 @@ for (const c of [
     desc: 'A long striped stocking cap with a fluffy brim and a golden jingle bell that swings with every step.' },
 ]) { COSMETICS.push(c); COSMETIC_BY_ID[c.id] = c; }
 
+// ---- Winterhaven shop wave 2 (buyable only while the 'winterhaven' event is live) + Plus perk showpieces.
+const WH_SHOP = { kind: 'model', event: 'winterhaven', winter: true, customizable: true };
+for (const c of [
+  { ...WH_SHOP, id: 'wh_peppermint_shades', name: 'Peppermint Shades', slot: 'face', price: 160, icon: '🍬', rarity: 'common', defaultColor: '#d8263a',
+    colorPresets: [['Peppermint', '#d8263a'], ['Spearmint', '#2f9a5a'], ['Blue Raspberry', '#3a78d8'], ['Grape Twist', '#8a3aa8']],
+    desc: 'Round swirl-lens shades with candy-cane striped frames and little peppermint hinges. Sweetest look in Winterhaven.' },
+  { ...WH_SHOP, id: 'wh_snowflake_halo', name: 'Snowflake Halo', slot: 'face', price: 300, icon: '❄️', rarity: 'epic', defaultColor: '#9fe0ff',
+    colorPresets: [['Frost', '#9fe0ff'], ['Lilac Ice', '#c8a8ff'], ['Mint Rime', '#9fffd2'], ['Sunlit Gold', '#ffd98a']],
+    desc: 'A glittering ring of six snowflakes that slowly orbits above your head, twinkling as it turns.' },
+  { ...WH_SHOP, id: 'wh_holly_garland', name: 'Holly Garland', slot: 'neck', price: 180, icon: '🌿', rarity: 'common', defaultColor: '#c0262f',
+    colorPresets: [['Holly Berry', '#c0262f'], ['Snowberry', '#f2f0ea'], ['Gilded', '#e0b23a'], ['Frostberry', '#5aa8e8']],
+    desc: 'A fresh garland of holly leaves and glossy berries draped round your shoulders, tied with a little bell.' },
+  { ...WH_SHOP, id: 'wh_gift_bow', name: 'Giant Gift Bow', slot: 'back', price: 240, icon: '🎀', rarity: 'rare', defaultColor: '#d8263a',
+    colorPresets: [['Ribbon Red', '#d8263a'], ['Emerald', '#1f8a52'], ['Royal Blue', '#2f5ad8'], ['Gold Foil', '#e0b23a']],
+    desc: 'A huge satin gift bow with curling ribbon tails, worn on your back. You are the present this year.' },
+  { id: 'wh_aurora_skin_wh', name: 'Winterhaven Aurora Skin', slot: 'skin', price: 320, icon: '🌌', rarity: 'epic',
+    kind: 'skin', event: 'winterhaven', winter: true, customizable: true, shimmer: true, color: '#a8f0d8', defaultColor: '#a8f0d8',
+    colorPresets: [['Lantern Mint', '#a8f0d8'], ['Frostgate Blue', '#9cc8ff'], ['Mirrorfrost Pink', '#ffc2e0'], ['Glimmer Violet', '#d0b0ff']],
+    desc: 'The Winterhaven night sky on your skin: a soft, drifting aurora shimmer in festive village tones.' },
+  // Plus perk showpieces (Premium tab)
+  { ...WH_SHOP, premium: true, id: 'wh_plus_frost_wings', name: 'Plus Frost Wings', slot: 'back', price: 8000, icon: '🪽', rarity: 'legendary', defaultColor: '#9fe0ff',
+    colorPresets: [['Glacier', '#9fe0ff'], ['Aurora', '#8affc1'], ['Amethyst', '#c49bff'], ['Rose Frost', '#ffb3d1']],
+    desc: 'Plus perk. Three tiers of glowing crystal feathers that beat slowly and shed frost sparkles as you move.' },
+  { ...WH_SHOP, premium: true, id: 'wh_plus_aurora_crown', name: 'Plus Aurora Crown', slot: 'hat', price: 5000, icon: '👑', rarity: 'legendary', defaultColor: '#8affc1',
+    colorPresets: [['Borealis', '#8affc1'], ['Polar Blue', '#8fd0ff'], ['Violet Night', '#c4a0ff'], ['Dawn Rose', '#ffb3d1']],
+    desc: 'Plus perk. A silver crown crowned by shimmering aurora ribbons and a floating star gem.' },
+  { ...WH_SHOP, premium: true, id: 'wh_plus_crystal_scepter', name: 'Plus Crystal Scepter', slot: 'hand', price: 3500, icon: '🔮', rarity: 'epic', defaultColor: '#8fe8ff',
+    colorPresets: [['Ice', '#8fe8ff'], ['Amethyst', '#c49bff'], ['Emerald', '#7dffb0'], ['Sunstone', '#ffc870']],
+    desc: 'Plus perk. A silver-wrapped staff topped with a spinning ice crystal and orbiting snow motes.' },
+]) { COSMETICS.push(c); COSMETIC_BY_ID[c.id] = c; }
+
 const WH = { price: 0, earnOnly: true, event: 'winterhaven', kind: 'model', winter: true, customizable: true, earnIn: 'Winterhaven' };
 for (const c of [
   { id: 'wh_lantern_hat', earnIn: 'Lantern Lane', unlock: 'wh_quest_lantern', name: 'Lantern Hat', slot: 'hat', rarity: 'rare', icon: '🏮', defaultColor: '#ffb347',
