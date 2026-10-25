@@ -23,6 +23,14 @@ const CSS = `
 .kof-x.lock{border-color:#ff6b7f;box-shadow:0 0 12px #ff6b7f;width:34px;height:34px}
 .kof-charge{position:absolute;left:50%;top:calc(46% + 26px);width:80px;height:7px;transform:translateX(-50%);background:rgba(0,0,0,.4);border-radius:4px;overflow:hidden;opacity:0;transition:opacity .15s}
 .kof-charge i{display:block;height:100%;width:0;background:linear-gradient(90deg,#9ff,#ffd24a,#ff5d73)}
+.kof-x{transition:width .12s,height .12s,border-color .12s}
+.kof-hm{position:absolute;left:50%;top:46%;width:40px;height:40px;transform:translate(-50%,-50%) rotate(45deg);border:3px solid #fff;border-radius:4px;opacity:0;box-shadow:0 0 12px #fff}
+.kof-hm.on{animation:kofhm .3s ease-out}.kof-hm.big{border-color:#ffd24a;box-shadow:0 0 18px #ffd24a}
+@keyframes kofhm{0%{opacity:1;width:22px;height:22px}100%{opacity:0;width:64px;height:64px}}
+.kof-charge.full{animation:kofcf .18s infinite alternate;box-shadow:0 0 12px #ffd24a}
+@keyframes kofcf{to{transform:translateX(-50%) scale(1.12)}}
+.kof-top span{display:inline-block}.kof-bump{animation:kofbump .35s ease-out}
+@keyframes kofbump{0%{transform:scale(1.6);color:#ff6b7f}100%{transform:scale(1)}}
 .kof-flash{position:absolute;inset:0;background:radial-gradient(circle,rgba(255,80,100,0) 50%,rgba(255,60,90,.45));opacity:0;transition:opacity .4s}
 .kof-flash.on{opacity:1;transition:none}
 .kof-end{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:linear-gradient(180deg,#fff,#dff3ff);color:#1d4f7a;border:5px solid #fff;border-radius:26px;box-shadow:0 8px 0 #9cc9ea,0 20px 50px rgba(0,0,0,.4);padding:20px 30px;text-align:center;min-width:300px;display:none;pointer-events:auto}
@@ -46,7 +54,7 @@ export class FloesUI {
     const r = this.root = document.createElement('div'); r.className = 'kof';
     r.innerHTML = `<div class="kof-top"><div><small>ALIVE</small><span data-a>6</span></div><div><small>TIME</small><span data-t>90</span></div><div><small>KOs</small><span data-k>0</span></div><div><small>STREAK</small><span data-s>0</span></div></div>
       <div class="kof-board" data-bd></div><div class="kof-feed" data-fd></div>
-      <div class="kof-x" data-x></div><div class="kof-charge" data-cg><i></i></div>
+      <div class="kof-x" data-x></div><div class="kof-hm" data-hm></div><div class="kof-charge" data-cg><i></i></div>
       <div class="kof-flash" data-f></div><div class="kof-banner" data-b></div><div class="kof-end" data-e></div>
       <div class="kof-emotes">${EMOTES.map((e, i) => `<button data-em="${i}">${e}</button>`).join('')}</div>
       ${mobile ? '<button class="kof-throw" data-th>❄<br>THROW</button>' : ''}
@@ -61,10 +69,14 @@ export class FloesUI {
     this.set('a', alive); const t = Math.ceil(Math.max(0, time)); this.set('t', t); this.$('t').classList.toggle('kof-low', t <= 10);
     this.set('k', kos); this.set('s', streak);
     this.$('x').classList.toggle('lock', !!lock);
-    const cg = this.$('cg'); cg.style.opacity = charge > 0 ? 1 : 0; cg.firstChild.style.width = `${Math.round(charge * 100)}%`;
+    const cg = this.$('cg'); cg.style.opacity = charge > 0 ? 1 : 0; cg.firstChild.style.width = `${Math.round(charge * 100)}%`; cg.classList.toggle('full', charge >= 1);
+    const x = this.$('x'), xs = charge > 0 ? Math.round((lock ? 34 : 26) - charge * 10) : 0; x.style.width = x.style.height = xs ? `${xs}px` : '';
+    if (kos !== this._kos) { if (this._kos !== undefined && kos > this._kos) { const k = this.$('k'); k.classList.remove('kof-bump'); void k.offsetWidth; k.classList.add('kof-bump'); } this._kos = kos; }
+    if (alive !== this._al) { if (this._al !== undefined && alive < this._al) { const a = this.$('a'); a.classList.remove('kof-bump'); void a.offsetWidth; a.classList.add('kof-bump'); } this._al = alive; }
     const html = '<h4>🏆 STANDINGS</h4>' + board.map((p, i) => `<div class="${p.out ? 'out' : ''} ${p.me ? 'me' : ''}"><i style="color:${p.color};background:${p.color}"></i>${i === 0 && !p.out && p.kos > 0 ? '👑 ' : ''}${p.name}<b>${p.kos}💥</b></div>`).join('');
     if (html !== this._bd) { this.$('bd').innerHTML = html; this._bd = html; }
   }
+  hitmark(big) { const h = this.$('hm'); h.classList.remove('on'); h.classList.toggle('big', !!big); void h.offsetWidth; h.classList.add('on'); }
   set(k, v) { const e = this.$(k); if (e.textContent !== String(v)) e.textContent = v; }
   feed(text) {
     const f = this.$('fd'), d = document.createElement('div'); d.innerHTML = text; f.prepend(d);

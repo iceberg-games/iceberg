@@ -24,7 +24,7 @@ const CSS = `
 .lmt-x.lock:before,.lmt-x.lock:after{background:#ff6b9a;box-shadow:0 0 10px #ff4f8b}
 .lmt-x.lock{animation:lmtspin .6s linear infinite}
 .lmt-hm{position:absolute;left:50%;top:46%;width:44px;height:44px;transform:translate(-50%,-50%) rotate(45deg);border:3px solid #fff;border-radius:6px;opacity:0;box-shadow:0 0 14px #fff}
-.lmt-hm.on{animation:lmthm .35s ease-out}
+.lmt-hm.on{animation:lmthm .4s cubic-bezier(.2,.9,.3,1)}
 .lmt-pw{position:absolute;left:50%;bottom:120px;transform:translateX(-50%);font-weight:900;font-size:16px;padding:6px 14px;border-radius:14px;background:rgba(14,8,40,.8);border:2px solid currentColor;box-shadow:0 0 14px currentColor;display:none}
 .lmt-pw i{display:block;height:4px;margin-top:4px;background:currentColor;border-radius:2px}
 .lmt-flash{position:absolute;inset:0;background:radial-gradient(circle,rgba(255,80,140,0) 45%,rgba(255,60,140,.5));opacity:0;transition:opacity .4s}
@@ -40,6 +40,8 @@ const CSS = `
 .lmt-fire{position:absolute;right:24px;bottom:190px;width:108px;height:108px;border-radius:50%;border:4px solid #bff6ff;font-size:16px;font-weight:900;color:#fff;background:radial-gradient(circle at 40% 35%,#7af2ff,#6a3cff 70%,#2a0f6a);box-shadow:0 0 24px #4fd8ff,0 6px 0 #2a0f6a;text-shadow:0 0 8px #000}
 .lmt-fire.on{transform:scale(.92);box-shadow:0 0 40px #fff}
 .lmt-help{position:absolute;top:128px;left:50%;transform:translateX(-50%);font-size:12px;opacity:.8;text-shadow:0 0 6px #000;white-space:nowrap}
+@keyframes lmtbump{0%{transform:scale(1.55);filter:brightness(1.8)}100%{transform:scale(1)}}
+.lmt-bump{animation:lmtbump .35s ease-out}.lmt-top span{display:inline-block}
 @keyframes lmtp{to{transform:scale(1.12)}}
 @keyframes lmtin{from{transform:translate(-50%,-50%) scale(.6);opacity:0}}
 @keyframes lmtsl{from{transform:translateX(-30px);opacity:0}}
@@ -73,6 +75,7 @@ export class LumenUI {
     const html = '<h4>✦ RACE TO ' + C.TAGS_TO_WIN + '</h4>' + board.map((p, i) => `<div class="lmt-row ${p.me ? 'me' : ''} ${p.dead ? 'dead' : ''}"><i class="bar" style="width:${Math.min(100, p.score / C.TAGS_TO_WIN * 100)}%;background:${p.color}"></i><span style="color:${p.color}">${i === 0 && p.score > 0 ? '👑 ' : ''}${p.name}</span><b>${p.score}</b></div>`).join('');
     if (html !== this._bd) { this.$('bd').innerHTML = html; this._bd = html; }
   }
+  bump(k) { const e = this.$(k); if (!e) return; e.classList.remove('lmt-bump'); void e.offsetWidth; e.classList.add('lmt-bump'); }
   set(k, v) { const e = this.$(k); if (e.textContent !== String(v)) e.textContent = v; }
   hitmark() { const h = this.$('hm'); h.classList.remove('on'); void h.offsetWidth; h.classList.add('on'); }
   feed(text) { const f = this.$('fd'), d = document.createElement('div'); d.innerHTML = text; f.prepend(d); while (f.children.length > 5) f.lastChild.remove(); setTimeout(() => { d.style.opacity = 0; setTimeout(() => d.remove(), 500); }, 3500); }

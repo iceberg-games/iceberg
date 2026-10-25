@@ -84,8 +84,10 @@ export function buildArena() {
     // crack lines radiating from a point
     const pts = []; for (let k = 0; k < 6; k++) { let a = rand(0, 6.28), px = rand(-0.5, 0.5), pz = rand(-0.5, 0.5); for (let s = 0; s < 5; s++) { const nx = px + Math.cos(a) * r * 0.2, nz = pz + Math.sin(a) * r * 0.2; pts.push(new THREE.Vector3(px, 0.03, pz), new THREE.Vector3(nx, 0.03, nz)); px = nx; pz = nz; a += rand(-0.6, 0.6); } }
     const cracks = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), crackMat()); group.add(cracks);
+    const rim = new THREE.Mesh(new THREE.RingGeometry(r * 0.86, r * 1.02, 32), new THREE.MeshBasicMaterial({ color: '#ff5a6e', transparent: true, opacity: 0, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
+    rim.rotation.x = -Math.PI / 2; rim.position.y = 0.05; rim.renderOrder = 2; group.add(rim);
     group.position.set(x, 0, z); scene.add(group);
-    const f = { x, z, r0: r, center, scale: 1, target: 1, state: 'ok', t: 0, y: 0, gone: false, group, cracks, sideMat, top: myTop, phase: rand(0, 6) };
+    const f = { x, z, r0: r, center, scale: 1, target: 1, state: 'ok', t: 0, y: 0, gone: false, group, cracks, rim, sideMat, top: myTop, phase: rand(0, 6) };
     floes.push(f); return f;
   }
   makeFloe(0, 0, C.CENTER_R, true);
@@ -99,7 +101,7 @@ export function buildArena() {
   const glowTex = glowTexture();
   return {
     scene, floes, glowTex,
-    reset() { for (const f of floes) { f.state = 'ok'; f.t = 0; f.y = 0; f.gone = false; f.scale = f.target = 1; f.group.visible = true; f.group.position.set(f.x, 0, f.z); f.group.rotation.set(0, 0, 0); f.group.scale.set(1, 1, 1); f.cracks.material.opacity = 0; f.top.color.set('#f4f9ff'); } },
+    reset() { for (const f of floes) { f.state = 'ok'; f.t = 0; f.y = 0; f.gone = false; f.scale = f.target = 1; f.group.visible = true; f.group.position.set(f.x, 0, f.z); f.group.rotation.set(0, 0, 0); f.group.scale.set(1, 1, 1); f.cracks.material.opacity = 0; f.rim.material.opacity = 0; f.top.color.set('#f4f9ff'); } },
     crack(f) { f.state = 'crack'; f.t = 0; },
     erode(frac) {
       for (const f of floes) {
@@ -114,12 +116,14 @@ export function buildArena() {
       if (f.state === 'crack') {
         f.t += dt; const k = f.t / C.CRACK_SECS, j = 0.04 + k * 0.12;
         f.group.position.set(f.x + rand(-j, j), rand(-j, j) * 0.5, f.z + rand(-j, j));
-        f.cracks.material.opacity = Math.min(1, k * 1.4);
+        f.cracks.material.opacity = Math.min(1, 0.35 + k * 1.4);
+        f.rim.material.opacity = (0.35 + 0.45 * k) * (0.55 + 0.45 * Math.sin(f.t * (6 + k * 16)));
+        f.rim.material.color.setRGB(1, 0.75 - k * 0.45, 0.35 - k * 0.1);
         f.top.color.setRGB(0.96 - k * 0.3, 0.97 - k * 0.2, 1);
         f.sideMat.emissiveIntensity = 0.35 + Math.sin(f.t * 18) * 0.25 * k;
         if (k >= 1) { f.state = 'sink'; f.t = 0; this.ripple(f.x, f.z, f.r0 * 0.8); return 'sink'; }
       } else if (f.state === 'sink') {
-        f.t += dt; f.y = -f.t * f.t * 1.6 - f.t * 0.6; f.group.position.set(f.x, f.y, f.z); f.group.rotation.x = f.t * 0.25; f.group.rotation.z = -f.t * 0.18;
+        f.t += dt; f.y = -f.t * f.t * 1.6 - f.t * 0.6; f.group.position.set(f.x, f.y, f.z); f.rim.material.opacity = Math.max(0, f.rim.material.opacity - dt * 3); f.group.rotation.x = f.t * 0.25; f.group.rotation.z = -f.t * 0.18;
         if (f.y < -3) { f.gone = true; f.group.visible = false; }
       } else { f.group.rotation.x = Math.sin(performance.now() / 900 + f.phase) * 0.012; f.group.rotation.z = Math.cos(performance.now() / 1100 + f.phase) * 0.012; }
       return null;

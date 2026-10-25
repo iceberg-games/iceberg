@@ -147,8 +147,9 @@ export default {
         A.set(ox, y0, oz);
         Bv.set(ox + dx * ht, hit ? hit.pos.y + 1.3 : y0 - Math.min(0.6, ht * 0.01), oz + dz * ht);
         beam(A, Bv, e.color, prism ? 1.5 : 1);
-        flare(A, e.color, 1.6, 0.12);
-        if (hit) tag(hit, e, tmp2.set(dx, 0, dz));
+        flare(A, e.color, e.me ? 2.2 : 1.6, e.me ? 0.16 : 0.12);
+        if (e.me || near) burst(Bv.x, Bv.y, Bv.z, hit ? 0 : 3, e.color, 2, 2, 0.25);
+        if (hit) { flare(Bv, '#ffffff', hit.inv > 0 ? 1.5 : 3.2, 0.2); tag(hit, e, tmp2.set(dx, 0, dz)); }
         else if (blk.p) { flare(Bv, blk.p.color, 2.4, 0.3); burst(Bv.x, Bv.y, Bv.z, 8, blk.p.color, 4, 5, 0.5); blk.p.flash = Math.min(1, blk.p.flash + 0.5); if (near && Math.random() < 0.6) audio.sfx('beam_block'); }
       }
       if (e.bot) e.ai.shootAnim = 0.12;
@@ -157,7 +158,7 @@ export default {
     // ---------- tagging ----------
     let R = null, phase = 'count', countT = 0, lastTick = -1, endT = 0, postT = 0;
     let shake = 0, hitstop = 0, firing = false, alive = true, leader = null;
-    const playerVel = new THREE.Vector3(), prevPos = new THREE.Vector3();
+    const playerVel = new THREE.Vector3(), prevPos = new THREE.Vector3(), kick = new THREE.Vector3();
     const camDist0 = player.camDist, baseSpeed = player.mods.speed;
     const tagHtml = (x) => `<b style="color:${x.color};text-shadow:0 0 8px ${x.color}">${x.name}</b>`;
     function tag(o, by, dir) {
@@ -174,7 +175,7 @@ export default {
       flare(tmp.set(hx, hy, hz), '#ffffff', 6, 0.35); ring(hx, hz, by.color);
       ui.feed(`${tagHtml(by)} ✦ ${tagHtml(o)}`);
       if (by.me) {
-        R.tags++; ui.hitmark(); audio.sfx('beam_hit'); hitstop = 0.06; shake = Math.max(shake, 0.22);
+        R.tags++; ui.hitmark(); ui.bump('k'); audio.sfx('beam_hit'); hitstop = 0.07; shake = Math.max(shake, 0.26); ring(hx, hz, '#ffffff');
         const combo = R.elapsed - (R.lastTagT ?? -9) < 3; R.lastTagT = R.elapsed;
         pop(combo ? 'DOUBLE TAG!' : POPS[(Math.random() * POPS.length) | 0], hx, hy + 1.6, hz, combo ? '#ff8be0' : '#fff36b', combo ? 1.4 : 1.1);
         if (combo) audio.sfx('combo_tag');
@@ -182,7 +183,7 @@ export default {
         if (C.TAGS_TO_WIN - by.score === 3) ui.banner('✦ 3 TO GO', 'finish it!', 1000);
       }
       if (o.me) {
-        R.deaths++; ui.flash(); shake = Math.max(shake, 0.5); hitstop = 0.08; audio.sfx('tag_out'); player.enabled = false; firing = false;
+        R.deaths++; ui.flash(); shake = Math.max(shake, 0.5); kick.addScaledVector(dir, 0.4); hitstop = 0.08; audio.sfx('tag_out'); player.enabled = false; firing = false;
       } else { o.mesh.visible = false; if (o.ai) o.ai.cover = null; }
       // bots that just got shot at duck for cover
       for (const e of ents) if (e.bot && !e.dead && e !== by && Math.hypot(e.pos.x - hx, e.pos.z - hz) < 8 && Math.random() < 0.5) takeCover(e, api, by);
@@ -200,7 +201,8 @@ export default {
       const face = Math.atan2(-s.x, -s.z);
       if (e.me) { player.teleport(new THREE.Vector3(s.x, 0, s.z), face); player.enabled = true; audio.sfx('respawn'); }
       else { e.pos.set(s.x, 0, s.z); e.vel.set(0, 0, 0); e.vy = 0; e.mesh.visible = true; e.mesh.rotation.y = face; e.ai.target = null; e.ai.retarget = 0; }
-      burst(s.x, 1, s.z, 24, e.color, 4, -2, 0.8); ring(s.x, s.z, e.color);
+      burst(s.x, 1, s.z, 24, e.color, 4, -2, 0.8); ring(s.x, s.z, e.color); flare(tmp.set(s.x, 1.3, s.z), e.color, 4, 0.4);
+      if (e.me || Math.hypot(s.x - player.pos.x, s.z - player.pos.z) < 26) for (let i = 0; i < 10; i++) burst(s.x + rand(-0.3, 0.3), i * 0.4, s.z + rand(-0.3, 0.3), 1, '#ffffff', 0.4, -3, 0.6);
     }
 
     const ui = new LumenUI(mobile, { onFireDown: () => { firing = true; }, onFireUp: () => { firing = false; } });
@@ -234,7 +236,7 @@ export default {
       const won = winner ? winner.me : myPlace() === 1;
       R.won = won; R.winner = (winner || ranking()[0]).name; R.place = myPlace();
       if (won) {
-        ui.banner('🏆 VICTORY!', winner ? `first to ${C.TAGS_TO_WIN}` : 'most tags at the buzzer', 2000); audio.sfx('win_fanfare');
+        shake = Math.max(shake, 0.35); ui.banner('🏆 VICTORY!', winner ? `first to ${C.TAGS_TO_WIN}` : 'most tags at the buzzer', 2000); audio.sfx('win_fanfare');
         for (let i = 0; i < 5; i++) setTimeout(() => alive && burst(player.pos.x + rand(-3, 3), 3 + rand(0, 3), player.pos.z + rand(-3, 3), 34, ['#7af2ff', '#c08bff', '#ff8be0', '#8bffc4', '#ffe14f'][i], 8, 3, 1.3), i * 200);
       } else { ui.banner(`✦ ${R.winner} WINS`, `you placed #${R.place}`, 2000); audio.sfx('defeat'); }
     }
@@ -287,9 +289,10 @@ export default {
             const fwd = myForward(new THREE.Vector3());
             const tg = aimAssist(meEnt, fwd, mobile ? 0.6 : 0.14);
             const dir = tg ? leadDir(meEnt, tg, fwd) : fwd;
-            player.facing = Math.atan2(dir.x, dir.z);
+            const fa = Math.atan2(dir.x, dir.z);
+            if (mobile) { let da = fa - player.facing; da = Math.atan2(Math.sin(da), Math.cos(da)); player.facing += da * 0.55; } else player.facing = fa;
             fire(meEnt, dir); R.fireCd = C.FIRE_CD * (meEnt.power === 'surge' ? 0.55 : 1);
-            cam.position.addScaledVector(dir, -0.08);
+            kick.addScaledVector(dir, -(meEnt.power === 'surge' ? 0.07 : 0.12)); kick.y += 0.03;
           }
           // lead change
           const top = ranking(); const lead = top[0].score > top[1].score ? top[0] : null;
@@ -329,7 +332,7 @@ export default {
           const rr = Math.hypot(e.pos.x, e.pos.z); if (rr > C.ARENA_R) { e.pos.x *= C.ARENA_R / rr; e.pos.z *= C.ARENA_R / rr; }
           const sp = Math.hypot(e.vel.x, e.vel.z);
           e.ai.faceT = (e.ai.faceT || 0) - dt;
-          if (e.ai.faceT <= 0 && sp > 0.5) e.mesh.rotation.y = Math.atan2(e.vel.x, e.vel.z);
+          if (e.ai.faceT <= 0 && sp > 0.5) { let da = Math.atan2(e.vel.x, e.vel.z) - e.mesh.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da)); e.mesh.rotation.y += da * (1 - Math.exp(-12 * dt)); }
           const u = e.mesh.userData, run = Math.sin(t * 15 + e.score) * Math.min(1, sp / 5) * 0.8;
           u.legs[0].rotation.x = run; u.legs[1].rotation.x = -run;
           e.ai.shootAnim = Math.max(0, (e.ai.shootAnim || 0) - dt); u.arm.rotation.x = -1.35 - e.ai.shootAnim * 3;
@@ -343,7 +346,7 @@ export default {
         }
 
         // ---- fx ----
-        for (const B of beams) { if (B.t <= 0) continue; B.t -= dt0; const k = Math.max(0, B.t / 0.22);
+        for (const B of beams) { if (B.t <= 0) continue; B.t -= dt0; const k0 = Math.max(0, B.t / 0.22), k = k0 > 0.75 ? 1 : (k0 / 0.75) * (k0 / 0.75) * (3 - 2 * k0 / 0.75);
           B.core.scale.set(0.08 * B.w * (0.4 + k), 0.08 * B.w * (0.4 + k), 1); B.glow.scale.set(0.34 * B.w * (0.5 + k), 0.34 * B.w * (0.5 + k), 1);
           B.core.material.opacity = k; B.glow.material.opacity = 0.6 * k; if (B.t <= 0) B.g.visible = false; }
         for (const F of flares) { if (F.t <= 0) continue; F.t -= dt0; const k = Math.max(0, F.t / F.max); F.s.scale.setScalar(F.size * (1.4 - k * 0.4)); F.s.material.opacity = k; if (F.t <= 0) F.s.visible = false; }
@@ -359,7 +362,8 @@ export default {
         for (const s of popPool) { if (s.t <= 0) continue; s.t -= dt0; s.spr.position.y += s.vy * dt0; s.vy *= Math.exp(-3 * dt0); const k = s.t > 0.75 ? 1 + (s.t - 0.75) * 4 : 1; s.spr.scale.copy(s.base).multiplyScalar(k); s.spr.material.opacity = Math.min(1, s.t * 3); s.spr.visible = s.t > 0; }
 
         shake = Math.max(0, shake - dt0 * 2);
-        if (shake > 0) cam.position.add(tmp.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(shake * 0.3));
+        if (shake > 0) { const s2 = shake * shake * 0.5 + shake * 0.12; cam.position.add(tmp.set(Math.sin(t * 39.3) + Math.sin(t * 21.7) * 0.5, Math.sin(t * 43.1 + 1.1) * 0.8, Math.cos(t * 33.7) * 0.6).multiplyScalar(s2)); }
+        if (kick.lengthSq() > 1e-5) { cam.position.add(kick); kick.multiplyScalar(Math.exp(-18 * dt0)); }
 
         const lockT = phase === 'play' && !meEnt.dead ? aimAssist(meEnt, myForward(new THREE.Vector3()), mobile ? 0.6 : 0.14) : null;
         const board = ranking().map(e => ({ name: e.name, color: e.color, me: e.me, score: e.score, dead: e.dead }));
@@ -378,7 +382,7 @@ export default {
     function grant(e, type) {
       e.power = type; e.powerT = C.POWER_SECS[type]; const P = C.POWERS[type];
       burst(e.pos.x, 1.4, e.pos.z, 30, P.color, 6, -1, 0.8); flare(tmp.set(e.pos.x, 1.4, e.pos.z), P.color, 5, 0.4); ring(e.pos.x, e.pos.z, P.color);
-      if (e.me) { audio.sfx(`power_${type}`); ui.banner(`${P.icon} ${P.label}!`, P.sub, 1100); if (type === 'surge') player.mods.speed = baseSpeed * 1.45; }
+      if (e.me) { shake = Math.max(shake, 0.15); kick.y += 0.12; ui.bump('pw'); audio.sfx(`power_${type}`); ui.banner(`${P.icon} ${P.label}!`, P.sub, 1100); if (type === 'surge') player.mods.speed = baseSpeed * 1.45; }
       else if (Math.hypot(e.pos.x - player.pos.x, e.pos.z - player.pos.z) < 18) ui.feed(`${tagHtml(e)} grabbed ${P.icon} ${P.label}`);
     }
     return game;

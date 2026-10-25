@@ -6,7 +6,7 @@ export const CENTER_R = 6.2, RING_R = 11, RING_N = 7, RING_FLOE_R = 4.6;
 export const FOOT_TOL = 0.35;          // forgiveness past a floe's rim
 export const SINK_START = 14;          // seconds before the first floe cracks
 export const SINK_EVERY = 8.5;         // gap between floe collapses (shrinks late)
-export const CRACK_SECS = 2.6;         // warning shake before a floe sinks
+export const CRACK_SECS = 3.1;         // warning shake + pulsing rim before a floe sinks (was 2.6)
 export const SHRINK_TO = 0.78;         // all floes slowly erode to this scale
 export const BALL_SPEED = 24, BALL_GRAV = 10, BALL_R = 1.05;
 export const KB_BASE = 10, KB_CHARGED = 19, CHARGE_SECS = 0.8;

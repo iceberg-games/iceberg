@@ -57,6 +57,11 @@ export default {
       }
     }
 
+    // ---------- impact rings (pooled, camera-facing) ----------
+    const iRingGeo = new THREE.RingGeometry(0.55, 0.8, 24);
+    const iRings = Array.from({ length: 6 }, () => { const m = new THREE.Mesh(iRingGeo, new THREE.MeshBasicMaterial({ color: '#fff', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false, side: THREE.DoubleSide })); m.visible = false; scene.add(m); return { m, t: 0, s: 1 }; });
+    let iRingNext = 0;
+    function impactRing(x, y, z, color, s) { const r = iRings[iRingNext++ % iRings.length]; r.m.position.set(x, y, z); r.m.material.color.set(color); r.t = 0.28; r.s = s; r.m.visible = true; }
     // ---------- text pops (BONK!) + emotes ----------
     const popPool = [];
     function pop(text, x, y, z, color = '#fff36b', scale = 1) {
@@ -120,13 +125,16 @@ export default {
       const kb = (C.KB_BASE + (C.KB_CHARGED - C.KB_BASE) * b.charge) * (1 + target.heat);
       target.heat += 0.14;
       target.kb.addScaledVector(tmp, kb);
+      if (target.me || b.owner.me) punch.addScaledVector(tmp, (target.me ? 0.35 : 0.18) * (1 + b.charge));
       if (target.me) { player.vel.y = 5 + b.charge * 3; player.onGround = false; ui.flash(); shake = Math.max(shake, 0.35 + b.charge * 0.4); }
       else { target.vy = 5 + b.charge * 3; target.ground = false; shake = Math.max(shake, b.owner.me ? 0.25 + b.charge * 0.3 : 0.08); }
       target.lastCharge = b.charge; if (kb > 14) audio.sfx('slide'); target.lastHitBy = b.owner; target.lastHitT = R_.elapsed;
       hitstop = b.owner.me || target.me ? 0.07 + b.charge * 0.05 : 0.02;
       burst(b.p.x, b.p.y, b.p.z, 18 + b.charge * 16, '#ffffff', 6 + b.charge * 4, 10, 0.6, tmp);
       burst(b.p.x, b.p.y, b.p.z, 6, target.color, 4, 8, 0.6);
-      audio.sfx('hit', b.charge);
+      audio.sfx('hit', b.charge); impactRing(b.p.x, b.p.y, b.p.z, b.charge > 0.75 ? '#ffd24a' : '#ffffff', 0.8 + b.charge * 1.2);
+      if (target.bot) target.squash = 0.35 + b.charge * 0.25;
+      if (b.owner.me) ui.hitmark(b.charge > 0.75);
       if (b.owner.me) { R_.hits++; pop(b.charge > 0.75 ? 'MEGA BONK!' : POPS[(Math.random() * POPS.length) | 0], b.p.x, b.p.y + 1, b.p.z, b.charge > 0.75 ? '#ff7a8a' : '#fff36b', 1 + b.charge * 0.5); }
       else if (target.me) pop('OOF!', b.p.x, b.p.y + 1, b.p.z, '#9fe8ff');
       if (target.bot && Math.random() < 0.15) setTimeout(() => !target.out && alive && emote(target, 1), 400);
@@ -136,7 +144,7 @@ export default {
     // ---------- round ----------
     let R = null, phase = 'count', countT = 0, lastTick = -1, endT = 0, postT = 0;
     let shake = 0, hitstop = 0, charge = 0, charging = false, alive = true;
-    let airT = 0, stepD = 0, warnT = 0;
+    let airT = 0, stepD = 0, warnT = 0; const punch = new THREE.Vector3(); let chargeFull = false;
     const playerVel = new THREE.Vector3(), prevPos = new THREE.Vector3();
     const camDist0 = player.camDist, baseSpeed = player.mods.speed;
     player.mods.speed = baseSpeed * 1.12;
@@ -193,7 +201,7 @@ export default {
       const tag = (x) => `<b style="color:${x.color}">${x.name}</b>`;
       ui.feed(credit ? `${tag(credit)} 💥 ${tag(e)}` : `${tag(e)} 💦 fell in`);
       if (credit?.me) {
-        R.kos++; audio.sfx('ko'); if (R.kos >= 2) audio.sfx('combo'); if ((e.lastCharge || 0) > 0.6) audio.sfx('ooh'); shake = Math.max(shake, 0.5);
+        R.kos++; audio.sfx('ko'); if (R.kos >= 2) audio.sfx('combo'); if ((e.lastCharge || 0) > 0.6) audio.sfx('ooh'); shake = Math.max(shake, 0.5); hitstop = Math.max(hitstop, 0.1); impactRing(e.pos.x, 0.2, e.pos.z, '#ff6b7f', 2.4); ui.flashKO?.();
         ui.banner('💥 KNOCKOUT!', `${e.name} is swimming · ${left - 1} rival${left - 1 === 1 ? '' : 's'} left`, 1300);
         pop('KO!', e.pos.x, 2.5, e.pos.z, '#ff6b7f', 1.8);
       } else if (credit?.bot && Math.random() < 0.7) setTimeout(() => !credit.out && alive && emote(credit, Math.random() < 0.6 ? 0 : 2), 300);
@@ -208,7 +216,7 @@ export default {
     function win(timeout) {
       if (R.win || meEnt.out) return;
       R.win = true; R.survived = timeout; R.place = 1; phase = 'post'; postT = 2.2;
-      ui.banner(timeout ? '⏱ SURVIVED!' : '🏆 VICTORY!', 'last one standing', 2000); audio.sfx('win');
+      shake = Math.max(shake, 0.3); punch.y += 0.25; ui.banner(timeout ? '⏱ SURVIVED!' : '🏆 VICTORY!', 'last one standing', 2000); audio.sfx('win');
       for (let i = 0; i < 4; i++) setTimeout(() => alive && burst(player.pos.x + rand(-2, 2), 3 + rand(0, 2), player.pos.z + rand(-2, 2), 30, ['#ffd24a', '#5be37d', '#ff7ad9', '#3fd0ff'][i], 8, 6, 1.3), i * 220);
       emote(meEnt, 0);
     }
@@ -274,7 +282,7 @@ export default {
             const cand = floes.filter(f => !f.center && f.state === 'ok');
             // prefer crowded floes: more drama
             cand.sort((a, b) => ents.filter(e => !e.out && floeAt(e.pos.x, e.pos.z) === b).length - ents.filter(e => !e.out && floeAt(e.pos.x, e.pos.z) === a).length + rand(-0.8, 0.8));
-            if (cand[0]) { arena.crack(cand[0]); audio.sfx('crack'); if (floeAt(pl.pos.x, pl.pos.z) === cand[0]) ui.banner('⚠ CRACKING!', 'hop to another floe', 1100); }
+            if (cand[0]) { arena.crack(cand[0]); audio.sfx('crack'); if (floeAt(pl.pos.x, pl.pos.z) === cand[0]) { ui.banner('⚠ CRACKING!', 'hop to another floe', 1300); shake = Math.max(shake, 0.18); } burst(cand[0].x, 0.3, cand[0].z, 16, '#7fc8ff', 3, 6, 0.6); }
             R.nextSink += Math.max(4.5, C.SINK_EVERY - R.elapsed / 20);
           }
           arena.erode(R.elapsed / C.ROUND_SECS);
@@ -287,11 +295,11 @@ export default {
         // ---- player support + knockback ----
         if (!meEnt.out) {
           if (sim) { pl.pos.addScaledVector(meEnt.kb, dt); }
-          meEnt.kb.multiplyScalar(Math.exp(-2.4 * dt));
+          meEnt.kb.multiplyScalar(Math.exp(-(meEnt.kb.lengthSq() < 9 ? 4.2 : 2.4) * dt));
           if (phase === 'count') meEnt.kb.set(0, 0, 0);
           const f = floeAt(pl.pos.x, pl.pos.z);
           if (f && pl.pos.y <= f.y + 0.05 && pl.pos.y > f.y - 0.9 && pl.vel.y <= 0.01) {
-            if (!pl.onGround && airT > 0.25) { audio.sfx('land'); burst(pl.pos.x, f.y + 0.1, pl.pos.z, 6, '#ffffff', 2, 6, 0.4); }
+            if (!pl.onGround && airT > 0.25) { punch.y -= 0.12; audio.sfx('land'); burst(pl.pos.x, f.y + 0.1, pl.pos.z, 6, '#ffffff', 2, 6, 0.4); }
             pl.pos.y = f.y; pl.vel.y = 0; pl.onGround = true; airT = 0;
             stepD += playerVel.length() * dt0; if (stepD > 1.6) { stepD = 0; audio.sfx('step'); }
             const edgeD = f.r0 * f.scale - Math.hypot(pl.pos.x - f.x, pl.pos.z - f.z); warnT -= dt0;
@@ -312,17 +320,20 @@ export default {
           if (phase === 'play') want = botThink(e, api, dt, want);
           e.vel.lerp(want, 1 - Math.exp(-3.2 * dt));
           if (sim) e.pos.addScaledVector(e.vel, dt).addScaledVector(e.kb, dt);
-          e.kb.multiplyScalar(Math.exp(-2.4 * dt));
+          e.kb.multiplyScalar(Math.exp(-(e.kb.lengthSq() < 9 ? 4.2 : 2.4) * dt));
           e.vy -= C.GRAV * dt; e.pos.y += e.vy * dt;
           const f = floeAt(e.pos.x, e.pos.z);
-          if (f && e.pos.y <= f.y + 0.05 && e.pos.y > f.y - 0.9 && e.vy <= 0) { e.pos.y = f.y; e.vy = 0; e.ground = true; } else e.ground = false;
+          if (f && e.pos.y <= f.y + 0.05 && e.pos.y > f.y - 0.9 && e.vy <= 0) { if (!e.ground && e.vy < -6) { e.squash = 0.3; burst(e.pos.x, f.y + 0.1, e.pos.z, 4, '#ffffff', 2, 6, 0.35); } e.pos.y = f.y; e.vy = 0; e.ground = true; } else e.ground = false;
           if (e.pos.y < -0.9) { if (sim) eliminate(e); else { e.pos.y = 0; e.vy = 0; } continue; }
           const sp = e.vel.length();
-          if (sp > 0.5) e.mesh.rotation.y = Math.atan2(e.vel.x, e.vel.z);
+          e.ai.faceLock = Math.max(0, (e.ai.faceLock || 0) - dt);
+          if (sp > 0.5 && e.ai.faceLock <= 0) { let da = Math.atan2(e.vel.x, e.vel.z) - e.mesh.rotation.y; da = Math.atan2(Math.sin(da), Math.cos(da)); e.mesh.rotation.y += da * (1 - Math.exp(-10 * dt)); }
+          e.squash = Math.max(0, (e.squash || 0) - dt * 2.2); const sq = Math.sin(e.squash * 9) * e.squash * 0.5;
+          if (!e.ground && e.vy > 2) e.mesh.scale.set(0.94, 1.08, 0.94); else e.mesh.scale.set(1 + sq, 1 - sq, 1 + sq);
           const legs = e.mesh.userData.legs, run = Math.sin(t * 14) * Math.min(1, sp / 5) * 0.7;
           legs[0].rotation.x = run; legs[1].rotation.x = -run;
           const arm = e.mesh.userData.arm; e.ai.throwAnim = Math.max(0, (e.ai.throwAnim || 0) - dt); arm.rotation.x = e.ai.throwAnim > 0 ? -2.6 * (e.ai.throwAnim / 0.25) : run * 0.6;
-          const kbl = e.kb.length(); e.mesh.rotation.x = Math.min(0.5, kbl * 0.03);
+          const kbl = e.kb.length(); e.mesh.rotation.x += (Math.min(0.5, kbl * 0.03) - e.mesh.rotation.x) * (1 - Math.exp(-12 * dt));
           if (kbl > 5) burst(e.pos.x, e.pos.y + 0.8, e.pos.z, 1, e.color, 1, 0, 0.5);
         }
         // separation (bump each other a bit)
@@ -336,7 +347,7 @@ export default {
         for (const b of balls) {
           if (!b.alive) continue;
           b.v.y -= C.BALL_GRAV * dt; b.p.addScaledVector(b.v, dt);
-          if (Math.random() < 0.5) burst(b.p.x, b.p.y, b.p.z, 1, b.charge > 0.6 ? '#ffd24a' : '#cfefff', 0.3, 0, 0.25);
+          if (Math.random() < 0.5 + b.charge * 0.5) burst(b.p.x, b.p.y, b.p.z, 1, b.charge > 0.6 ? '#ffd24a' : '#cfefff', 0.3, 0, 0.25);
           let done = false;
           for (const e of ents) {
             if (e === b.owner || e.out) continue;
@@ -364,9 +375,16 @@ export default {
           e.emote.spr.material.opacity = Math.min(1, e.emote.t * 2); if (e.emote.t <= 0) { scene.remove(e.emote.spr); e.emote.spr.material.map.dispose(); e.emote.spr.material.dispose(); e.emote = null; }
         }
 
+        for (const r of iRings) { if (r.t <= 0) continue; r.t -= dt0; const k = 1 - Math.max(0, r.t) / 0.28; r.m.scale.setScalar(r.s * (0.6 + k * 2.6)); r.m.material.opacity = (1 - k) * 0.9; r.m.quaternion.copy(cam.quaternion); if (r.t <= 0) r.m.visible = false; }
+        // charge feedback: sparkle at hand while charging, one-shot ping + puff at full
+        if (charging && !meEnt.out) {
+          if (Math.random() < 0.25 + charge * 0.6) { const fw = myForward(tmp); burst(pl.pos.x + fw.x * 0.6, pl.pos.y + 1.6, pl.pos.z + fw.z * 0.6, 1, charge >= 1 ? '#ffd24a' : '#cfefff', 1.2 + charge * 2, -1, 0.35); }
+          if (charge >= 1 && !chargeFull) { chargeFull = true; audio.sfx('tick', 1); burst(pl.pos.x, pl.pos.y + 1.6, pl.pos.z, 10, '#ffd24a', 3, 0, 0.35); }
+        } else chargeFull = false;
         // ---- camera punch ----
         shake = Math.max(0, shake - dt0 * 1.8);
-        if (shake > 0) cam.position.add(tmp.set(rand(-1, 1), rand(-1, 1), rand(-1, 1)).multiplyScalar(shake * 0.35));
+        if (shake > 0) { const s2 = shake * shake * 0.6 + shake * 0.15; cam.position.add(tmp.set(Math.sin(t * 37.1) + Math.sin(t * 23.3) * 0.5, Math.sin(t * 41.7 + 1.3) * 0.8, Math.cos(t * 31.9) * 0.6).multiplyScalar(s2)); }
+        if (punch.lengthSq() > 1e-4) { cam.position.add(punch); punch.multiplyScalar(Math.exp(-14 * dt0)); }
 
         const lockT = phase === 'play' && !meEnt.out ? aimAssist(meEnt, myForward(new THREE.Vector3()), mobile ? 0.75 : 0.42) : null;
         const board = [...ents].sort((a, b) => (a.out - b.out) || ((b.kos || 0) - (a.kos || 0))).map(e => ({ name: e.name, color: e.color, out: e.out, me: e.me, kos: e.kos || 0 }));

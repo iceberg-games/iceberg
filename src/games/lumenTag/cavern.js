@@ -128,7 +128,8 @@ export function buildCavern() {
       for (const s of shafts) s.material.uniforms.t.value = t;
       for (let i = 0; i < NM; i++) { const s = seeds[i]; mp[i * 3] = s[0] + Math.sin(t * 0.3 + s[3]) * 1.2; mp[i * 3 + 1] = (s[1] + t * 0.25 + s[3]) % 16; mp[i * 3 + 2] = s[2] + Math.cos(t * 0.25 + s[3]) * 1.2; }
       mg.attributes.position.needsUpdate = true;
-      lights.forEach((l, i) => { l.intensity = 50 + Math.sin(t * 1.3 + i * 2) * 14; });
+      const beat = Math.pow(0.5 + 0.5 * Math.sin(t * 1.9), 6) * 0.35;   // slow 'breathing' pulse, no extra lights
+      lights.forEach((l, i) => { l.intensity = 50 + Math.sin(t * 1.3 + i * 2) * 14 + beat * 30; });
       for (const p of pillars) { p.flash = Math.max(0, p.flash - dt * 3); p.mat.emissiveIntensity = 0.42 + Math.sin(t * 1.2 + p.x) * 0.12 + p.flash * 1.6; p.inner.material.opacity = 0.3 + p.flash * 0.6; }
       for (const p of pads) { p.gem.visible = p.halo.visible = p.ready; p.gem.rotation.y = t * 2; p.gem.position.y = p.halo.position.y = 1.4 + Math.sin(t * 3 + p.x) * 0.2;
         p.ring.material.opacity = p.ready ? 0.6 + Math.sin(t * 5) * 0.3 : 0.15; p.ring.scale.setScalar(p.ready ? 1 + Math.sin(t * 4) * 0.06 : 0.8); }

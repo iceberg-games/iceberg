@@ -37,7 +37,7 @@ export function botThink(e, api, dt, want) {
   const ai = e.ai, { ents, floes, floeAt } = api;
   const SPEED = 6.4;
   ai.retarget -= dt; ai.cd -= dt; ai.strafeT = (ai.strafeT || 0) - dt;
-  if (ai.strafeT <= 0) { ai.strafe = Math.random() < 0.5 ? -1 : 1; ai.strafeT = rand(0.8, 2); }
+  if (ai.strafeT <= 0) { ai.strafe = (Math.random() < 0.5 ? -1 : 1) * rand(0.6, 1.2); ai.strafeT = rand(0.8, 2); }
   if (ai.retarget <= 0 || !ai.target || ai.target.out) {
     let best = null, bd = Infinity;
     for (const o of ents) { if (o === e || o.out) continue; const d = Math.hypot(o.pos.x - e.pos.x, o.pos.z - e.pos.z) * (o.me ? 0.8 : 1) * rand(0.85, 1.15); if (d < bd) { bd = d; best = o; } }
@@ -85,7 +85,7 @@ export function botThink(e, api, dt, want) {
       api.leadDir(e, tgt, v); const err = rand(-0.14, 0.14); const c = Math.cos(err), s = Math.sin(err);
       v.set(v.x * c - v.z * s, 0, v.x * s + v.z * c);
       api.throwBall(e, v, Math.random() < 0.25 ? rand(0.5, 1) : rand(0, 0.35));
-      e.mesh.rotation.y = Math.atan2(v.x, v.z);
+      e.mesh.rotation.y = Math.atan2(v.x, v.z); ai.faceLock = 0.3;
       ai.cd = rand(1.2, 2.6);
     }
   }
