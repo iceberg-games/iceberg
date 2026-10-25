@@ -8,6 +8,7 @@ import cornerBakery from './cornerBakery/index.js';
 import naturalDisasterSurvival from './disasterSurvival/index.js';
 import winterhaven from './winterhaven/index.js';
 import starfallLake from './starfallLake/index.js';
+import sledRush from './sled-rush/index.js';
 import { withEventQuest, frostQuest, hqQuest, obbyQuest } from './_event/hooks.js'; // Natural Disasters event quests (remove to end the event)
 import { creatorDef, customGameDef } from './customGame.js';
 import { backend } from '../backend/LocalBackend.js';
@@ -20,6 +21,7 @@ export const BUILTIN_GAMES = [
   naturalDisasterSurvival,
   winterhaven,
   starfallLake,
+  sledRush,
 ];
 export const CREATOR = creatorDef;
 
