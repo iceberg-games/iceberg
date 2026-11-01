@@ -18,6 +18,7 @@ export const GAME_META = {
   'knockout-floes':     { mobile: true, publishedAt: '2026-10-25T14:41:50-07:00' },  // NEW: joystick + Jump + big THROW tap (hold = charge). Publisher: replace unscheduled with publishedAt to go live.
   'lumen-tag':          { mobile: true, publishedAt: '2026-10-25T14:44:33-07:00' },  // NEW: joystick + Jump + big FIRE (hold = auto-fire w/ aim assist). Publisher: replace unscheduled with publishedAt to go live.
   'rimebound':          { publishedAt: '2026-10-25T15:52:30-07:00', mobile: true },  // full MVP lobby+match
+  'pengu-plaza':        { mobile: true, unscheduled: true },  // NEW (QoL, unscheduled): joystick + emote bar + big action tap. Publisher: add publishedAt on Colin's yes.
   'rainbow-obby':       { publishedAt: '2026-10-16T22:11:58-07:00', retired: true },  // replaced by Giant Rainbow Obby
 };
 
