@@ -36,8 +36,8 @@ export default {
     // bell
     { const b = L.BELL; B.add(M.stone, cyl, b.x, 0.2, b.z, 1.2, 0.4, 1.2); for (const s of [-1, 1]) B.add(M.wood, cyl, b.x + s * 0.9, 1.6, b.z, 0.1, 2.8, 0.1); B.box(M.wood, b.x, 3.0, b.z, 2.1, 0.18, 0.2);
       B.add(M.paint, cone, b.x, 2.5, b.z, 0.5, 0.75, 0.5, '#ffd36b'); }
-    // fountain (just behind bell per photo look), arch, ice pengu, lantern lane
-    { const f = L.PROPS.fountain; B.add(M.stone, cyl, f.x, 0.35, f.z - 3, 2.6, 0.7, 2.6); B.add(M.ice, cyl, f.x, 0.72, f.z - 3, 2.3, 0.05, 2.3); B.add(M.ice, cone, f.x, 2, f.z - 3, 0.6, 2.4, 0.6, '#dff6ff'); }
+    // fountain at PROPS.fountain (0,6) = GM2 game fountain, arch, ice pengu, lantern lane
+    { const f = L.PROPS.fountain; B.add(M.stone, cyl, f.x, 0.35, f.z, 2.6, 0.7, 2.6); B.add(M.ice, cyl, f.x, 0.72, f.z, 2.3, 0.05, 2.3); B.add(M.ice, cone, f.x, 2, f.z, 0.6, 2.4, 0.6, '#dff6ff'); }
     { const a = L.PROPS.arch; const m = new THREE.Mesh(new THREE.TorusGeometry(5, 0.45, 10, 40, Math.PI), M.ice); m.position.set(a.x, 0, a.z); m.castShadow = true; scene.add(m);
       for (let i = 0; i <= 20; i++) { const t = i / 20 * Math.PI; G.add(glow, sph, a.x + Math.cos(t) * 5, Math.sin(t) * 5, a.z + 0.5, 0.14, 0.14, 0.14, hdr(['#7fd4ff', '#c49bff', '#4ff0d0'][i % 3], 2.2)); } }
     { const p = L.PROPS.icePengu; B.add(M.ice, sph, p.x, 3, p.z, 2.6, 3.4, 2.3, '#cdefff'); B.add(M.ice, sph, p.x, 6.6, p.z, 1.8, 1.7, 1.7, '#dff6ff'); B.add(M.paint, cone, p.x, 6.4, p.z + 1.8, 0.35, 0.8, 0.35, '#ffb02e', [Math.PI / 2, 0, 0]);

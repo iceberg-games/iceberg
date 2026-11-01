@@ -19,7 +19,7 @@ export const PHOTO_SPOTS = [
   { id: 'lantern', name: 'Lantern Lane', x: 22, z: 16, look: [26, 3, 20] },
 ];
 // set-only extras (filming): prop positions implied by photo spot look targets + penguin NPC stand points (GM2 NPC_COUNT = 9)
-export const PROPS = { fountain: { x: 0, z: 2 }, arch: { x: 0, z: 33 }, icePengu: { x: -25, z: -22 }, lanternLane: { x: 26, z: 20 } };
+export const PROPS = { fountain: { x: 0, z: 6 }, arch: { x: 0, z: 33 }, icePengu: { x: -25, z: -22 }, lanternLane: { x: 26, z: 20 } };
 export const NPC_POINTS = [[-6, -14], [5, -18], [0, -11], [14, 4.8], [-9, 9.5], [6, 16], [-16, 2], [18, -2], [-4, 24]]
   .map(([x, z], i) => ({ id: `pengu-${i}`, x, z, facing: Math.atan2(-x, 6 - z), pose: ['skate', 'skate', 'skate', 'cocoa', 'sit', 'wave', 'idle', 'idle', 'dance'][i] }));
 export const AREAS = [
