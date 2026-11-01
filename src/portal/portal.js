@@ -28,6 +28,7 @@ import { uiSoundOptions } from '../audio/siteSounds.js';
 import { modelPrefs } from '../backend/LocalBackend.js';
 import { maybeShowEventPopup, eventPopup, createEventStatusSource } from './eventPopup.js';
 import { createStormTheme } from './stormTheme.js';
+import { createFriendsView } from './friends.js';
 
 const root = document.getElementById('portal');
 if (CONFIG.isSite) document.body.classList.add('iceberg-site');
@@ -36,7 +37,7 @@ const economy = new Economy(backend);
 let remote = null;
 let dev = false;   // server says this account is on the developer allowlist (is_dev)
 let view = new URLSearchParams(location.search).get('view') || 'games';
-let chatRoom = null, friendsTimer = null, banner = null;
+let chatRoom = null, friendsCtl = null, banner = null;
 let gameSort = new URLSearchParams(location.search).get('sort') || 'newest';
 let ready = false;   // stored session checked (so the event popup knows guest vs account)
 
@@ -155,44 +156,10 @@ function chatView() {
 }
 
 function friendsView() {
-  const sec = h('section.p-view#view-friends', h('h2', '🤝 Friends'));
-  if (!remote) { sec.append(needAccount('add friends')); return sec; }
-  const input = h('input#friend-name', { placeholder: 'Exact username', maxLength: 20, autocomplete: 'off' });
-  const lists = h('div.p-friends#friends-lists', h('p.muted', 'Loading…'));
-  const msg = h('p.small.muted#friend-msg');
-  const add = async (e) => {
-    e.preventDefault();
-    const name = input.value.trim(); if (!name) return;
-    try {
-      const r = await remote.sendFriendRequest(name);
-      msg.textContent = r.ok ? (r.status === 'friends' ? `You and ${name} are now friends!` : `Request sent to ${name}.`)
-        : ({ no_such_user: 'No player with that username.', self: "That's you!", too_many_pending: 'Too many requests waiting.', too_many_friends: 'Friend list is full.' }[r.reason] || r.reason);
-      input.value = ''; refresh();
-    } catch (err) { msg.textContent = err.message; }
-  };
-  const row = (f, actions) => h('div.p-friend', { 'data-user': f.username },
-    h('span.dot' + (f.online ? '.online' : '')), h('b', f.displayName), h('span.muted', ` @${f.username}`), h('span.grow'), ...actions);
-  async function refresh() {
-    let data; try { data = await remote.listFriends(); } catch (e) { clear(lists).append(h('p.muted', e.message)); return; }
-    let playing = []; try { playing = await remote.friendsPlaying() || []; } catch { /* older backend: no multiplayer yet */ }
-    const where = Object.fromEntries(playing.map(p => [p.username, p]));
-    const gameName = (id) => BUILTIN_GAMES.find(d => d.id === id)?.name || id;
-    const joinBtn = (f) => { const p = where[f.username]; if (!p) return null;
-      return h('span.p-playing', h('span.muted', ` playing ${gameName(p.gameId)} `),
-        h('a.btn.small.join-friend' + (p.full ? '.secondary' : ''), { href: `${playUrl(p.gameId)}&join=${encodeURIComponent(f.username)}`, target: '_blank', rel: 'noopener', 'data-join': f.username,
-          title: p.full ? 'Their server is full: you will join another server of the same game' : `Join ${f.displayName} in ${gameName(p.gameId)}` }, p.full ? 'Full: play' : 'Join')); };
-    const act = (label, fn, cls = '') => h('button.btn.small' + cls, { onclick: async () => { await fn(); refresh(); } }, label);
-    clear(lists).append(h('div.p-friend-lists',   // h() flattens arrays + drops nulls (Element.append would not)
-      h('h3', `Friends (${data.friends.length})`),
-      data.friends.length ? data.friends.map(f => row(f, [joinBtn(f), act('Remove', () => remote.removeFriend(f.username), '.secondary')])) : h('p.muted', 'No friends yet. Add someone by their exact username.'),
-      data.incoming.length ? h('h3', 'Requests for you') : null,
-      data.incoming.map(f => row(f, [act('Accept', () => remote.respondFriendRequest(f.username, true)), act('Decline', () => remote.respondFriendRequest(f.username, false), '.secondary')])),
-      data.outgoing.length ? h('h3', 'Waiting for them') : null,
-      data.outgoing.map(f => row(f, [act('Cancel', () => remote.removeFriend(f.username), '.secondary')]))));
-  }
-  sec.append(h('form.p-card.row#friend-form', { onsubmit: add }, input, h('button.btn', { type: 'submit' }, 'Add friend')), msg, lists);
-  refresh(); friendsTimer = setInterval(refresh, 15000);
-  return sec;
+  friendsCtl?.destroy();
+  friendsCtl = createFriendsView({ remote, toast, playUrl, needAccount, me: economy.profile?.username || '',
+    gameName: (id) => BUILTIN_GAMES.find(d => d.id === id)?.name || id });
+  return friendsCtl.el;
 }
 
 function settingsView() {
@@ -248,7 +215,7 @@ async function signOutNow() {
 function go(v) { view = v; const u = new URL(location.href); u.searchParams.set('view', v); history.replaceState(null, '', u); render(); }
 
 function render() {
-  chatRoom?.destroy(); chatRoom = null; clearInterval(friendsTimer); banner?.destroy(); banner = null;
+  chatRoom?.destroy(); chatRoom = null; friendsCtl?.destroy(); friendsCtl = null; banner?.destroy(); banner = null;
   const views = { games: gamesView, chat: chatView, friends: friendsView, settings: settingsView, account: accountView };
   clear(root).append(h('div.snowbg'), h('div.p-wrap', header(), devRow(), banPanel(), nav(), (views[view] || gamesView)()));
   if (ready && (view === 'games' || !views[view])) checkEventPopup();
