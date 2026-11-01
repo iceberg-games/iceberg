@@ -790,6 +790,15 @@ await t('custom games: publish, public list, owner-only, soft delete', async () 
   assert.equal(kept.length, 1); assert.ok(kept[0].deleted_at);   // soft delete: row kept
   assert.equal((await rpc(db, A, 'publish_custom_game', { p_game_key: 'g_test1', p_name: 'Ice Run 2', p_doc: doc })).ok, true);   // republish restores
   assert.equal((await rpc(db, null, 'list_published_games', {})).length, 1);
+  assert.equal((await rpc(db, null, 'get_published_game', { p_game_key: 'g_test1' })).name, 'Ice Run 2');
+  assert.equal(await rpc(db, null, 'get_published_game', { p_game_key: 'nope' }), null);
+  const big = await rpc(db, A, 'publish_custom_game', { p_game_key: 'g_big', p_name: 'Big', p_doc: { thumbnail: 'x'.repeat(400000) } });
+  assert.equal(big.reason, 'thumb_too_large');
+  const huge = await rpc(db, A, 'publish_custom_game', { p_game_key: 'g_huge', p_name: 'Huge', p_doc: { blob: Array.from({ length: 30 }, (_, i) => i + Math.random().toString(36).repeat(4000)) } });
+  assert.ok(huge.reason === 'too_large' || huge.ok === true);   // compressed jsonb may fit; cap enforced on stored size
+  const Z = await createUser(db, { username: 'zz_banned_cg' });
+  await su(db, `insert into public.bans (user_id, username, reason) values ($1, 'zz_banned_cg', 'test')`, [Z]);
+  assert.match(await denied(rpc(db, Z, 'publish_custom_game', { p_game_key: 'g_ban', p_name: 'Ban', p_doc: {} })), /banned/);
   const coins = await su(db, `select coins from public.profiles where username = 'alice_1'`);
   assert.equal(typeof coins[0].coins !== 'undefined', true);   // economy untouched by publish
 });

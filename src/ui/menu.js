@@ -10,7 +10,8 @@ import { BUILTIN_GAMES, CREATOR, allGames } from '../games/registry.js';
 import { TEMPLATES, newGameDoc, customGameDef } from '../games/customGame.js';
 import { backend } from '../backend/LocalBackend.js';
 import { exportGameJSON, importGameJSON, downloadText } from '../core/share.js';
-import { listServerGames, unpublish, newGameId } from '../studio/store.js';
+import { listServerGames, unpublish, newGameId, mergeOwn } from '../studio/store.js';
+import { getRemote } from '../net/session.js';
 
 export class Menu {
   constructor(root, { economy, models, ui, onPlay, onEdit, onStart }) {
@@ -44,6 +45,8 @@ export class Menu {
     // Server-published games (everyone's), fetched async; local "Your Games" render immediately.
     if (!this._serverLoading) { this._serverLoading = true; listServerGames().then(g => { this.serverGames = g; this.serverError = null; }, e => { this.serverError = e.message; })
       .finally(() => { if (this.mode === 'games') this.showGames(); setTimeout(() => { this._serverLoading = false; }, 30000); }); }
+    const myId = getRemote()?.signedIn ? getRemote().userId : null;
+    for (let i = 0; i < custom.length; i++) custom[i] = mergeOwn(custom[i], (this.serverGames || []).find(g => g.id === custom[i].id), myId);
     const localIds = new Set(custom.map(g => g.id));
     const community = (this.serverGames || []).filter(g => !localIds.has(g.id));
     const card = (def, extra = null) => h('div.game-card', { 'data-game': def.id },

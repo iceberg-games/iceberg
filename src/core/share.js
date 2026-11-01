@@ -1,3 +1,4 @@
+import { newGameId } from '../studio/ids.js';
 // Export / import user-made games as a single self-contained JSON file
 // (embeds any uploaded models the game uses, base64-encoded).
 const toB64 = (buf) => { let s = ''; const b = new Uint8Array(buf); for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000)); return btoa(s); };
@@ -27,6 +28,6 @@ export async function importGameJSON(text, library) {
     if (library.has(m.id)) continue;
     await library.addRecord({ id: m.id, name: m.name, format: m.format, data: m.encoding === 'base64' ? fromB64(m.data) : m.data, createdAt: Date.now() });
   }
-  const doc = { ...data.game, id: 'g_' + Date.now().toString(36), importedAt: Date.now() };
+  const doc = { ...data.game, id: newGameId(), importedAt: Date.now() };
   return doc;
 }
