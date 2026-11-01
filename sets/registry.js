@@ -8,4 +8,5 @@ export const SETS = {
   'rimebound-resort': () => import('./rimebound-resort/index.js'),
   'rimebound-mines': () => import('./rimebound-mines/index.js'),
   'snowball-siege': () => import('./snowball-siege/index.js'),
+  'glacier-drift': () => import('./glacier-drift/index.js'),
 };
