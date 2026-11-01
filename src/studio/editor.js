@@ -1,7 +1,8 @@
 // Studio editor game instance: free-fly camera, multi-selection (click,
 // Shift/Ctrl-click, box select, Ctrl+A), move/rotate/scale gizmos for one part
-// or a whole selection, group/ungroup into Models, copy/paste/duplicate/delete,
-// properties (incl. multi-edit), scripts, undo/redo and the animator.
+// or a whole selection, group/ungroup into Models, copy/paste/duplicate/delete
+// (clipboard shared across Studio games), snap grid, snow/ice terrain brushes,
+// properties (incl. multi-edit), script stacks, undo/redo and the animator.
 import * as THREE from 'three';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { StudioWorld } from './world.js';
@@ -9,6 +10,7 @@ import { makeInstance, newId } from './instances.js';
 import { translate } from './nlscript.js';
 import { setKey, deleteKey, sampleAnimation, waveAnimation, boneRot } from './animation.js';
 import { bus } from '../core/events.js';
+import { newTerrain, applyBrush, heightAt } from './terrain.js';
 
 const R2D = THREE.MathUtils.radToDeg, D2R = THREE.MathUtils.degToRad;
 const round = (v, n = 3) => +(+v).toFixed(n);
@@ -41,8 +43,20 @@ export async function createEditor(ctx, doc) {
   const st = cache.get(doc.id) || { undo: [], redo: [], cam: null };
   cache.set(doc.id, st);
   const cam = new FlyCamera(engine.camera, st.cam);
-  const grid = new THREE.GridHelper(512, 512, '#9fb3c4', '#8193a3'); grid.position.y = 0.01; grid.material.transparent = true; grid.material.opacity = 0.18;
-  if (doc.ground !== 'void') scene.add(grid);
+  // visible snap grid: line spacing follows the Move snap (1 stud when snap is off); G toggles it
+  let grid = null;
+  const buildGrid = () => {
+    if (grid) { scene.remove(grid); grid.geometry.dispose(); grid.material.dispose(); grid = null; }
+    if (!st.showGrid) return;
+    const step = Math.max(0.25, ed.snap.move || 1), size = Math.min(512, step * 256);
+    grid = new THREE.GridHelper(size, Math.round(size / step), '#7fd0ff', '#9fb3c4'); grid.position.y = 0.03;
+    grid.material.transparent = true; grid.material.opacity = ed.snap.move ? 0.32 : 0.16; grid.material.depthWrite = false; grid.renderOrder = 1;
+    scene.add(grid);
+  };
+  if (st.showGrid == null) st.showGrid = doc.ground !== 'void';
+  // terrain brush ring (shown while the Terrain tool hovers the ground)
+  const brushRing = new THREE.Mesh(new THREE.RingGeometry(0.92, 1, 48), new THREE.MeshBasicMaterial({ color: '#7fe0ff', transparent: true, opacity: 0.85, depthTest: false, side: THREE.DoubleSide }));
+  brushRing.rotation.x = -Math.PI / 2; brushRing.renderOrder = 5; brushRing.visible = false; scene.add(brushRing);
 
   const tc = new TransformControls(engine.camera, engine.renderer.domElement);
   tc.setSize(0.9);
@@ -53,17 +67,19 @@ export async function createEditor(ctx, doc) {
 
   const ed = {
     scene, collision: null, hideAvatar: true, editing: true, cameraController: cam, doc, world, music: doc.music || 'none',
-    selection: [], tool: 'move', snap: { move: 1, rot: 15 }, space: 'world',
+    selection: [], tool: st.tool || 'move', snap: st.snap || { move: 1, rot: 15 }, space: 'world',
+    brush: st.brush || { mode: 'raise', radius: 8, strength: 0.6 },
     tc, pivot,
     animator: { open: false, rigId: null, animId: null, time: 0, bone: null, playing: false, clip: null },
   };
   // selectedId = the primary (last clicked) selection, kept for single-selection callers
   Object.defineProperty(ed, 'selectedId', { get: () => ed.selection[ed.selection.length - 1] || null, set: (id) => { ed.selection = id ? [id] : []; } });
+  st.snap = ed.snap; st.brush = ed.brush; buildGrid();
   const changed = (what = 'doc') => bus.emit('studio:changed', what);
   const instById = (id) => doc.instances.find(i => i.id === id);
-  const snapshot = () => JSON.stringify({ instances: doc.instances, animations: doc.animations });
+  const snapshot = () => JSON.stringify({ instances: doc.instances, animations: doc.animations, terrain: doc.terrain || null });
   ed.checkpoint = () => { st.undo.push(snapshot()); if (st.undo.length > 150) st.undo.shift(); st.redo = []; doc.updatedAt = Date.now(); };
-  const restore = (s) => { const o = JSON.parse(s); doc.instances = o.instances; doc.animations = o.animations || []; world.rebuildAll(doc.instances); ed.selection = ed.selection.filter(instById); attach(); changed(); };
+  const restore = (s) => { const o = JSON.parse(s); doc.instances = o.instances; doc.animations = o.animations || []; doc.terrain = o.terrain || undefined; world.rebuildAll(doc.instances); world.setTerrain(doc.terrain); ed.selection = ed.selection.filter(instById); attach(); changed(); };
   ed.undo = () => { if (!st.undo.length) return false; st.redo.push(snapshot()); restore(st.undo.pop()); return true; };
   ed.redo = () => { if (!st.redo.length) return false; st.undo.push(snapshot()); restore(st.redo.pop()); return true; };
   ed.canUndo = () => st.undo.length > 0; ed.canRedo = () => st.redo.length > 0;
@@ -101,7 +117,7 @@ export async function createEditor(ctx, doc) {
     }
     drawBoxes();
     const ids = moveSet();
-    if (!ids.length || ed.tool === 'select') return;
+    if (!ids.length || ed.tool === 'select' || ed.tool === 'terrain') return;
     tc.setMode({ move: 'translate', rotate: 'rotate', scale: 'scale' }[ed.tool]);
     tc.setTranslationSnap(ed.snap.move || null); tc.setRotationSnap(ed.snap.rot ? D2R(ed.snap.rot) : null); tc.setScaleSnap(ed.snap.move ? 0.25 : null);
     if (groupMode()) {
@@ -118,8 +134,13 @@ export async function createEditor(ctx, doc) {
   ed.selectMany = (ids, add = false) => { const list = add ? [...ed.selection] : []; for (const id of ids) if (instById(id) && !list.includes(id)) list.push(id); ed.selection = list; attach(); changed('selection'); };
   ed.toggleSelect = (id) => { if (!instById(id)) return; ed.selection = ed.isSelected(id) ? ed.selection.filter(x => x !== id) : [...ed.selection, id]; attach(); changed('selection'); };
   ed.selectAll = () => ed.selectMany(doc.instances.filter(i => !i.parent).map(i => i.id));
-  ed.setTool = (t) => { ed.tool = t; attach(); changed('tool'); };
-  ed.setSnap = (k, v) => { ed.snap[k] = v; attach(); changed('tool'); };
+  ed.setTool = (t) => { ed.tool = st.tool = t; brushRing.visible = false; attach(); changed('tool'); };
+  ed.setSnap = (k, v) => { ed.snap[k] = v; attach(); if (k === 'move') buildGrid(); changed('tool'); };
+  ed.showGrid = () => !!st.showGrid;
+  ed.toggleGrid = (on = !st.showGrid) => { st.showGrid = on; buildGrid(); changed('tool'); return on; };
+  /** cycle Move snap Off → 0.25 → 0.5 → 1 → 2 → 4 (hotkey: Ctrl+Shift+S... see creator.js) */
+  ed.cycleSnap = () => { const opts = [0, 0.25, 0.5, 1, 2, 4]; ed.setSnap('move', opts[(opts.indexOf(ed.snap.move) + 1) % opts.length]); return ed.snap.move; };
+  ed.setBrush = (k, v) => { ed.brush[k] = v; if (k === 'radius') brushRing.scale.setScalar(v); changed('tool'); };
   ed.toggleSpace = () => { ed.space = ed.space === 'world' ? 'local' : 'world'; attach(); changed('tool'); };
 
   let dragStart = null, groupStart = null;
@@ -157,15 +178,53 @@ export async function createEditor(ctx, doc) {
   });
 
   // ---------- viewport picking & box select ----------
-  let downAxis = null;
+  let downAxis = null, painting = false;
+  // ---------- terrain brushes ----------
+  const groundHit = (ray) => {
+    const targets = [world.terrain, world.env.ground].filter(Boolean);
+    const h = targets.length ? ray.intersectObjects(targets, false)[0] : null;
+    if (h) return h.point;
+    const p = new THREE.Vector3(); return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), p) ? p : null; // void maps: y=0 plane
+  };
+  let flatTarget = null, lastDab = 0;
+  ed.ensureTerrain = () => { if (!doc.terrain) { doc.terrain = newTerrain(); world.setTerrain(doc.terrain); } return doc.terrain; };
+  ed.clearTerrain = () => { if (!doc.terrain) return; ed.checkpoint(); doc.terrain = undefined; world.setTerrain(null); changed(); };
+  /** one brush dab at a world point (used by strokes and by tests) */
+  ed.terrainDab = (x, z, mode = ed.brush.mode) => {
+    const t = ed.ensureTerrain();
+    const did = applyBrush(t, x, z, { mode, radius: ed.brush.radius, strength: ed.brush.strength, target: mode === 'flatten' ? flatTarget : null });
+    if (did) world.setTerrain(t);
+    return did;
+  };
+  ed.terrainHeightAt = (x, z) => heightAt(doc.terrain, x, z) ?? 0;
+  const dabAt = (ray, mode) => { const p = groundHit(ray); if (!p) return; brushRing.position.set(p.x, (heightAt(doc.terrain, p.x, p.z) ?? 0) + 0.15, p.z); ed.terrainDab(p.x, p.z, mode); };
+  let strokeMode = null;
+  ed.onHover = (ray) => {
+    if (ed.tool !== 'terrain') { brushRing.visible = false; return; }
+    const p = groundHit(ray); brushRing.visible = !!p;
+    if (p) { brushRing.scale.setScalar(ed.brush.radius); brushRing.position.set(p.x, (heightAt(doc.terrain, p.x, p.z) ?? 0) + 0.15, p.z); }
+    const now = performance.now();
+    if (painting && now - lastDab > 30) { lastDab = now; dabAt(ray, strokeMode); }
+  };
   const pickId = (ray) => { const hit = ray.intersectObjects(world.pickables(), false).find(h => h.object.visible); return hit && !hit.object.userData.ground ? world.idFromObject(hit.object) : null; };
   ed.onPointerDown = (e, ray) => {
     downAxis = tc.axis;
+    if (ed.tool === 'terrain' && e.button === 0 && !ed.animator.open) {
+      // one stroke = one undo step; Shift inverts raise/lower, Ctrl smooths
+      ed.checkpoint(); painting = true;
+      strokeMode = e.ctrlKey || e.metaKey ? 'smooth' : e.shiftKey ? ({ raise: 'lower', lower: 'raise' }[ed.brush.mode] || ed.brush.mode) : ed.brush.mode;
+      const p = groundHit(ray); flatTarget = p ? (heightAt(doc.terrain, p.x, p.z) ?? 0) : 0;
+      dabAt(ray, strokeMode);
+      const up = () => { painting = false; removeEventListener('pointerup', up, true); changed('terrain'); };
+      addEventListener('pointerup', up, true);
+      return 'drag';
+    }
     if (e.button !== 0 || tc.axis || ed.animator.open) return null;
     // drag on empty space (or Shift+drag anywhere) draws a selection box
     return (!pickId(ray) || e.shiftKey) ? 'drag' : null;
   };
   ed.onPointerDrag = ({ x0, y0, x, y }) => {
+    if (painting || ed.tool === 'terrain') return;
     Object.assign(marquee.style, { left: `${Math.min(x0, x)}px`, top: `${Math.min(y0, y)}px`, width: `${Math.abs(x - x0)}px`, height: `${Math.abs(y - y0)}px` });
     marquee.classList.remove('hidden');
   };
@@ -183,9 +242,9 @@ export async function createEditor(ctx, doc) {
     }
     ed.selectMany([...ids], add); return [...ids];
   };
-  ed.onPointerDragEnd = ({ x0, y0, x, y, shift, ctrl }) => { marquee.classList.add('hidden'); ed.boxSelect(x0, y0, x, y, shift || ctrl); };
+  ed.onPointerDragEnd = ({ x0, y0, x, y, shift, ctrl }) => { if (ed.tool === 'terrain') return; marquee.classList.add('hidden'); ed.boxSelect(x0, y0, x, y, shift || ctrl); };
   ed.onClick = ({ ray, button, shift, ctrl }) => {
-    if (button !== 0 || downAxis || tc.dragging) return;
+    if (button !== 0 || downAxis || tc.dragging || ed.tool === 'terrain') return;
     const raw = pickId(ray);
     if (ed.animator.open) { if (raw && world.entries.get(raw)?.rig) ed.selectRig(raw); return; }
     const id = raw ? topAncestor(raw) : null; // clicking a part inside a Model selects the Model
@@ -263,7 +322,7 @@ export async function createEditor(ctx, doc) {
   ed.copy = (ids) => {
     const list = asList(ids); if (!list.length) return 0;
     const srcIds = new Set(); for (const id of list) { srcIds.add(id); descendants(id).forEach(d => srcIds.add(d.id)); }
-    clipboard = { instances: JSON.parse(JSON.stringify(doc.instances.filter(i => srcIds.has(i.id)))).map(i => (srcIds.has(i.parent) ? i : { ...i, parent: null })), animations: JSON.parse(JSON.stringify((doc.animations || []).filter(a => srcIds.has(a.rigId)))) };
+    clipboard = { from: { gameId: doc.id, gameName: doc.name }, at: Date.now(), instances: JSON.parse(JSON.stringify(doc.instances.filter(i => srcIds.has(i.id)))).map(i => (srcIds.has(i.parent) ? i : { ...i, parent: null })), animations: JSON.parse(JSON.stringify((doc.animations || []).filter(a => srcIds.has(a.rigId)))) };
     try { localStorage.setItem(CLIP_KEY, JSON.stringify(clipboard)); } catch { /* storage full/blocked: memory clipboard still works */ }
     changed('clipboard'); return clipboard.instances.length;
   };
@@ -278,7 +337,24 @@ export async function createEditor(ctx, doc) {
     const c = b.isEmpty() ? new THREE.Vector3() : b.getCenter(new THREE.Vector3());
     const target = new THREE.Vector3(...placementPoint([1, Math.max(1, b.isEmpty() ? 1 : b.max.y - b.min.y + 1), 1]));
     const off = [target.x - c.x, Math.max(target.y - c.y, -b.min.y + 0.5 || 0), target.z - c.z].map(v => round(v));
+    ed.lastPasteFrom = clip.from?.gameId && clip.from.gameId !== doc.id ? clip.from.gameName : null;
     return addClones(cloneInstances(clip.instances, off, clip.animations || []));
+  };
+  /** what's on the clipboard (for the ribbon tooltip / toast): { count, gameName } */
+  ed.clipboardInfo = () => { let c = clipboard; if (!c) { try { c = JSON.parse(localStorage.getItem(CLIP_KEY) || 'null'); } catch { c = null; } } return c?.instances?.length ? { count: c.instances.filter(i => !i.parent).length, gameName: c.from?.gameName || null, sameGame: c.from?.gameId === doc.id } : null; };
+  /** Ctrl+R: rotate the selection 90° (or by the Rotate snap if set) around Y as one undo step */
+  ed.rotateSelection = (deg = 90, axis = 1) => {
+    const ids = moveSet(); if (!ids.length) return;
+    ed.checkpoint();
+    const c = boundsOf(ids).getCenter(new THREE.Vector3());
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(axis === 0 ? 1 : 0, axis === 1 ? 1 : 0, axis === 2 ? 1 : 0), D2R(deg));
+    for (const id of ids) {
+      const inst = instById(id), e = world.entries.get(id); if (!inst || !e) continue;
+      const p = new THREE.Vector3(...inst.pos).sub(c).applyQuaternion(q).add(c);
+      const rq = new THREE.Quaternion().setFromEuler(new THREE.Euler(...inst.rot.map(D2R))).premultiply(q); const eu = new THREE.Euler().setFromQuaternion(rq);
+      inst.pos = p.toArray().map(v => round(v)); inst.rot = [eu.x, eu.y, eu.z].map(v => round(R2D(v), 2)); world.rebuild(inst);
+    }
+    updateGroupCenters(); attach(); changed();
   };
 
   // ---------- Models (groups) ----------
@@ -336,8 +412,12 @@ export async function createEditor(ctx, doc) {
   // ---------- scripts (plain words) ----------
   const tctx = () => ({ names: doc.instances.map(i => i.name).filter(Boolean) });
   ed.translate = (text) => translate(text, tctx());
-  ed.addScript = (id, text = '') => { const inst = instById(id); if (!inst) return null; ed.checkpoint(); const s = { id: newId('s'), name: 'Script', text, program: translate(text, tctx()).program, enabled: true }; (inst.scripts ||= []).push(s); changed(); return s.id; };
+  ed.addScript = (id, text = '') => { const inst = instById(id); if (!inst) return null; ed.checkpoint(); const s = { id: newId('s'), name: `Script${(inst.scripts || []).length ? ' ' + ((inst.scripts || []).length + 1) : ''}`, text, program: translate(text, tctx()).program, enabled: true }; (inst.scripts ||= []).push(s); changed(); return s.id; };
   ed.updateScript = (id, sid, text) => { const s = instById(id)?.scripts?.find(x => x.id === sid); if (!s) return null; ed.checkpoint(); const r = translate(text, tctx()); s.text = text; s.program = r.program; changed('script'); return r; };
+  /** script stack: scripts on a part start top-to-bottom (index 0 first) */
+  ed.moveScript = (id, sid, dir) => { const inst = instById(id); const l = inst?.scripts; if (!l) return; const i = l.findIndex(s => s.id === sid), j = i + dir; if (i < 0 || j < 0 || j >= l.length) return; ed.checkpoint(); [l[i], l[j]] = [l[j], l[i]]; changed(); };
+  ed.toggleScript = (id, sid, on) => { const s = instById(id)?.scripts?.find(x => x.id === sid); if (!s) return; ed.checkpoint(); s.enabled = on ?? s.enabled === false; changed(); };
+  ed.renameScript = (id, sid, name) => { const s = instById(id)?.scripts?.find(x => x.id === sid); if (!s) return; ed.checkpoint(); s.name = String(name || 'Script').slice(0, 30); changed(); };
   ed.removeScript = (id, sid) => { const inst = instById(id); if (!inst) return; ed.checkpoint(); inst.scripts = inst.scripts.filter(s => s.id !== sid); changed(); };
 
   // ---------- animator ----------
@@ -383,6 +463,6 @@ export async function createEditor(ctx, doc) {
     if (A.open) for (const e of world.entries.values()) e.rig?.mixer?.update(dt);
     if (!tc.dragging && boxes.children.length && (boxTimer += dt) > 0.25) { boxTimer = 0; drawBoxes(); }
   };
-  ed.dispose = () => { st.cam = cam.state(); marquee.remove(); tc.detach(); tc.disconnect(); tc.getHelper().traverse(c => { c.geometry?.dispose(); c.material?.dispose?.(); }); }; // r169 tc.dispose() calls this.traverse (bug)
+  ed.dispose = () => { st.cam = cam.state(); marquee.remove(); painting = false; tc.detach(); tc.disconnect(); tc.getHelper().traverse(c => { c.geometry?.dispose(); c.material?.dispose?.(); }); }; // r169 tc.dispose() calls this.traverse (bug)
   return ed;
 }
