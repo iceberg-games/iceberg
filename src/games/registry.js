@@ -5,6 +5,7 @@ import frostFields from './frostFields.js';
 import birgHQ from './birgHQ.js';
 import giantRainbowObby from './giantObby/index.js';
 import cornerBakery from './cornerBakery/index.js';
+import snowconeTycoon from './snowconeTycoon/index.js';
 import naturalDisasterSurvival from './disasterSurvival/index.js';
 import winterhaven from './winterhaven/index.js';
 import starfallLake from './starfallLake/index.js';
@@ -24,6 +25,7 @@ export const BUILTIN_GAMES = [
   withEventQuest(birgHQ, ...hqQuest),
   withEventQuest(giantRainbowObby, ...obbyQuest),
   cornerBakery,
+  snowconeTycoon,
   naturalDisasterSurvival,
   winterhaven,
   starfallLake,

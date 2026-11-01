@@ -1,0 +1,27 @@
+// Snowcone Plaza shots (set for GM1 snowcone-tycoon) (16:9 default; also fine at ?w=1080&h=1920).
+import { SHOP, CASH_REGISTER, FOUNTAIN, STAIRS } from './layout.js';
+export const SHOTS = [
+  { id: 'arrival', name: 'Plaza arrival (push-in to the stand)', duration: 14, ease: 'inOutSine',
+    pos: [[0, 3.5, 32], [0, 2.6, 20], [0, 2.2, 8]], look: [[0, 4, -8], [0, 3.5, -8], [0, 2.4, -6]], fov: [55, 50] },
+  { id: 'syrup-rainbow', name: 'Syrup rainbow close-up (dripping glow)', duration: 10, ease: 'inOutSine', hold: 1,
+    pos: [[-3.5, 2.7, -3.4], [2.5, 2.5, -3.5]], look: [[-2.5, 1.5, -6.3], [1.8, 1.4, -6.3]], fov: [46, 40] },
+  { id: 'serve-window', name: 'Serve window POV (4 customer slots + boardwalk)', duration: 10, ease: 'inOutSine', hold: 1,
+    pos: [[-2.5, 2.9, -6.6], [2.5, 2.8, -6.4]], look: [[-1, 1.0, 1], [1, 1.0, 1]], fov: 58 },
+  { id: 'shaver-kitchen', name: 'Ice hopper + shavers (spinning blades, ice mist)', duration: 10, ease: 'inOutSine',
+    pos: [[-2.5, 3.6, -4.6], [2.0, 3.3, -4.8]], look: [[-1, 1.6, -7.9], [1, 1.5, -7.9]], fov: 52 },
+  { id: 'register-ding', name: 'Register order-ding sparkle', duration: 8, ease: 'inOutSine', hold: 1,
+    pos: [[CASH_REGISTER.x + 1.8, 2.0, CASH_REGISTER.z + 2.6], [CASH_REGISTER.x + 0.9, 1.75, CASH_REGISTER.z + 1.4]],
+    look: [[CASH_REGISTER.x, 1.6, CASH_REGISTER.z], [CASH_REGISTER.x, 1.9, CASH_REGISTER.z]], fov: [42, 36] },
+  { id: 'rush-hour', name: 'Rush-hour queue dolly + upgrade pads', duration: 12, ease: 'inOutSine',
+    pos: [[-8, 1.6, 4], [0, 1.8, 5.5], [8, 1.6, 4]], look: [[-3, 1, -1], [0, 1.2, -3], [3, 1, -1]], fov: 48 },
+  { id: 'patio-orbit', name: 'Patio orbit (umbrellas + fountain)', duration: 16, ease: 'inOutSine',
+    pos: Array.from({ length: 10 }, (_, i) => { const a = -0.9 + i * 0.2; return [FOUNTAIN.x + Math.sin(a) * 12, 4.2, FOUNTAIN.z + 2 + Math.cos(a) * 10]; }),
+    look: [[FOUNTAIN.x, 1.6, FOUNTAIN.z], [FOUNTAIN.x, 1.8, FOUNTAIN.z - 2]], fov: 52 },
+  { id: 'climb-loft', name: 'Stair climb to loft → rooftop sign', duration: 14, ease: 'inOutSine',
+    pos: [[STAIRS.x + 2, 1.8, STAIRS.z0 + 3], [STAIRS.x + 1.5, 4.4, STAIRS.z1 + 3], [6, SHOP.roofY + 2.5, -2], [0, SHOP.roofY + 3.5, 1]],
+    look: [[STAIRS.x, 2, STAIRS.z1], [3, 5.5, -7], [0, SHOP.roofY + 3, -12], [0, SHOP.roofY + 4.5, -12]], fov: [50, 46] },
+  { id: 'glacier-boardwalk', name: 'Boardwalk dolly w/ glacier backdrop', duration: 14, ease: 'inOutSine',
+    pos: [[-22, 2.2, 8], [0, 2.6, 9.5], [22, 2.2, 8]], look: [[-10, 2, -4], [0, 4, -30], [10, 2, -4]], fov: 55 },
+  { id: 'empire-crane', name: 'Empire crane-up (whole lot)', duration: 16, ease: 'inOutSine',
+    pos: [[18, 2, 26], [10, 12, 30], [0, 24, 30]], look: [[0, 3, 0], [0, 2, -2], [0, 0, 0]], fov: [55, 60] },
+];
