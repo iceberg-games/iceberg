@@ -1,0 +1,2 @@
+# Crystal Spire: credits
+Iceberg original. Every mesh (needle, ledges, geode clusters, bridges, shard rings, cirque ridges, glacier tongues, light shafts, fog layers) is procedural Three.js code plus the shared `sets/lib` sky/blocks/snow helpers. Built to the GM1 brief `/workspace/iceberg-game-maker/designs/crystal-spire-brief.md`; GM1 owns gameplay. No external assets, no Roblox assets, no Blender.
