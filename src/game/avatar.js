@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { COSMETIC_BY_ID } from '../data/cosmetics.js';
+import { QOL_GAME_BUILDERS } from './cosmetics/qolGameWearables.js';
 import WIND_MAIN_OGG from '../assets/audio/tornado_hat_wind_loop.ogg?url';
 import WIND_MAIN_MP3 from '../assets/audio/tornado_hat_wind_loop.mp3?url';
 import WIND_HIGH_OGG from '../assets/audio/tornado_hat_wind_loop_high.ogg?url';
@@ -41,6 +42,7 @@ function mesh(geo, mat, x = 0, y = 0, z = 0) {
 // ---------- cosmetic model builders ----------
 // Each returns { bone: 'head'|'torso'|'armR', object }
 const BUILDERS = {
+  ...QOL_GAME_BUILDERS, // gd_/ss_/pp_ QoL game wearables (self-contained module)
   wh_carrot_nose(_rc, color) { return buildCarrotNose(color); },
   wh_bridge_badge(_rc, color) { return buildBridgeBadge(color); },
   wh_carol_bells(_rc, color) { return buildCarolBells(color); },
