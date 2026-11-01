@@ -1,3 +1,5 @@
+@import "../ui/iceTokens.css";
+@import "../ui/iceChrome.css";
 /* Iceberg Studio — Roblox Studio-like dark layout with icy accents */
 body.studio-active #hud, body.studio-active .help, body.studio-active #back-to-editor { display: none !important; }
 .studio { position: absolute; inset: 0; z-index: 15; pointer-events: none; font: 13px/1.35 'Segoe UI', system-ui, sans-serif; color: #e4edf5; }
