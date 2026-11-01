@@ -126,3 +126,6 @@ body.portal-page { background: linear-gradient(180deg, #e9f6ff 0%, #d6ecfb 55%, 
   .ev-modal .ib-modal-actions .btn { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .ev-modal .btn.ev-play::after { animation: none; } }
+.p-friend.busy { opacity: .6; }
+#friend-msg.ok { color: #1d8a52; }
+#friends-status { color: #9a6b00; }

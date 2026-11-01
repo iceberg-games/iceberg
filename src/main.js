@@ -67,8 +67,14 @@ async function boot() {
     gameChat.show(true);
     // multiplayer: pick/create a server instance (or the friend's from ?join=), then chat in that instance's room
     const joinFriend = def.id === GAME_PARAM ? params.get('join') : null;
-    const inst = await mp.join(def.id, { friend: joinFriend }).catch((e) => { console.warn('multiplayer unavailable', e); return null; });
-    if (inst?.note === 'friend_full') ui.toast('That server is full, so you joined another one.', '👥');
+    let joinErr = null;
+    let inst = await mp.join(def.id, { friend: joinFriend }).catch((e) => { joinErr = e; console.warn('multiplayer unavailable', e); return null; });
+    // Friend join failed (not friends / left / signed out): fall back to a normal server instead of playing solo.
+    if (joinFriend && (!inst || inst.ok === false)) {
+      const why = !remote ? 'sign in to join friends' : (inst?.reason || joinErr?.message || 'they are not in a server right now');
+      ui.toast(`Couldn't join ${joinFriend}: ${String(why).replace(/_/g, ' ')}. Joined a normal server.`, '⚠️');
+      inst = await mp.join(def.id).catch(() => null);
+    } else if (inst?.note === 'friend_full') ui.toast('That server is full, so you joined another one.', '👥');
     else if (inst && joinFriend && !inst.note) ui.toast(`Joined ${joinFriend}'s server!`, '👋');
     gameChat.join(def.id, inst?.room).catch(() => {});
     session?.stop(); session = startPlaySession(remote, def.id);   // visit + 30 s heartbeats (portal tabs)
