@@ -18,13 +18,13 @@ export { newGameId } from './ids.js';
 const signedInRemote = () => { const r = getRemote(); return r && r.signedIn ? r : null; };
 const REASONS = { too_large: 'game is too big to publish (try fewer uploaded models)', id_taken: 'this game id belongs to another player; use Save As / re-import', limit_reached: 'you reached the published game limit', bad_name: 'game needs a name (1-40 characters)', bad_doc: 'game data is invalid', bad_id: 'game id is invalid', thumb_too_large: 'thumbnail image is too big' };
 
-/** Publish: local copy first (verified), then server when signed in. Returns { doc, remote }. Throws on failure. */
+/** Publish (signed-in only; guests get an error and keep their draft): local copy first (verified), then server. Returns { doc, remote }. Throws on failure. */
 export async function publish(doc) {
+  if (!signedInRemote()) throw new Error('sign in to publish (your game is saved as a draft on this device)');
   const pub = { ...doc, published: true, publishedAt: Date.now() };
   backend.saveCustomGame(pub);
   if (!backend.loadCustomGames().some(g => g.id === pub.id && g.publishedAt === pub.publishedAt)) throw new Error('could not save on this device (storage full or private mode)');
   const remote = signedInRemote();
-  if (!remote) return { doc: pub, remote: false };
   let r;
   try { r = await remote.publishCustomGame(pub); }
   catch (e) { throw new Error(`saved on this device, but the server publish failed: ${e.message}`); }

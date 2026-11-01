@@ -238,3 +238,5 @@ Rate limiting and trust:
 - Signed in: if the server copy of your own game is newer or the same, it replaces the stale local copy in Your Games.
 - Smoke checklist: `node tools/db/test-db.mjs` covers RLS (B can't update/delete/republish/unpublish A's game), anon list/get vs signed-in publish, thumbnail size limit, banned refusal, soft delete + republish. Manual: two-browser A publish → B opens `play/?game=<A's id>`; full storage (DevTools → Application → fill localStorage) → Publish shows "Publish failed", not success.
 - Merge order (primary, after Colin's yes): backup → apply 0017 → catalog:check → merge/Pages → live-smoke.
+- Colin's rules: guests cannot publish (Publish shows "sign in to publish"; drafts still save locally). Owners can unpublish (soft delete). Banned users are refused by `publish_custom_game`. Uploaded models are never uploaded with a published game; other players see a placeholder until bundling exists.
+- Note: `scripts/studio-e2e.mjs` publishes as a guest, so its publish/list checks now need a signed-in dev backend (`npm run dev:backend`) or must expect the "sign in to publish" error.
