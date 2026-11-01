@@ -22,6 +22,7 @@ export const GAME_META = {
   'snowball-siege':     { mobile: true, publishedAt: '2026-10-31T23:44:21-07:00' },  // QoL (GM2): 4v4 fort siege; joystick + Jump + big THROW (hold=charge) + RELOAD. Publisher: swap unscheduled for publishedAt on Colin's yes.
   'pengu-plaza':        { mobile: true, publishedAt: '2026-10-31T23:44:21-07:00' },  // NEW (QoL, unscheduled): joystick + emote bar + big action tap. Publisher: add publishedAt on Colin's yes.
   'snowcone-tycoon':    { mobile: true, publishedAt: '2026-10-31T23:51:10-07:00' },  // Wave 2: Snowcone Tycoon (published on Colin's publish-everything).
+  'crystal-spire':      { mobile: true, publishedAt: '2026-10-31T23:56:07-07:00' },  // Crystal Spire (Colin publish-everything).
   'rainbow-obby':       { publishedAt: '2026-10-16T22:11:58-07:00', retired: true },  // replaced by Giant Rainbow Obby
 };
 
