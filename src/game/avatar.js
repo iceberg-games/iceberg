@@ -7,6 +7,7 @@ import { COSMETIC_BY_ID } from '../data/cosmetics.js';
 import { QOL_GM1_BUILDERS } from './cosmetics/qolGm1Wearables.js';
 import { getBodySlots, normalizeBodyType, loadBodyType, BONE_ANCHOR, CLOTHING_ANCHOR, DEFAULT_BODY_TYPE } from './bodyTypes.js';
 export { BODY_TYPES, BODY_TYPE_IDS, getBodySlots, loadBodyType, saveBodyType } from './bodyTypes.js';
+import { QOL_GAME_BUILDERS } from './cosmetics/qolGameWearables.js';
 import WIND_MAIN_OGG from '../assets/audio/tornado_hat_wind_loop.ogg?url';
 import WIND_MAIN_MP3 from '../assets/audio/tornado_hat_wind_loop.mp3?url';
 import WIND_HIGH_OGG from '../assets/audio/tornado_hat_wind_loop_high.ogg?url';
@@ -46,6 +47,7 @@ function mesh(geo, mat, x = 0, y = 0, z = 0) {
 // ---------- cosmetic model builders ----------
 // Each returns { bone: 'head'|'torso'|'armR', object }
 const BUILDERS = {
+  ...QOL_GAME_BUILDERS, // gd_/ss_/pp_ QoL game wearables (self-contained module)
   wh_carrot_nose(_rc, color) { return buildCarrotNose(color); },
   wh_bridge_badge(_rc, color) { return buildBridgeBadge(color); },
   wh_carol_bells(_rc, color) { return buildCarolBells(color); },
@@ -96,6 +98,10 @@ const BUILDERS = {
   sf_star_net(_rc, color) { return buildStarCatchNet(color); },
   ah_glow_shard(_rc, color) { return buildHollowShard(color); },
   so_meteor_cape(_rc, color) { return buildMeteorCape(color); },
+  fz_jelly_dome(_rc, color) { return buildJellyDome(color); },
+  fz_cube_balloon(_rc, color) { return buildCubeBalloon(color); },
+  fz_pocket_globe(_rc, color) { return buildPocketGlobe(color); },
+  fz_bling_chain(_rc, color) { return buildBlingChain(color); },
   penguin_pal(_rc, color) { return buildPenguinPal(color); },
   ...QOL_GM1_BUILDERS,
   cap() {
@@ -2776,3 +2782,75 @@ function buildMeteorCape(color) {
   return { bone: 'torso', object: g };
 }
 
+// ---- Fun "fz_" ice wearables (additive; lane2) ----
+function buildJellyDome(color) {
+  const g = new THREE.Group(); const J = new THREE.Group(); J.position.y = 0.6; g.add(J);
+  const jm = new THREE.MeshPhysicalMaterial({ color, transparent: true, opacity: 0.6, roughness: 0.05, transmission: 0.3, emissive: color, emissiveIntensity: 0.25, clearcoat: 1, depthWrite: false });
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(0.3, 28, 16, 0, Math.PI * 2, 0, Math.PI / 2), jm); dome.scale.y = 0.9; J.add(dome);
+  const rimM = std(_tint(color, '#ffffff', 0.5), { roughness: 0.3 });
+  const rim = mesh(new THREE.TorusGeometry(0.3, 0.04, 10, 32), rimM); rim.rotation.x = Math.PI / 2; J.add(rim);
+  const cubeM = std(_tint(color, '#ff5f8a', 0.5), { roughness: 0.2, emissive: color, emissiveIntensity: 0.3 });
+  const cube = new THREE.Mesh(new RoundedBoxGeometry(0.1, 0.1, 0.1, 3, 0.03), cubeM); cube.position.y = 0.12; J.add(cube);
+  const hl = _glowSprite(softDotTexture(), '#ffffff', 0.1, 0.7); hl.position.set(-0.12, 0.2, 0.15); J.add(hl);
+  let t = 0;
+  g.userData.tick = (dt) => { t += dt; const b = Math.sin(t * 6) * Math.exp(-((t % 2.2) * 1.6)) + Math.sin(t * 2.2) * 0.15;
+    J.scale.set(1 - b * 0.12, 1 + b * 0.18, 1 - b * 0.12); J.rotation.z = Math.sin(t * 3.1) * 0.05;
+    cube.position.y = 0.12 + Math.sin(t * 2.5) * 0.03; cube.rotation.y += dt * 1.2; cube.rotation.x = Math.sin(t * 1.7) * 0.4; };
+  g.userData.setColor = (c) => { jm.color.set(c); jm.emissive.set(c); rimM.color.set(_tint(c, '#ffffff', 0.5)); cubeM.color.set(_tint(c, '#ff5f8a', 0.5)); cubeM.emissive.set(c); };
+  return { bone: 'head', object: g };
+}
+
+function buildCubeBalloon(color) {
+  const g = new THREE.Group(); const B = new THREE.Group(); g.add(B);
+  const bm = new THREE.MeshPhysicalMaterial({ color, roughness: 0.1, clearcoat: 1, transparent: true, opacity: 0.85, emissive: color, emissiveIntensity: 0.2 });
+  const cube = new THREE.Mesh(new RoundedBoxGeometry(0.34, 0.34, 0.34, 4, 0.1), bm); B.add(cube);
+  const eyeM = std('#1a2440', { roughness: 0.4 });
+  const eyes = [-1, 1].map(s => { const e = mesh(new THREE.SphereGeometry(0.028, 10, 8), eyeM, s * 0.07, 0.03, 0.172); e.scale.z = 0.4; B.add(e); return e; });
+  const smile = mesh(new THREE.TorusGeometry(0.05, 0.01, 6, 16, Math.PI), eyeM, 0, -0.03, 0.172); smile.rotation.z = Math.PI; B.add(smile);
+  const blushM = std('#ff8fb8', { roughness: 1 }); [-1, 1].forEach(s => { const c = mesh(new THREE.CircleGeometry(0.025, 12), blushM, s * 0.115, -0.02, 0.173); B.add(c); });
+  const strM = new THREE.LineBasicMaterial({ color: '#ffffff' });
+  const sg = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]); const line = new THREE.Line(sg, strM); g.add(line);
+  const anchor = new THREE.Vector3(0.2, 0.3, -0.2);
+  let t = 0, blink = 0;
+  g.userData.tick = (dt) => { t += dt; B.position.set(0.32 + Math.sin(t * 0.9) * 0.08, 1.25 + Math.sin(t * 1.6) * 0.06, -0.4 + Math.cos(t * 0.7) * 0.05);
+    B.rotation.set(Math.sin(t * 1.1) * 0.15, Math.sin(t * 0.6) * 0.4, Math.sin(t * 1.3) * 0.12);
+    blink = (t % 3.5) < 0.12 ? 0.1 : 1; eyes.forEach(e => e.scale.y = blink);
+    const p = sg.attributes.position; p.setXYZ(0, anchor.x, anchor.y, anchor.z); p.setXYZ(1, B.position.x, B.position.y - 0.17, B.position.z); p.needsUpdate = true; };
+  g.userData.setColor = (c) => { bm.color.set(c); bm.emissive.set(c); };
+  return { bone: 'torso', object: g };
+}
+
+function buildPocketGlobe(color) {
+  const g = new THREE.Group(); g.position.set(0, -0.98, 0.32);
+  const baseM = std(color, { roughness: 0.35, metalness: 0.2 });
+  g.add(mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.08, 20), baseM, 0, 0, 0));
+  const glassM = new THREE.MeshPhysicalMaterial({ color: '#ffffff', transparent: true, opacity: 0.25, roughness: 0, transmission: 0.6, depthWrite: false });
+  const G = new THREE.Group(); G.position.y = 0.16; g.add(G);
+  G.add(new THREE.Mesh(new THREE.SphereGeometry(0.14, 24, 16), glassM));
+  const berg = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 5), std('#e8faff', { flatShading: true, emissive: color, emissiveIntensity: 0.3 })); berg.position.y = -0.06; G.add(berg);
+  const light = new THREE.PointLight(color, 0.4, 1.2); G.add(light);
+  const dot = softDotTexture(); const flakes = [];
+  for (let i = 0; i < 22; i++) { const s = _glowSprite(dot, '#ffffff', 0.025, 0.9); G.add(s); flakes.push({ s, a: Math.random() * 6.28, r: Math.random() * 0.1, y: Math.random() * 0.2 - 0.1 }); }
+  let t = 0;
+  g.userData.tick = (dt) => { t += dt; const ph = t % 5; const swirl = ph < 1 ? 1 : Math.max(0, 1 - (ph - 1) / 2.5);
+    for (const f of flakes) { f.a += dt * (0.4 + swirl * 4); f.y = ph < 1 ? Math.min(0.1, f.y + dt * 0.3) : Math.max(-0.1, f.y - dt * 0.05); f.s.position.set(Math.cos(f.a) * f.r, f.y, Math.sin(f.a) * f.r); }
+    berg.rotation.y += dt * 0.5; light.intensity = 0.3 + swirl * 0.5; G.rotation.z = Math.sin(t * 1.4) * 0.06; };
+  g.userData.setColor = (c) => { baseM.color.set(c); berg.material.emissive.set(c); light.color.set(c); };
+  return { bone: 'armR', object: g };
+}
+
+function buildBlingChain(color) {
+  const g = new THREE.Group();
+  const linkM = std(color, { roughness: 0.15, metalness: 0.8, emissive: color, emissiveIntensity: 0.15 });
+  for (let i = 0; i <= 18; i++) { const a = Math.PI * (i / 18); const l = mesh(new THREE.TorusGeometry(0.035, 0.013, 6, 12), linkM, Math.cos(a) * 0.3, 0.4 - Math.sin(a) * 0.12, 0.05 + Math.sin(a) * 0.28); l.rotation.y = a + (i % 2) * Math.PI / 2; g.add(l); }
+  const P = new THREE.Group(); P.position.set(0, 0.2, 0.36); g.add(P);
+  const iceM = new THREE.MeshPhysicalMaterial({ color: _tint(color, '#ffffff', 0.4), roughness: 0.02, transmission: 0.5, thickness: 0.2, emissive: color, emissiveIntensity: 0.4, clearcoat: 1 });
+  const cube = new THREE.Mesh(new RoundedBoxGeometry(0.12, 0.12, 0.12, 2, 0.02), iceM); cube.rotation.set(0.6, 0.6, 0); P.add(cube);
+  const flash = _glowSprite(softDotTexture(), '#ffffff', 0.05, 0); flash.position.set(0.04, 0.05, 0.08); P.add(flash);
+  let t = 0;
+  g.userData.tick = (dt) => { t += dt; cube.rotation.y += dt * 1.6; P.rotation.z = Math.sin(t * 2) * 0.15;
+    const f = (t % 2.6) < 0.3 ? Math.sin(((t % 2.6) / 0.3) * Math.PI) : 0; flash.material.opacity = f; flash.scale.setScalar(0.05 + f * 0.25); flash.material.rotation = t * 3;
+    iceM.emissiveIntensity = 0.35 + f * 0.8; };
+  g.userData.setColor = (c) => { linkM.color.set(c); linkM.emissive.set(c); iceM.color.set(_tint(c, '#ffffff', 0.4)); iceM.emissive.set(c); };
+  return { bone: 'torso', object: g };
+}
