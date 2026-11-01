@@ -1,0 +1,2 @@
+# Snowcone Plaza (set for GM1 game Snowcone Tycoon): credits
+Iceberg original. All geometry is procedural Three.js (rounded boxes, cylinders, cones, sprites) built in code plus the shared `sets/lib` sky/blocks/snow helpers. The vibe follows the Iceberg Sound Designer pack (`/workspace/iceberg-audio/snowcone-tycoon/`) and the Iceberg poster art. No external meshes or textures, no Roblox assets, no Blender.
