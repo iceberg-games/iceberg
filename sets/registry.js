@@ -7,4 +7,5 @@ export const SETS = {
   'knockout-floes': () => import('./knockout-floes/index.js'),
   'rimebound-resort': () => import('./rimebound-resort/index.js'),
   'rimebound-mines': () => import('./rimebound-mines/index.js'),
+  'snowball-siege': () => import('./snowball-siege/index.js'),
 };
