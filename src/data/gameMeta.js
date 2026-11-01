@@ -20,6 +20,7 @@ export const GAME_META = {
   'rimebound':          { publishedAt: '2026-10-25T15:52:30-07:00', mobile: true },  // full MVP lobby+match
   'glacier-drift':      { mobile: true, unscheduled: true },  // NEW (QoL): joystick steer + Jump + big USE power-up tap. Publisher: replace unscheduled with publishedAt after Colin's yes.
   'snowball-siege':     { mobile: true, unscheduled: true },  // QoL (GM2): 4v4 fort siege; joystick + Jump + big THROW (hold=charge) + RELOAD. Publisher: swap unscheduled for publishedAt on Colin's yes.
+  'pengu-plaza':        { mobile: true, unscheduled: true },  // NEW (QoL, unscheduled): joystick + emote bar + big action tap. Publisher: add publishedAt on Colin's yes.
   'rainbow-obby':       { publishedAt: '2026-10-16T22:11:58-07:00', retired: true },  // replaced by Giant Rainbow Obby
 };
 
