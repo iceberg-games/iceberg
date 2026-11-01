@@ -276,7 +276,12 @@ function motionAction(c) {
   return null;
 }
 /** Continuous (always-on) behaviour in one clause, or null. */
+const CHASE_RE = /\b(chase|chases|chasing|follow|follows|following|hunt|hunts|hunting|run after|runs after)\b/;
+const WANDER_RE = /\b(wander|wanders|wandering|roam|roams|roaming|walk around|walks around|stroll|strolls|patrol around)\b/;
+function npcSpeed(c, d) { const m = c.match(re(`(?:speed|at)\\s+${N}(?:\\s+studs)?`)); let s = num(m?.[1], d); if (/\b(slow|slowly)\b/.test(c)) s *= 0.5; if (/\b(fast|quickly|really fast)\b/.test(c)) s *= 1.8; return s; }
 function continuousOf(c) {
+  if (CHASE_RE.test(c) && !/\b(teleport|send)\b/.test(c)) { const r = c.match(re(`(?:within|in|up to|closer than|range(?: of)?)\\s+${N}\\s+studs`)); return { type: 'chase', speed: npcSpeed(c, 10), range: num(r?.[1], 40) }; }
+  if (WANDER_RE.test(c)) { const r = c.match(re(`${N}\\s+studs`)); const p = c.match(re(`(?:pausing|resting|waiting|stopping)\\s+(?:for\\s+)?${SEC}`)); return { type: 'wander', speed: npcSpeed(c, 5), radius: num(r?.[1], 15), pause: num(p?.[1], 1.5) }; }
   if (SPIN_RE.test(c)) return { type: 'spin', ...spinOf(c) };
   const between = c.match(/\bbetween\s+(.+?)\s+&\s+(.+?)(?=$|\s+(?:every|each|in|over|taking|pausing|waiting)\b)/) || c.match(/\bfrom\s+(@p\d+|pt\d+|here|its start)\s+to\s+(@p\d+|pt\d+)/);
   const toBack = c.match(/\bto\s+(?:the\s+)?(@p\d+|pt\d+)\s+&\s+back\b/);
@@ -491,6 +496,8 @@ export function validateProgram(p) {
   for (const c of (p?.continuous || []).slice(0, 6)) {
     if (c?.type === 'spin') out.continuous.push({ type: 'spin', axis: ['x', 'y', 'z'].includes(c.axis) ? c.axis : 'y', speed: clamp(c.speed, -1440, 1440, 90) });
     if (c?.type === 'move') out.continuous.push({ type: 'move', axis: ['x', 'y', 'z'].includes(c.axis) ? c.axis : 'y', distance: clamp(c.distance, -500, 500, 5), period: clamp(c.period, 0.2, 120, 3) });
+    if (c?.type === 'chase') out.continuous.push({ type: 'chase', speed: clamp(c.speed, 0.5, 60, 10), range: clamp(c.range, 2, 500, 40) });
+    if (c?.type === 'wander') out.continuous.push({ type: 'wander', speed: clamp(c.speed, 0.5, 60, 5), radius: clamp(c.radius, 1, 300, 15), pause: clamp(c.pause, 0, 30, 1.5) });
     if (c?.type === 'path') { const pts = (c.points || []).filter(x => vec3(x) || typeof x === 'string').slice(0, 8).map(x => (typeof x === 'string' ? x.slice(0, 60) : x)); if (pts.length >= 2) out.continuous.push({ type: 'path', points: pts, period: clamp(c.period, 0.2, 120, 3), pause: clamp(c.pause, 0, 60, 0.5) }); }
   }
   for (const r of (p?.rules || []).slice(0, 24)) {
@@ -585,6 +592,8 @@ export function describe(program) {
   for (const c of program.continuous || []) {
     if (c.type === 'spin') lines.push(`Spins ${Math.abs(c.speed) < 60 ? 'slowly' : Math.abs(c.speed) > 200 ? 'fast' : ''} forever around the ${c.axis.toUpperCase()} axis (${Math.abs(c.speed)}°/second${c.speed < 0 ? ', backwards' : ''}).`.replace('  ', ' '));
     if (c.type === 'move') lines.push(`Moves ${c.axis === 'y' ? 'up and down' : c.axis === 'x' ? 'left and right' : 'back and forth'} ${Math.abs(c.distance)} studs, taking ${secs(c.period)} each way, forever.`);
+    if (c.type === 'chase') lines.push(`Chases the nearest player within ${c.range} studs at ${c.speed} studs/second, and walks home when they get away.`);
+    if (c.type === 'wander') lines.push(`Wanders around within ${c.radius} studs of its start at ${c.speed} studs/second, resting about ${secs(c.pause)} between walks.`);
     if (c.type === 'path') lines.push(`Moves between ${c.points.map(ptName).join(' and ')}, taking ${secs(c.period)} each way${c.pause ? ` and pausing ${secs(c.pause)}` : ''}, forever (players can ride it).`);
   }
   for (const r of program.rules || []) {
@@ -598,6 +607,7 @@ export function describe(program) {
 export const CHEATSHEET = [
   { title: 'Touch & click', items: ['When a player touches this, kill them', 'When touched, give 10 points and play a ding sound', 'When clicked, turn green', 'When the button is pressed, open the door called Gate for 5 seconds', 'When a player enters this area, say "Welcome!"', 'When a player leaves this area, say "Bye!"', 'The first time someone touches this, give them 5 Birg Bucks'] },
   { title: 'Moving & spinning', items: ['Spin slowly forever', 'Spin 2 times a second like a wheel', 'Move up and down 5 studs every 2 seconds', 'Move between 0, 5, 0 and 20, 5, 0 every 4 seconds', 'Move to the part called Goal and back every 3 seconds', 'Act as an elevator going up 20 studs', 'When touched, move up 10 studs over 2 seconds, wait 2 seconds, then go back', 'When touched, wait 1 second then fall and come back after 3 seconds'] },
+  { title: 'NPC AI (chase & wander)', items: ['Chase the player within 40 studs', 'Chase the player fast within 60 studs', 'Wander around within 15 studs', 'Slowly wander around within 25 studs pausing 3 seconds', 'When touched, take 20 damage'] },
   { title: 'Players', items: ['When touched, teleport them to the part called Finish', 'When touched, bounce them really high', 'When touched, make them 2 times faster for 5 seconds', 'When touched, make them jump higher for 10 seconds', 'When touched, give them low gravity', 'When touched, take 25 damage', 'When touched, heal them', 'When touched, save their progress', 'When touched, you win'] },
   { title: 'Looks & effects', items: ['Every 2 seconds, turn red or blue at random', 'When touched, slowly fade to purple over 3 seconds', 'When touched, fade out', 'Become 50% transparent', 'When clicked, turn the light on', 'When clicked, turn the light off', 'When touched, make sparkles and play a chime sound', 'When touched, explode and disappear for 3 seconds', 'Glow blue'] },
   { title: 'Score, timers & variables', items: ['When the game starts, show the leaderboard', 'When touched, add 1 to the counter', 'When touched, if the player has 10 points, open the door called Gate, otherwise say "You need 10 points!"', 'When the score reaches 50, say "Halfway there!"', 'When the game starts, start a 60 second countdown', 'When the countdown ends, say "Time is up!"', 'When touched, give a random number of points between 1 and 10'] },

@@ -14,6 +14,16 @@ import { drafts, publish, isPublished } from '../studio/store.js';
 import { upgradeDoc } from '../studio/templates.js';
 import { exportGameJSON, importGameJSON, downloadText } from '../core/share.js';
 import { isMobile, onDeviceChange } from '../core/device.js';
+import { TERRAIN_BRUSHES } from '../studio/terrain.js';
+
+/** One source of truth for Studio shortcuts: drives the ? cheat sheet, tooltips and the status bar. */
+export const HOTKEYS = [
+  { group: 'Tools', keys: [['1', 'Select'], ['2', 'Move'], ['3', 'Scale'], ['4', 'Rotate'], ['5', 'Terrain brush'], ['Ctrl+L', 'World / local axes'], ['G', 'Show / hide grid'], ['Shift+G', 'Cycle move snap (Off·¼·½·1·2·4)']] },
+  { group: 'Selection', keys: [['Click', 'Select'], ['Shift/Ctrl+Click', 'Add / remove'], ['Drag empty space', 'Box select'], ['Shift+Drag', 'Box select (add)'], ['Ctrl+A', 'Select all'], ['Esc', 'Clear selection / close help'], ['F', 'Focus camera on selection']] },
+  { group: 'Edit', keys: [['Ctrl+C / X / V', 'Copy / cut / paste (works across your games)'], ['Ctrl+D', 'Duplicate'], ['Del', 'Delete'], ['Ctrl+G', 'Group into Model'], ['Ctrl+Shift+G', 'Ungroup'], ['Ctrl+R', 'Rotate 90° (Y)'], ['Ctrl+Z', 'Undo'], ['Ctrl+Y / Ctrl+Shift+Z', 'Redo']] },
+  { group: 'Terrain (tool 5)', keys: [['Drag', 'Paint with the brush'], ['Shift+Drag', 'Invert raise ↔ lower'], ['Ctrl+Drag', 'Smooth'], ['[ / ]', 'Brush smaller / bigger'], ['Alt+1…4', 'Raise · Lower · Smooth · Flatten']] },
+  { group: 'Camera & game', keys: [['Right-drag', 'Look'], ['W A S D', 'Fly'], ['Q / E', 'Down / up'], ['Shift', 'Fly faster'], ['Wheel', 'Zoom'], ['Ctrl+S', 'Save'], ['? or F1', 'This cheat sheet']] },
+];
 
 const num = (v) => (Math.round(v * 1000) / 1000).toString();
 
@@ -47,20 +57,42 @@ export class CreatorPanel {
     if (e.target.closest?.('input, textarea, select') || document.querySelector('#name-dialog')) return;
     const ctrl = e.ctrlKey || e.metaKey, k = e.code;
     const stop = () => { e.preventDefault(); e.stopPropagation(); };
+    if (k === 'F1' || (e.key === '?' && !ctrl)) { stop(); this.toggleHelp(); return; }
+    if (document.querySelector('#hotkey-help')) { if (k === 'Escape') { stop(); this.toggleHelp(false); } return; }
+    if (e.altKey && !ctrl && /^Digit[1-4]$/.test(k)) { stop(); ed.setBrush('mode', Object.keys(TERRAIN_BRUSHES)[+k.slice(5) - 1]); if (ed.tool !== 'terrain') ed.setTool('terrain'); return; }
+    if (!ctrl && (k === 'BracketLeft' || k === 'BracketRight')) { stop(); ed.setBrush('radius', Math.max(2, Math.min(40, ed.brush.radius + (k === 'BracketRight' ? 2 : -2)))); return; }
+    if (!ctrl && k === 'KeyG') { stop(); if (e.shiftKey) { const v = ed.cycleSnap(); this.ui.toast(`Move snap: ${v ? v + ' studs' : 'off'}`, '🧲'); } else this.ui.toast(ed.toggleGrid() ? 'Grid on' : 'Grid off', '▦'); return; }
+    if (ctrl && k === 'KeyR') { stop(); ed.rotateSelection(ed.snap.rot && ed.snap.rot !== 90 && e.shiftKey ? ed.snap.rot : 90); return; }
+    if (ctrl && k === 'KeyL') { stop(); ed.toggleSpace(); return; }
     if (['KeyT', 'KeyL', 'KeyM', 'KeyH', 'KeyB'].includes(k) && !ctrl) { e.stopPropagation(); return; } // don't open game drawers in Studio
     if (ctrl && k === 'KeyZ') { stop(); e.shiftKey ? ed.redo() : ed.undo(); }
     else if (ctrl && k === 'KeyY') { stop(); ed.redo(); }
     else if (ctrl && k === 'KeyD') { stop(); ed.duplicate(); }
     else if (ctrl && k === 'KeyA') { stop(); this.scriptSel = null; ed.selectAll(); }
     else if (ctrl && k === 'KeyC') { stop(); const n = ed.copy(); if (n) this.ui.toast(`Copied ${n} item${n > 1 ? 's' : ''}`, '📋'); }
-    else if (ctrl && k === 'KeyX') { stop(); ed.cut(); }
-    else if (ctrl && k === 'KeyV') { stop(); ed.paste(); }
+    else if (ctrl && k === 'KeyX') { stop(); const n = ed.cut(); if (n) this.ui.toast(`Cut ${n} item${n > 1 ? 's' : ''}`, '✂️'); }
+    else if (ctrl && k === 'KeyV') { stop(); this.paste(); }
     else if (ctrl && k === 'KeyG') { stop(); e.shiftKey ? ed.ungroup() : ed.group(); }
-    else if (k === 'Escape' && !ed.animator.open) { ed.select(null); }
+    else if (k === 'Escape' && !ed.animator.open) { if (ed.tool === 'terrain') ed.setTool('select'); else ed.select(null); }
     else if (ctrl && k === 'KeyS') { stop(); this.save(); }
     else if (k === 'Delete' || k === 'Backspace') { stop(); ed.remove(); }
     else if (k === 'KeyF' && !ctrl) { ed.focus(); }
-    else if (!ctrl && /^Digit[1-4]$/.test(k)) ed.setTool(['select', 'move', 'scale', 'rotate'][+k.slice(5) - 1]);
+    else if (!ctrl && /^Digit[1-5]$/.test(k)) ed.setTool(['select', 'move', 'scale', 'rotate', 'terrain'][+k.slice(5) - 1]);
+  }
+  paste() {
+    const ed = this.ed, ids = ed.paste();
+    if (ids.length) this.ui.toast(`Pasted ${ids.length} item${ids.length > 1 ? 's' : ''}${ed.lastPasteFrom ? ` from "${ed.lastPasteFrom}"` : ''}`, '📥');
+    else this.ui.toast('Clipboard is empty — copy something first (Ctrl+C)', '📋');
+  }
+  /** ? / F1 hotkey cheat sheet overlay */
+  toggleHelp(force) {
+    const cur = document.querySelector('#hotkey-help'), open = force ?? !cur;
+    cur?.remove(); if (!open) return;
+    const wrap = h('div.st-dialog-back#hotkey-help', { onclick: (e) => { if (e.target === wrap) wrap.remove(); } },
+      h('div.st-dialog.st-help', h('div.st-help-head', h('b', '⌨️ Studio shortcuts'), h('button.st-mini#hotkey-help-close', { onclick: () => wrap.remove() }, '✕ Close')),
+        h('div.st-help-grid', HOTKEYS.map(g => h('div.st-help-col', h('h4', g.group), g.keys.map(([key, what]) => h('div.st-help-row', h('kbd', key), h('span', what)))))),
+        h('p.st-hint', 'Tip: Ctrl means ⌘ on Mac. Shortcuts pause while you type in a box.')));
+    this.el.append(wrap);
   }
 
   // ---------- persistence ----------
@@ -78,21 +110,25 @@ export class CreatorPanel {
       h('div.st-left', this.left = h('div.st-left-inner')),
       h('div.st-right', this.props = h('div.st-props')),
       this.anim = h('div.st-anim.hidden'),
-      h('div.st-status', 'Right-drag: look · W A S D + Q/E: fly · Click: select · Shift/Ctrl+click: add · Drag on empty space: box select · Ctrl+A all · 1–4: tools · Ctrl+Z/Y · Ctrl+C/X/V · Ctrl+D duplicate · Ctrl+G group (Shift: ungroup) · Del · F focus · Ctrl+S save'),
+      h('div.st-status', h('button.st-mini#hotkey-help-btn', { onclick: () => this.toggleHelp() }, '⌨️ Shortcuts (?)'), ' Right-drag look · WASD+Q/E fly · Shift/Ctrl+click add · drag empty = box select · 1–5 tools · G grid · Ctrl+C/X/V copy/cut/paste · Ctrl+D dup · Ctrl+G group · Ctrl+R rotate 90° · F focus · Ctrl+S save'),
     );
     this.renderRibbon(); this.renderLeft(); this.renderProps(); this.renderAnimator();
   }
 
   renderRibbon() {
     const ed = this.ed; if (!ed) return;
-    const tool = (id, icon, label, key) => h('button.st-tool' + (ed.tool === id ? '.on' : ''), { 'data-tool': id, title: `${label} (${key})`, onclick: () => ed.setTool(id) }, h('span', icon), label);
+    const tool = (id, icon, label, key) => h('button.st-tool' + (ed.tool === id ? '.on' : ''), { 'data-tool': id, title: `${label} (${key})`, onclick: () => ed.setTool(id) }, h('span', icon), label, h('small.st-key', String(key)));
+    const clip = ed.clipboardInfo();
     const ins = (type, icon, label, over = {}) => h('button.st-tool', { 'data-insert': label.toLowerCase().replace(/\s+/g, '-'), onclick: () => ed.insert(type, over) }, h('span', icon), label);
     const snapSel = (key, opts, label) => h('label.st-snap', label, h('select', { 'data-snap': key, onchange: (e) => ed.setSnap(key, +e.target.value) }, opts.map(o => h('option', { value: o, selected: ed.snap[key] === o }, o === 0 ? 'Off' : (key === 'rot' ? `${o}°` : o)))));
     const importInput = h('input', { type: 'file', accept: '.json', style: { display: 'none' }, onchange: async (e) => { const f = e.target.files[0]; if (!f) return; try { const d = upgradeDoc(await importGameJSON(await f.text(), this.models)); drafts.save(d); this.ui.toast(`Imported "${d.name}"`, '📥'); this.onReload(d); } catch (err) { this.ui.toast(`Import failed: ${err.message}`, '⚠️'); } } });
     clear(this.ribbon).append(
       h('div.st-brand', '🧊', h('b', 'Iceberg Studio')),
-      h('div.st-group', h('div.st-gl', 'Tools'), h('div.st-row', tool('select', '🖱️', 'Select', 1), tool('move', '✥', 'Move', 2), tool('scale', '⤢', 'Scale', 3), tool('rotate', '⟳', 'Rotate', 4)),
-        h('div.st-row', snapSel('move', [0, 0.25, 0.5, 1, 2, 4], 'Move'), snapSel('rot', [0, 5, 15, 45, 90], 'Rotate'), h('button.st-mini#space-toggle', { onclick: () => ed.toggleSpace(), title: 'Move in world or local axes' }, ed.space === 'world' ? '🌐 World' : '📐 Local'))),
+      h('div.st-group', h('div.st-gl', 'Tools'), h('div.st-row', tool('select', '🖱️', 'Select', 1), tool('move', '✥', 'Move', 2), tool('scale', '⤢', 'Scale', 3), tool('rotate', '⟳', 'Rotate', 4), tool('terrain', '🏔️', 'Terrain', 5)),
+        h('div.st-row', snapSel('move', [0, 0.25, 0.5, 1, 2, 4], '🧲 Move'), snapSel('rot', [0, 5, 15, 45, 90], 'Rotate'),
+          h('button.st-mini' + (ed.showGrid() ? '.on' : '') + '#grid-toggle', { onclick: () => ed.toggleGrid(), title: 'Show / hide the snap grid (G). Line spacing follows Move snap.' }, '▦ Grid'),
+          h('button.st-mini#space-toggle', { onclick: () => ed.toggleSpace(), title: 'Move in world or local axes (Ctrl+L)' }, ed.space === 'world' ? '🌐 World' : '📐 Local'))),
+      ed.tool === 'terrain' ? this.terrainGroup() : null,
       h('div.st-group', h('div.st-gl', 'Insert'), h('div.st-row', ins('part', '🧱', 'Block', { shape: 'box' }), ins('part', '⚪', 'Sphere', { shape: 'sphere', size: [3, 3, 3], name: 'Sphere' }), ins('part', '🛢️', 'Cylinder', { shape: 'cylinder', size: [3, 2, 3], name: 'Cylinder' }), ins('part', '📐', 'Wedge', { shape: 'wedge', size: [4, 2, 4], name: 'Wedge' })),
         h('div.st-row', ins('spawn', '📍', 'Spawn'), ins('checkpoint', '🚩', 'Checkpoint'), ins('part', '🔥', 'Kill brick', { name: 'KillBrick', kill: true, material: 'lava', color: '#ff4a1c', size: [4, 1, 4] }), ins('coin', '🪙', 'Coin'))),
       h('div.st-group', h('div.st-gl', 'Edit'), h('div.st-row',
@@ -101,7 +137,8 @@ export class CreatorPanel {
         h('button.st-tool#dup-btn', { disabled: !ed.selectedId, onclick: () => ed.duplicate(), title: 'Duplicate (Ctrl+D)' }, h('span', '⧉'), 'Duplicate'),
         h('button.st-tool#del-btn', { disabled: !ed.selectedId, onclick: () => ed.remove(), title: 'Delete (Del)' }, h('span', '🗑'), 'Delete'),
         h('button.st-tool#copy-btn', { disabled: !ed.selectedId, onclick: () => ed.copy(), title: 'Copy (Ctrl+C)' }, h('span', '📋'), 'Copy'),
-        h('button.st-tool#paste-btn', { disabled: !ed.hasClipboard(), onclick: () => ed.paste(), title: 'Paste (Ctrl+V)' }, h('span', '📥'), 'Paste'),
+        h('button.st-tool#cut-btn', { disabled: !ed.selectedId, onclick: () => ed.cut(), title: 'Cut (Ctrl+X)' }, h('span', '✂️'), 'Cut'),
+        h('button.st-tool#paste-btn', { disabled: !clip, onclick: () => this.paste(), title: clip ? `Paste ${clip.count} item${clip.count > 1 ? 's' : ''}${clip.gameName && !clip.sameGame ? ` from "${clip.gameName}"` : ''} (Ctrl+V)` : 'Paste (Ctrl+V) — clipboard is shared between your Studio games' }, h('span', '📥'), 'Paste'),
         h('button.st-tool#group-btn', { disabled: !ed.selectedId, onclick: () => ed.group(), title: 'Group into a Model (Ctrl+G)' }, h('span', '🗃️'), 'Group'),
         h('button.st-tool#ungroup-btn', { disabled: !ed.selection.some(id => ed.doc.instances.find(i => i.id === id)?.type === 'group'), onclick: () => ed.ungroup(), title: 'Ungroup (Ctrl+Shift+G)' }, h('span', '📤'), 'Ungroup'),
         h('button.st-tool' + (ed.animator.open ? '.on' : '') + '#animator-btn', { onclick: () => ed.openAnimator(!ed.animator.open) }, h('span', '🎬'), 'Animator'))),
@@ -114,6 +151,16 @@ export class CreatorPanel {
           importInput, h('button.st-mini#import-game', { onclick: () => importInput.click() }, '⤒ Import'),
           h('button.st-mini#exit-editor', { onclick: () => { this.save(true); this.ed.saveCamera(); this.onExit(); } }, '✕ Exit'))),
     );
+  }
+
+  terrainGroup() {
+    const ed = this.ed, b = ed.brush;
+    return h('div.st-group#terrain-panel', h('div.st-gl', '🏔️ Snow & ice terrain'),
+      h('div.st-row', Object.entries(TERRAIN_BRUSHES).map(([k, v], i) => h('button.st-mini' + (b.mode === k ? '.on' : ''), { 'data-brush': k, title: `${v.label} (Alt+${i + 1})`, onclick: () => ed.setBrush('mode', k) }, `${v.icon} ${v.label}`))),
+      h('div.st-row',
+        h('label.st-snap', 'Size', h('input#brush-radius', { type: 'range', min: 2, max: 40, step: 1, value: b.radius, title: '[ and ] change size', oninput: (e) => ed.setBrush('radius', +e.target.value) }), h('span', String(b.radius))),
+        h('label.st-snap', 'Strength', h('input#brush-strength', { type: 'range', min: 0.1, max: 2, step: 0.1, value: b.strength, oninput: (e) => ed.setBrush('strength', +e.target.value) })),
+        h('button.st-mini.danger#terrain-clear', { disabled: !ed.doc.terrain, onclick: () => ed.clearTerrain(), title: 'Remove all terrain (undoable)' }, '🧹 Clear')));
   }
 
   // ---------- left: explorer / toolbox ----------
@@ -146,7 +193,8 @@ export class CreatorPanel {
           isGroup ? h('span.st-twisty', { 'data-twisty': inst.id, onclick: (e) => { e.stopPropagation(); open ? this.collapsed.add(inst.id) : this.collapsed.delete(inst.id); this.renderLeft(); } }, open ? '▾' : '▸') : null,
           h('span.ic', TYPE_INFO[inst.type]?.icon || '🧱'), inst.name + badge, isGroup ? h('small', ` (${(kids.get(inst.id) || []).length})`) : null));
         const cpad = { paddingLeft: `${20 + depth * 14}px` };
-        for (const sc of inst.scripts || []) rows.push(h('div.st-node.child' + (this.scriptSel === sc.id ? '.sel' : ''), { 'data-script': sc.id, style: cpad, onclick: () => { this.scriptSel = sc.id; ed.select(inst.id); } }, h('span.ic', '📜'), sc.text ? `Script: ${sc.text.slice(0, 24)}${sc.text.length > 24 ? '…' : ''}` : 'Script (empty)'));
+        const many = (inst.scripts || []).length > 1;
+        (inst.scripts || []).forEach((sc, n) => rows.push(h('div.st-node.child' + (this.scriptSel === sc.id ? '.sel' : '') + (sc.enabled === false ? '.off' : ''), { 'data-script': sc.id, style: cpad, title: many ? `Runs #${n + 1} of ${inst.scripts.length} (top to bottom)` : '', onclick: () => { this.scriptSel = sc.id; ed.select(inst.id); } }, h('span.ic', '📜'), many ? h('b.st-order', `${n + 1}`) : null, sc.text ? `${sc.name && sc.name !== 'Script' ? sc.name + ': ' : ''}${sc.text.slice(0, 24)}${sc.text.length > 24 ? '…' : ''}` : `${sc.name || 'Script'} (empty)`, sc.enabled === false ? h('small', ' (off)') : null)));
         for (const a of (doc.animations || []).filter(a => a.rigId === inst.id)) rows.push(h('div.st-node.child', { style: cpad, onclick: () => { ed.select(inst.id); ed.openAnimator(true); ed.animator.animId = a.id; ed.poseAt(0); this.renderAnimator(); } }, h('span.ic', '🎞️'), `Animation: ${a.name}`));
         if (isGroup && open) walk(inst.id, depth + 1);
       }
@@ -210,6 +258,12 @@ export class CreatorPanel {
         item('🦘', 'Trampoline', () => { const id = ed.insert('part', { name: 'Trampoline', shape: 'cylinder', color: '#ff7ac8', size: [4, 0.6, 4] }); ed.addScript(id, 'When touched, bounce them really high'); }),
         item('🚪', 'Door', () => { const id = ed.insert('part', { name: 'Door', color: '#8a5a34', material: 'wood', size: [4, 7, 0.5] }); ed.addScript(id, 'When touched, open like a door for 3 seconds'); }),
         item('📍', 'Spawn', () => ed.insert('spawn')), item('🚩', 'Checkpoint', () => ed.insert('checkpoint')), item('🪙', 'Coin', () => ed.insert('coin'))),
+      h('h4', '🤖 NPC AI templates'), h('p.st-hint', 'Drops a character with plain-words AI scripts. Edit the words to tune speed and range (e.g. "within 60 studs", "fast").'),
+      h('div.st-grid#ai-templates',
+        item('🐻‍❄️', 'Chaser NPC', () => this.insertNpc('Chaser', ['Chase the player within 40 studs', 'When touched, take 20 damage']), { 'data-ai': 'chase', title: 'Chases the nearest player and hurts on touch' }),
+        item('🐧', 'Wanderer NPC', () => this.insertNpc('Wanderer', ['Wander around within 15 studs', 'When clicked, say "Brrr, hi there!"']), { 'data-ai': 'wander', title: 'Wanders near where you place it' }),
+        item('👾', 'Chaser block', () => { const id = ed.insert('part', { name: 'ChaserBlock', color: '#e2474b', material: 'neon', size: [2, 2, 2] }); ed.addScript(id, 'Chase the player fast within 30 studs'); ed.addScript(id, 'When touched, kill them'); this.scriptSel = null; }, { 'data-ai': 'chase-block' }),
+        item('🦭', 'Lazy wanderer', () => this.insertNpc('Seal', ['Slowly wander around within 25 studs pausing 3 seconds']), { 'data-ai': 'wander-slow' })),
       h('h4', 'Gears'), h('p.st-hint', 'Inserts a Gear Giver. Players touch it to get the gear, then press its number to use it.'),
       h('div.st-grid', GEAR_LIST.map(g => item(g.icon, g.name, () => ed.insert('gear', { gearId: g.id, name: g.name.replace(/\s/g, '') + 'Giver' }), { 'data-gear': g.id, title: g.desc }))),
       h('h4', 'Rigs (for the Animator)'), h('div.st-grid',
@@ -221,6 +275,8 @@ export class CreatorPanel {
       h('p.st-hint', 'Blender: File → Export → glTF 2.0 → "glTF Binary (.glb)". Rigged models (armature) can be animated.'),
       models.length ? h('div.st-grid', models.map(m => item(m.isRig ? '🦴' : '📦', m.name, () => ed.insert('model', { modelId: m.id, name: m.name }), { 'data-model': m.id }))) : h('p.st-hint', 'No models uploaded yet.'));
   }
+
+  insertNpc(name, scripts) { const ed = this.ed; const id = ed.insert('rig', { name }); scripts.forEach(t => ed.addScript(id, t)); this.scriptSel = null; this.ui.toast(`Added ${name} — press ▶ Test to see it move`, '🤖'); return id; }
 
   // ---------- right: properties ----------
   renderProps() {
@@ -295,7 +351,15 @@ export class CreatorPanel {
       inst.type === 'model' ? this.field('Model', h('select', { onchange: set('modelId') }, this.models.list().map(m => h('option', { value: m.id, selected: inst.modelId === m.id }, m.name)))) : null,
       (anims.length || clips.length) ? this.field('Autoplay', h('select#prop-autoplay', { onchange: set('autoplay') }, h('option', { value: '' }, '(none)'), anims.map(a => h('option', { value: a.id, selected: inst.autoplay === a.id }, `🎞️ ${a.name}`)), clips.map(c => h('option', { value: `clip:${c.name}`, selected: inst.autoplay === `clip:${c.name}` }, `📼 ${c.name} (from .glb)`)))) : null,
       h('h4', 'Scripts'),
-      (inst.scripts || []).length ? h('div', inst.scripts.map(s => h('div.st-scriptrow', h('span', '📜 ', s.text || '(empty)'), h('button.st-mini', { onclick: () => { this.scriptSel = s.id; this.renderLeft(); this.renderProps(); } }, 'Edit')))) : h('p.st-hint', 'No scripts. Add one and describe what this part should do in plain words.'),
+      (inst.scripts || []).length ? h('div#script-stack',
+        inst.scripts.length > 1 ? h('p.st-hint', 'Script stack — all of them run. They start top to bottom (#1 first); use ▲▼ to change the order, untick to switch one off.') : null,
+        inst.scripts.map((s, n) => h('div.st-scriptrow' + (s.enabled === false ? '.off' : ''), { 'data-script-row': s.id },
+          h('b.st-order', `#${n + 1}`),
+          h('input', { type: 'checkbox', checked: s.enabled !== false, title: 'Enabled', onchange: (e) => ed.toggleScript(inst.id, s.id, e.target.checked) }),
+          h('span.st-scripttext', '📜 ', s.text || '(empty)'),
+          h('button.st-mini', { disabled: n === 0, title: 'Run earlier', onclick: () => ed.moveScript(inst.id, s.id, -1) }, '▲'),
+          h('button.st-mini', { disabled: n === inst.scripts.length - 1, title: 'Run later', onclick: () => ed.moveScript(inst.id, s.id, 1) }, '▼'),
+          h('button.st-mini', { onclick: () => { this.scriptSel = s.id; this.renderLeft(); this.renderProps(); } }, 'Edit')))) : h('p.st-hint', 'No scripts. Add one and describe what this part should do in plain words. Parts can hold several scripts.'),
       h('button.st-big#add-script', { onclick: () => { const sid = ed.addScript(inst.id, ''); this.scriptSel = sid; this.renderLeft(); this.renderProps(); } }, '＋ Add Script'),
       h('div.st-row.st-actions', h('button.st-mini', { onclick: () => ed.focus() }, '🎯 Focus'), h('button.st-mini', { onclick: () => ed.duplicate() }, '⧉ Duplicate'), h('button.st-mini.danger', { onclick: () => ed.remove() }, '🗑 Delete')));
   }
@@ -305,7 +369,8 @@ export class CreatorPanel {
     const ta = h('textarea#script-text', { rows: 5, placeholder: 'Describe what this part should do, e.g. "when a player touches this, kill them"', value: s.text || '', oninput: (e) => { clearTimeout(timer); timer = setTimeout(() => ed.updateScript(inst.id, s.id, e.target.value), 250); } });
     this.preview = h('div.st-preview');
     const box = h('div',
-      h('h3', '📜 Script on ', h('i', inst.name)),
+      h('h3', '📜 Script ', inst.scripts.length > 1 ? `#${inst.scripts.indexOf(s) + 1} of ${inst.scripts.length} ` : '', 'on ', h('i', inst.name)),
+      this.field('Script name', h('input#script-name', { value: s.name || 'Script', maxLength: 30, onchange: (e) => ed.renameScript(inst.id, s.id, e.target.value) })),
       h('p.st-hint', 'Write what you want in plain words. No coding needed!'),
       ta,
       h('div.st-row', h('button.st-big#script-apply', { onclick: () => { clearTimeout(timer); ed.updateScript(inst.id, s.id, ta.value); } }, '✔ Apply'), h('label.st-check', h('input#show-code', { type: 'checkbox', checked: this.showCode, onchange: (e) => { this.showCode = e.target.checked; this.renderScriptPreview(); } }), ' Show code (advanced)')),
@@ -344,7 +409,9 @@ export class CreatorPanel {
       this.field('📱 Mobile-playable', h('input#mobile-toggle', { type: 'checkbox', checked: doc.mobile !== false, onchange: set('mobile') })),
       h('h4', 'Starter gears'), h('p.st-hint', 'Every player starts with these.'),
       h('div', GEAR_LIST.map(g => h('label.st-check', h('input', { type: 'checkbox', 'data-starter': g.id, checked: (doc.starterGears || []).includes(g.id), onchange: (e) => { ed.checkpoint(); const s = new Set(doc.starterGears || []); e.target.checked ? s.add(g.id) : s.delete(g.id); doc.starterGears = [...s]; } }), ` ${g.icon} ${g.name}`))),
-      h('h4', 'Publishing'), h('p#publish-status', pub ? '✅ Published — it shows in the Games menu. Publish again to update it.' : '📝 Draft — only you can see it here. Press 🚀 Publish to add it to the Games menu.'),
+      h('h4', 'Terrain'), h('p.st-hint', doc.terrain ? 'Snow & ice terrain is on. Press 5 to sculpt.' : 'Press 5 (🏔️ Terrain) and drag on the ground to raise snowy hills; Shift+drag digs, Ctrl+drag smooths.'),
+      h('h4', 'Publishing'), h('p.st-hint#cloud-status', 'Signed in: drafts + published games save to your account (server). Guests keep drafts in this browser and must sign in to publish.'),
+      h('p#publish-status', pub ? '✅ Published — it shows in the Games menu. Publish again to update it.' : '📝 Draft — only you can see it here. Press 🚀 Publish to add it to the Games menu.'),
       h('p.st-hint', `${doc.instances.length} instances · ${(doc.animations || []).length} animations`));
   }
 

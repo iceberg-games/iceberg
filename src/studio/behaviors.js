@@ -29,6 +29,35 @@ export class Motion {
   goBack(seconds) { this.tweenTo(new THREE.Vector3(), seconds); }
   get busy() { return !!this.tween; }
 
+  /** chase / wander NPC step: walks this.offset on the ground plane; hooks come from runtime.js */
+  npc(c, dt) {
+    const hooks = this.hooks || {}, here = this.origin.clone().add(this.offset);
+    const step = (tx, tz, speed) => {
+      const dx = tx - here.x, dz = tz - here.z, d = Math.hypot(dx, dz); if (d < 0.05) return false;
+      const k = Math.min(d, speed * dt) / d; this.offset.x += dx * k; this.offset.z += dz * k;
+      // turn smoothly to face where it walks
+      const want = Math.atan2(dx, dz), r = this.entry.root.rotation; let diff = want - r.y; diff = Math.atan2(Math.sin(diff), Math.cos(diff)); r.y += diff * Math.min(1, dt * 8);
+      return true;
+    };
+    let moved = false;
+    if (c.type === 'chase') {
+      const p = hooks.player?.(); if (!p) return false;
+      const d = Math.hypot(p.x - here.x, p.z - here.z);
+      if (d < c.range && d > 1.2) moved = step(p.x, p.z, c.speed);
+      else if (d >= c.range) moved = step(this.origin.x, this.origin.z, c.speed * 0.5); // lost them: walk home
+    } else {
+      c._s ||= { tx: this.origin.x, tz: this.origin.z, wait: Math.random() * c.pause };
+      const s = c._s;
+      if (s.wait > 0) s.wait -= dt;
+      else if (!step(s.tx, s.tz, c.speed)) { const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * c.radius; s.tx = this.origin.x + Math.cos(a) * r; s.tz = this.origin.z + Math.sin(a) * r; s.wait = c.pause * (0.5 + Math.random()); }
+      else moved = true;
+    }
+    // follow snow/ice terrain height
+    const g0 = hooks.ground?.(this.origin.x, this.origin.z), g = hooks.ground?.(this.origin.x + this.offset.x, this.origin.z + this.offset.z);
+    if (g != null && g0 != null) this.offset.y = g - g0;
+    return moved || true;
+  }
+
   /** advance; returns true if the part moved or turned this frame */
   update(dt) {
     if (!this.active || this.paused) return false;
@@ -47,6 +76,7 @@ export class Motion {
         pos.copy(pts[i]).lerp(pts[i + 1], k);
         moved = true;
       }
+      else if (c.type === 'chase' || c.type === 'wander') { if (this.npc(c, dt)) moved = true; }
     }
     for (const s of this.spins) { root.rotation[s.axis] += THREE.MathUtils.degToRad(s.speed) * dt; s.left -= dt; moved = true; }
     this.spins = this.spins.filter(s => s.left > 0);

@@ -96,3 +96,19 @@ body.studio-active #hud, body.studio-active .help, body.studio-active #back-to-e
 .st-phrase:hover { border-color: #3fa2ea; background: #2f3d4b; }
 .st-node.group { font-weight: 600; } .st-twisty { display: inline-block; width: 12px; margin-right: 2px; color: #9fb3c4; }
 .st-chip.sugg { border-color: #c98a2a; color: #ffe2a8; }
+/* ---- Studio QoL: key hints, terrain panel, script stack, hotkey sheet ---- */
+.st-tool .st-key { font-size: 9px; color: #8b98a6; line-height: 1; }
+.st-tool.on .st-key { color: #cfe9ff; }
+#terrain-panel { background: linear-gradient(180deg, rgba(127,224,255,.08), transparent); }
+#terrain-panel input[type=range] { width: 80px; }
+.st-order { display: inline-block; min-width: 18px; padding: 0 4px; margin-right: 4px; border-radius: 4px; background: #1e5d8f; color: #fff; font-size: 10px; text-align: center; }
+.st-node.off, .st-scriptrow.off { opacity: .55; }
+#script-stack .st-scriptrow { display: flex; gap: 4px; align-items: center; }
+#script-stack .st-scripttext { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-status .st-mini { margin-right: 6px; }
+.st-help { width: min(880px, 92vw); max-height: 80vh; overflow: auto; }
+.st-help-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 15px; }
+.st-help-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px 18px; }
+.st-help-col h4 { margin: 4px 0; color: #9fd3f5; }
+.st-help-row { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; }
+.st-help-row kbd { flex: 0 0 auto; min-width: 70px; padding: 1px 6px; border: 1px solid #4f5a66; border-bottom-width: 2px; border-radius: 4px; background: #2d323a; color: #e4edf5; font: 11px ui-monospace, monospace; text-align: center; }

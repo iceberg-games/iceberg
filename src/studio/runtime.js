@@ -8,6 +8,7 @@ import { StudioWorld } from './world.js';
 import { computeCollider, makeInstance, newId } from './instances.js';
 import { Motion, ScriptRunner, compare } from './behaviors.js';
 import { translate } from './nlscript.js';
+import { heightAt as terrainHeightAt } from './terrain.js';
 import { GEARS, Backpack, creatorGearsOf, gearMods } from './gears.js';
 import { sampleAnimation } from './animation.js';
 import { bus } from '../core/events.js';
@@ -72,6 +73,7 @@ export async function createRuntime(ctx, doc) {
   const scene = new THREE.Scene();
   const world = new StudioWorld(scene, doc, { models, editing: false });
   const collision = new Collision({ floorY: world.env.floorY, bounds: world.env.bounds });
+  if (doc.terrain) collision.heightAt = (x, z) => terrainHeightAt(doc.terrain, x, z);
   const app = document.getElementById('app');
   const ui = document.createElement('div'); ui.className = 'rt-ui'; app.append(ui);
   const el = (cls, html = '') => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; ui.append(d); return d; };
@@ -115,10 +117,13 @@ export async function createRuntime(ctx, doc) {
     const t = byName(p); return t ? t.home.pos.clone() : null;
   };
   entries.forEach(e => { e.motion = new Motion(e, resolvePoint(e)); });
+  // chase / wander NPC behaviors read the player and the ground through these hooks
+  const npcHooks = { player: () => engine.player.pos, ground: (x, z) => (doc.terrain ? terrainHeightAt(doc.terrain, x, z) : null) };
+  entries.forEach(e => { e.motion.hooks = npcHooks; });
 
   // ---- spawn / respawn ----
   const spawnE = entries.find(e => e.inst.type === 'spawn');
-  const spawn = spawnE ? topOf(spawnE) : new THREE.Vector3(0, world.env.floorY == null ? 10 : 0.1, 0);
+  const spawn = spawnE ? topOf(spawnE) : new THREE.Vector3(0, Math.max(world.env.floorY == null ? 10 : 0.1, (doc.terrain ? terrainHeightAt(doc.terrain, 0, 0) ?? 0 : 0) + 0.1), 0);
   let respawnPoint = spawn.clone(), lastCheckpoint = null;
   const flash = el('rt-flash');
   const backpack = new Backpack(engine.player, avatar, () => renderHotbar(), { gameId: doc.id, creatorGears: creatorGearsOf(doc) });
@@ -194,7 +199,7 @@ export async function createRuntime(ctx, doc) {
     if (a.what === 'clone' && a.target) { const t = byName(a.target); if (!t) return; inst = JSON.parse(JSON.stringify(t.inst)); inst.id = newId(); inst.scripts = []; inst.pos = [top.x + (Math.random() - 0.5), top.y + inst.size[1] / 2 + 0.5, top.z + (Math.random() - 0.5)]; inst.anchored = false; }
     else if (a.what === 'coin') inst = makeInstance('coin', { pos: [top.x, top.y + 1, top.z] });
     else inst = makeInstance('part', { shape: a.what === 'ball' ? 'sphere' : 'box', size: a.what === 'ball' ? [2, 2, 2] : [2, 2, 2], color: a.color && a.color !== 'random' ? a.color : (a.kill ? '#ff4a1c' : new THREE.Color().setHSL(Math.random(), 0.7, 0.55).getHexString().replace(/^/, '#')), material: a.kill ? 'lava' : 'plastic', kill: !!a.kill, anchored: false, pos: [top.x + (Math.random() - 0.5) * 0.6, top.y + 1.5, top.z + (Math.random() - 0.5) * 0.6], name: 'Spawned' });
-    const e = world.add(inst); e.spawned = true; initEntry(e); e.motion = new Motion(e, resolvePoint(e)); e.life = 20;
+    const e = world.add(inst); e.spawned = true; initEntry(e); e.motion = new Motion(e, resolvePoint(e)); e.motion.hooks = npcHooks; e.life = 20;
     entries.push(e); spawned.push(e);
   }
   function removeEntry(e) { if (e.collider) collision.removeConvex(e.collider); world.remove(e.inst.id); const i = entries.indexOf(e); if (i >= 0) entries.splice(i, 1); }

@@ -2,6 +2,7 @@
 // sky/lighting/ground environment + 3D objects for every instance.
 import * as THREE from 'three';
 import { buildObject } from './instances.js';
+import { buildTerrainMesh, updateTerrainMesh } from './terrain.js';
 
 export const SKIES = {
   day:    { name: 'Frosty Day',   top: '#7fb8e6', horizon: '#e9f5ff', sun: 1.6, hemi: 1.1, sunColor: '#fff8ee' },
@@ -84,6 +85,14 @@ export class StudioWorld {
     this.entries = new Map();
     for (const inst of doc.instances || []) this.add(inst);
     this.time = 0;
+    this.terrain = null; this.setTerrain(doc.terrain);
+  }
+  /** (re)build the snow/ice heightfield mesh; t = doc.terrain or null */
+  setTerrain(t) {
+    if (!t) { if (this.terrain) { this.scene.remove(this.terrain); this.terrain.geometry.dispose(); this.terrain = null; } return; }
+    if (this.terrain && this.terrain.userData.res === t.res && this.terrain.userData.size === t.size) { updateTerrainMesh(this.terrain, t); return; }
+    if (this.terrain) { this.scene.remove(this.terrain); this.terrain.geometry.dispose(); }
+    this.terrain = buildTerrainMesh(t); this.terrain.userData.res = t.res; this.terrain.userData.size = t.size; this.scene.add(this.terrain);
   }
   add(inst) {
     const entry = buildObject(inst, { models: this.models, editing: this.editing });
@@ -95,7 +104,7 @@ export class StudioWorld {
   remove(id) { const e = this.entries.get(id); if (e) { this.group.remove(e.root); this.entries.delete(id); } }
   rebuild(inst) { this.remove(inst.id); return this.add(inst); }
   rebuildAll(instances) { for (const id of [...this.entries.keys()]) this.remove(id); for (const i of instances) this.add(i); }
-  pickables() { const out = []; for (const e of this.entries.values()) e.root.traverse(o => { if (o.isMesh || o.isSkinnedMesh) out.push(o); }); if (this.env.ground) out.push(this.env.ground); return out; }
+  pickables() { const out = []; for (const e of this.entries.values()) e.root.traverse(o => { if (o.isMesh || o.isSkinnedMesh) out.push(o); }); if (this.terrain) out.push(this.terrain); if (this.env.ground) out.push(this.env.ground); return out; }
   idFromObject(o) { while (o) { if (o.userData.instId) return o.userData.instId; o = o.parent; } return null; }
   update(dt, focus) {
     this.time += dt; this.env.update(dt, focus);

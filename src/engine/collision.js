@@ -11,6 +11,7 @@ export class Collision {
     this.convexes = []; // rotated/sloped parts: {verts, normals, edges, aabb}
     this.floorY = floorY;
     this.bounds = bounds; // {type:'circle', r} | {type:'box', minX,maxX,minZ,maxZ}
+    this.heightAt = null; // optional (x, z) => ground height | null (Studio snow/ice terrain)
   }
   addBox(minX, minY, minZ, maxX, maxY, maxZ) { const b = { minX, minY, minZ, maxX, maxY, maxZ }; this.boxes.push(b); return b; }
   addBox3(box3) { return this.addBox(box3.min.x, box3.min.y, box3.min.z, box3.max.x, box3.max.y, box3.max.z); }
@@ -29,6 +30,12 @@ export class Collision {
         for (let y = Math.floor(minY + e); y <= Math.floor(maxY - e); y++)
           for (let z = Math.floor(minZ + e); z <= Math.floor(maxZ - e); z++)
             if (this.voxels.has(x, y, z)) return true;
+    }
+    if (this.heightAt) {
+      // solid below the terrain surface (sampled at the box centre + corners)
+      let top = -Infinity;
+      for (const [x, z] of [[(minX + maxX) / 2, (minZ + maxZ) / 2], [minX, minZ], [maxX, minZ], [minX, maxZ], [maxX, maxZ]]) { const hh = this.heightAt(x, z); if (hh != null && hh > top) top = hh; }
+      if (top > -Infinity && minY < top - 0.02 && top > (this.floorY ?? -Infinity)) return true;
     }
     for (const c of this.convexes) if (aabbVsConvex(minX, minY, minZ, maxX, maxY, maxZ, c)) return true;
     const cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2, hw = (maxX - minX) / 2;

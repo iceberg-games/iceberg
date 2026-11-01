@@ -137,3 +137,12 @@ Blender export: File → Export → glTF 2.0 (.glb) with "Animation" and "Skinni
 - Real-money BB via Stripe.
 - Moderation (chat filter, model/game review, reports).
 - Creator tools (publishing, sharing, sandboxed scripts).
+
+### PC Studio QoL (feature/studio-qol)
+- **Terrain (5)**: Raise / Lower / Smooth / Flatten snow-ice heightfield (`src/studio/terrain.js`, saved as `doc.terrain`). Drag to paint; Shift inverts, Ctrl smooths, `[ ]` size, Alt+1–4 brush. Each stroke is one undo step; playtest collides with it.
+- **Snap grid**: ▦ Grid / `G` toggles a visible grid whose spacing follows Move snap; `Shift+G` cycles snap; `Ctrl+R` rotates the selection 90°; `Ctrl+L` world/local.
+- **Clipboard**: Ctrl+C/X/V shared across your Studio games (toast shows the source game).
+- **Script stack**: numbered run order (#1 starts first), ▲▼ reorder, per-script on/off + names.
+- **NPC AI**: Toolbox → Chaser NPC / Wanderer NPC / Chaser block / Lazy wanderer; phrases "Chase the player within 40 studs", "Wander around within 15 studs".
+- **Shortcuts**: `?` / F1 cheat sheet (single `HOTKEYS` table in `src/ui/creator.js`).
+- Test: `npm run build && node scripts/studio-qol-e2e.mjs`.
