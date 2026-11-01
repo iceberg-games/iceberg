@@ -22,16 +22,18 @@
 // ICE UI skin: Sound Designer's frost-glass-ui pack (/workspace/iceberg-audio/frost-glass-ui/). Filenames live ONLY here.
 // equip / unequip / tab / buy play instead of click (via data-sfx). buy is NOT bound to pointerdown: ui.js plays it after
 // the purchase is confirmed (rejections -> error). reward: panel_open then success_ding ~150 ms later (playReward()).
+// QoL frost-chrome: soft chrome from /workspace/iceberg-audio/feel/ (clicks, hover, menus, toast, pop, confirm);
+// sharper /workspace/iceberg-audio/ui/ for play / error / notification. Files copied to site/public/audio/ui/.
 const NAMES = {
-  click: ['soft_click', 'soft_click_2', 'soft_click_3'], hover: ['hover_chime'], play: ['ui_play_button'],
-  popup_open: ['panel_open'], popup_close: ['panel_close'], notification: ['ui_notification'],
-  toast: ['ui_toast'], error: ['ui_error'], pop: ['soft_pop'], unequip: ['soft_pop'], tab: ['tab_switch'],
-  equip: ['equip'], buy: ['buy'], success: ['success_ding'],
+  click: ['ui_click_soft_1', 'ui_click_soft_2', 'ui_click_soft_3'], hover: ['ui_hover_tick'], play: ['ui_play_button'],
+  popup_open: ['menu_open'], popup_close: ['menu_close'], notification: ['ui_notification'],
+  toast: ['toast_blip'], error: ['ui_error'], pop: ['ui_pop'], unequip: ['ui_pop'], tab: ['tab_switch'],
+  equip: ['ui_confirm'], buy: ['buy'], success: ['ui_confirm'], confirm: ['ui_confirm'],
 };
-const GAIN = { click: 0.85, hover: 0.6, play: 1.0, popup_open: 0.85, popup_close: 0.8, notification: 0.9, toast: 0.85, error: 0.9,
-  pop: 0.8, unequip: 0.6, tab: 0.8, equip: 0.85, buy: 0.9, success: 0.85 };
-const MIN_GAP = { click: 35, hover: 90, play: 250, popup_open: 80, popup_close: 80, notification: 300, toast: 120, error: 250,
-  pop: 60, unequip: 80, tab: 60, equip: 120, buy: 200, success: 250 };
+const GAIN = { click: 0.7, hover: 0.6, play: 1.0, popup_open: 0.85, popup_close: 0.8, notification: 0.9, toast: 0.85, error: 0.9,
+  pop: 0.8, unequip: 0.6, tab: 0.8, equip: 0.85, buy: 0.9, success: 0.85, confirm: 0.85 };
+const MIN_GAP = { click: 35, hover: 60, play: 250, popup_open: 80, popup_close: 80, notification: 300, toast: 120, error: 250,
+  pop: 60, unequip: 80, tab: 60, equip: 120, buy: 200, success: 250, confirm: 150 };
 const CLICKABLE = 'button, [role="button"], [role="tab"], [role="menuitem"], a[href], a, .clickable, [data-sfx], summary, '
   + 'input[type="button"], input[type="submit"], input[type="reset"], input[type="checkbox"], input[type="radio"], select, label.toggle';
 // Detected Play buttons (data-sfx="play" always wins): portal + menu cards, featured banner, title Start, studio Test.
@@ -97,6 +99,7 @@ export function initUiSounds(o = {}) {
       if (e.button !== 0) return;                       // primary button / touch / pen only
       const name = sfxFor(e.target);
       if (name) playUi(name);
+      frostRipple(e);
     }, { capture: true, passive: true });
     // Keyboard activation (Enter/Space on a focused button) fires 'click' with detail 0 and no pointerdown.
     document.addEventListener('click', (e) => {
@@ -159,3 +162,16 @@ export function playUi(name = 'click', { volume = 1 } = {}) {
 }
 
 export function setVolume(v) { if (S) S.volume = Math.max(0, Math.min(1, v)); }
+
+// QoL frost-chrome: a quick frost ripple under the pointer on chrome buttons (CSS .ice-ripple in iceChrome.css).
+const RIPPLE = '.btn, .tab, .hud-btn, .locker-item, .p-tab, .body-type-card, .card .btn';
+function frostRipple(e) {
+  const el = e.target instanceof Element ? e.target.closest(RIPPLE) : null;
+  if (!el || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const r = el.getBoundingClientRect(), d = Math.max(r.width, r.height) * 2.2;
+  if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
+  if (getComputedStyle(el).overflow === 'visible') el.style.overflow = 'hidden';
+  const s = document.createElement('span'); s.className = 'ice-ripple';
+  s.style.cssText = `left:${e.clientX - r.left}px;top:${e.clientY - r.top}px;width:${d}px;height:${d}px`;
+  el.appendChild(s); setTimeout(() => s.remove(), 480);
+}

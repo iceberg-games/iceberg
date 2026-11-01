@@ -1,0 +1,74 @@
+/* ICE chrome v2 (QoL): sharper frosted glass, crisper panel edges, tactile press + focus rings.
+   Layered after iceSkin.css (imported at its end) and studio.css. Variables in iceTokens.css. */
+:root {
+  --ice-frost-blur-2: blur(22px) saturate(1.6) brightness(1.04);
+  --ice-glass-2: linear-gradient(155deg, rgba(255,255,255,.80) 0%, rgba(236,248,255,.66) 45%, rgba(210,236,252,.72) 100%);
+  --ice-glass-rim: inset 0 1px 0 rgba(255,255,255,1), inset 0 -1px 0 rgba(120,180,225,.35), inset 0 0 0 1px rgba(255,255,255,.55);
+  --ice-hairline: 1px solid rgba(120,185,232,.55);
+  --ice-focus: 0 0 0 3px #fff, 0 0 0 6px rgba(63,157,224,.75);
+  --ice-press-in: inset 0 2px 6px rgba(14,42,69,.22);
+  --ice-dark-glass: linear-gradient(170deg, rgba(30,44,62,.82), rgba(20,30,44,.88));
+  --ice-dark-rim: inset 0 1px 0 rgba(170,220,255,.18), inset 0 0 0 1px rgba(120,190,240,.16);
+}
+
+/* --- frosted drawers / modals: brighter, deeper, less muddy --- */
+.drawer { background: var(--ice-glass-2); backdrop-filter: var(--ice-frost-blur-2); -webkit-backdrop-filter: var(--ice-frost-blur-2);
+  border-left: var(--ice-hairline); box-shadow: -24px 0 60px rgba(10,34,58,.28), -2px 0 0 rgba(255,255,255,.9), var(--ice-glass-rim); }
+.drawer::after { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0; opacity: .55;
+  background: radial-gradient(120% 40% at 100% 0%, rgba(255,255,255,.85), transparent 60%), radial-gradient(80% 30% at 0% 100%, rgba(168,220,255,.45), transparent 70%); }
+.drawer-inner { position: relative; z-index: 1; }
+.drawer-head { border-bottom: var(--ice-hairline); box-shadow: 0 1px 0 rgba(255,255,255,.9); background: linear-gradient(180deg, rgba(255,255,255,.55), transparent); }
+.drawer-body h4 { display: flex; align-items: center; gap: 8px; text-transform: uppercase; font-size: 12px; letter-spacing: 1.2px; }
+.drawer-body h4::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(63,157,224,.45), transparent); }
+.ib-modal { background: var(--ice-glass-2); backdrop-filter: var(--ice-frost-blur-2); -webkit-backdrop-filter: var(--ice-frost-blur-2);
+  border: var(--ice-hairline); box-shadow: 0 30px 80px rgba(5,20,35,.45), var(--ice-glass-rim); }
+.ib-toast { backdrop-filter: var(--ice-frost-blur-2); -webkit-backdrop-filter: var(--ice-frost-blur-2); border: var(--ice-hairline); }
+
+/* --- HUD / lobby chrome bars --- */
+.brand, .bottombar, .title-card { background: var(--ice-glass-2); backdrop-filter: var(--ice-frost-blur-2); -webkit-backdrop-filter: var(--ice-frost-blur-2);
+  border: var(--ice-hairline); box-shadow: var(--ice-shadow), var(--ice-glass-rim); }
+body.portal-page:not(.theme-storm) .p-header, body.portal-page:not(.theme-storm) .p-card { background: var(--ice-glass-2);
+  backdrop-filter: var(--ice-frost-blur-2); -webkit-backdrop-filter: var(--ice-frost-blur-2); border: var(--ice-hairline); box-shadow: var(--ice-shadow), var(--ice-glass-rim); }
+
+/* --- cards: crisp ice tiles --- */
+.card, .pack, .locker-item { border: var(--ice-hairline); box-shadow: 0 4px 0 var(--ice-border-cool), 0 10px 20px -10px rgba(14,42,69,.35), var(--ice-glass-rim); }
+.card .card-icon, .locker-item .card-icon { filter: drop-shadow(0 3px 2px rgba(14,42,69,.2)); }
+.card.owned { background: linear-gradient(170deg, #fff 0%, #eefaf4 80%, #e0f5ea 100%); }
+
+/* --- tactile press: every clickable chrome control sinks + flashes a frost ripple --- */
+.btn, .tab, .hud-btn, .icon-btn, .locker-item, .card .btn, .p-tab, .swatch, .body-type-card, .st-tool, .st-tab {
+  -webkit-tap-highlight-color: transparent; }
+.btn:active, .hud-btn:active, .icon-btn:active, .tab:active, .p-tab:active, .locker-item:active, .swatch:active {
+  transition-duration: 60ms !important; filter: brightness(.96) saturate(1.1); }
+.locker-item:active, .card:active { transform: translateY(2px) scale(.97); box-shadow: 0 1px 0 var(--ice-border-cool), var(--ice-press-in); }
+.ice-ripple { position: absolute; border-radius: 50%; pointer-events: none; transform: translate(-50%, -50%) scale(0); z-index: 3;
+  background: radial-gradient(circle, rgba(255,255,255,.9) 0%, rgba(190,232,255,.55) 40%, transparent 70%); animation: ice-ripple .45s var(--ice-ease) forwards; }
+@keyframes ice-ripple { to { transform: translate(-50%, -50%) scale(1); opacity: 0; } }
+
+/* --- focus rings (keyboard) --- */
+.btn:focus-visible, .tab:focus-visible, .hud-btn:focus-visible, .icon-btn:focus-visible, .locker-item:focus-visible, .p-tab:focus-visible,
+.swatch:focus-visible, .st-tool:focus-visible, .st-tab:focus-visible, .drawer input:focus-visible, .drawer select:focus-visible {
+  outline: none; box-shadow: var(--ice-focus) !important; }
+
+/* --- scrollbars inside frosted panels --- */
+.drawer-body, .st-right, .st-left { scrollbar-width: thin; scrollbar-color: rgba(63,157,224,.55) transparent; }
+
+/* --- Studio / editor: dark frost glass (keeps its dark theme, adds depth + crisp edges) --- */
+.st-ribbon { background: linear-gradient(180deg, rgba(38,52,70,.92), rgba(26,36,50,.94)); backdrop-filter: blur(16px) saturate(1.4);
+  border-bottom: 1px solid rgba(120,190,240,.28); box-shadow: 0 6px 18px rgba(0,0,0,.35), var(--ice-dark-rim); }
+.st-left, .st-right { background: var(--ice-dark-glass); backdrop-filter: blur(16px) saturate(1.3); -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  box-shadow: var(--ice-dark-rim), 0 0 24px rgba(0,0,0,.3); border-color: rgba(120,190,240,.22) !important; }
+.st-status { background: rgba(16,24,34,.92); border-top: 1px solid rgba(120,190,240,.22); }
+.st-tool { background: linear-gradient(180deg, #34404f, #2a333f); border: 1px solid rgba(140,200,245,.14); box-shadow: 0 2px 0 #151b23, inset 0 1px 0 rgba(255,255,255,.08);
+  transition: transform .12s var(--ice-spring), background .15s, border-color .15s, box-shadow .12s; }
+.st-tool:hover { background: linear-gradient(180deg, #3d4b5d, #303b49); border-color: rgba(108,200,255,.55); transform: translateY(-1px); }
+.st-tool:active { transform: translateY(1px) scale(var(--ice-press-scale)); box-shadow: 0 0 0 #151b23, inset 0 2px 5px rgba(0,0,0,.45); }
+.st-tab { transition: background .15s, color .15s; } .st-tab:hover { color: #e4f4ff; background: #2c3542; }
+.st-props h4 { color: #9fd3f5; border-bottom-color: rgba(120,190,240,.22); }
+.st-dialog { background: var(--ice-dark-glass); backdrop-filter: blur(20px) saturate(1.4); border: 1px solid rgba(120,190,240,.3);
+  box-shadow: 0 24px 60px rgba(0,0,0,.5), var(--ice-dark-rim); border-radius: 14px; }
+.studio select:focus-visible, .studio input:focus-visible, .studio textarea:focus-visible { outline: none; border-color: #6cc8ff; box-shadow: 0 0 0 3px rgba(108,200,255,.35); }
+
+@media (hover: none) { .btn, .tab, .hud-btn, .locker-item { min-height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .ice-ripple { display: none; } }
+@supports not (backdrop-filter: blur(1px)) { .drawer, .ib-modal { background: var(--ice-panel-strong); } }

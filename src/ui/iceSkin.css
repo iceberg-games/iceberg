@@ -121,3 +121,4 @@ body.portal-page:not(.theme-storm) .p-friend { background: var(--ice-panel-stron
 .body-type-label { font-size: 1.2rem; }
 .body-type-state { font-size: .85rem; padding: 4px 14px; }
 @media (max-width: 520px) { .locker-row.body-types { grid-template-columns: 1fr; } .body-type-card { flex-direction: row; min-height: 72px; gap: 12px; justify-content: flex-start; } .body-type-state { margin: 0 0 0 auto; } }
+@import './iceChrome.css';

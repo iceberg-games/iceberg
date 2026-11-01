@@ -4,6 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 const _bodyGlb = {};
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { COSMETIC_BY_ID } from '../data/cosmetics.js';
+import { QOL_GM1_BUILDERS } from './cosmetics/qolGm1Wearables.js';
 import { getBodySlots, normalizeBodyType, loadBodyType, BONE_ANCHOR, CLOTHING_ANCHOR, DEFAULT_BODY_TYPE } from './bodyTypes.js';
 export { BODY_TYPES, BODY_TYPE_IDS, getBodySlots, loadBodyType, saveBodyType } from './bodyTypes.js';
 import WIND_MAIN_OGG from '../assets/audio/tornado_hat_wind_loop.ogg?url';
@@ -96,6 +97,7 @@ const BUILDERS = {
   ah_glow_shard(_rc, color) { return buildHollowShard(color); },
   so_meteor_cape(_rc, color) { return buildMeteorCape(color); },
   penguin_pal(_rc, color) { return buildPenguinPal(color); },
+  ...QOL_GM1_BUILDERS,
   cap() {
     const g = new THREE.Group(), m = std('#d83a3f');
     g.add(mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.2, 20, 1, false, 0, Math.PI * 2), m, 0, 0.72, 0));
@@ -2773,3 +2775,4 @@ function buildMeteorCape(color) {
   g.userData.setColor = (c) => { capeM.color.set(c); capeM.emissive.set(c); };
   return { bone: 'torso', object: g };
 }
+

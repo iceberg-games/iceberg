@@ -309,3 +309,32 @@ for (const c of [
     desc: 'A wind-whipped powder-day scarf that streams behind you on the sled run. Finish Sled Rush (or hit 3 stars) to earn it.' },
 ]) { const item = { ...SR, ...c }; COSMETICS.push(item); COSMETIC_BY_ID[item.id] = item; }
 
+
+// ---- QoL (GM1 games): Snowcone Tycoon + Crystal Spire. Shop-priced, recolorable. Builders in game/avatar.js
+// (classic-space, parented via bodyTypes anchors: head->hat, torso->back/neck, armR->handR).
+for (const c of [
+  { id: 'sc_scoop_hat', name: 'Rainbow Snowcone Hat', slot: 'hat', price: 220, icon: '🍧', rarity: 'rare', defaultColor: '#ff6fa5',
+    colorPresets: [['Cherry Bomb', '#ff6fa5'], ['Blue Raspberry', '#3fb6ff'], ['Lime Fizz', '#8fe05a'], ['Mango Sun', '#ffb53f']],
+    desc: 'Snowcone Tycoon (snowcone-tycoon): a paper cone hat piled with a shaved-ice dome, syrup drips and a cherry on top. Pick your flavor.' },
+  { id: 'sc_syrup_bottle', name: 'Sticky Syrup Bottle', slot: 'hand', price: 140, icon: '🧴', rarity: 'uncommon', defaultColor: '#e8344f',
+    colorPresets: [['Cherry', '#e8344f'], ['Blue Raspberry', '#2f8fff'], ['Grape', '#8a4fe0'], ['Lemon', '#ffd23f']],
+    desc: 'Snowcone Tycoon (snowcone-tycoon): a chunky squeeze bottle with a swirly nozzle and a glossy drip that never quite falls.' },
+  { id: 'sc_cone_pack', name: 'Waffle Cone Pack', slot: 'back', price: 280, icon: '🍦', rarity: 'rare', defaultColor: '#ffb6d5',
+    colorPresets: [['Strawberry', '#ffb6d5'], ['Mint Chip', '#9fe8c8'], ['Snow Vanilla', '#fff4dc'], ['Bubblegum Blue', '#a8dcff']],
+    desc: 'Snowcone Tycoon (snowcone-tycoon): a giant waffle cone backpack with a shaved-ice scoop and sprinkle confetti. Peak shop-owner energy.' },
+  { id: 'sc_shop_apron', name: 'Syrup-Splash Apron', slot: 'neck', price: 160, icon: '🧑‍🍳', rarity: 'uncommon', defaultColor: '#ff8fb8',
+    colorPresets: [['Stand Pink', '#ff8fb8'], ['Pool Blue', '#5ec8ff'], ['Sherbet', '#ffa64f'], ['Mint', '#6fdcae']],
+    desc: 'Snowcone Tycoon (snowcone-tycoon): a striped stand apron with a scoop in the pocket and a little "OPEN" badge.' },
+  { id: 'cs_spire_crown', name: 'Faceted Crystal Circlet', slot: 'hat', price: 420, icon: '💎', rarity: 'epic', defaultColor: '#9a7bff',
+    colorPresets: [['Amethyst', '#9a7bff'], ['Glacier', '#5fd6ff'], ['Rose Quartz', '#ff8fcf'], ['Emerald', '#4fe0a0']],
+    desc: 'Crystal Spire (crystal-spire): a ring of faceted spire shards with a tall glowing center spike that slowly pulses.' },
+  { id: 'cs_climber_glove', name: 'Crystal Climber Glove', slot: 'hand', price: 240, icon: '🧤', rarity: 'rare', defaultColor: '#5fd6ff',
+    colorPresets: [['Glacier', '#5fd6ff'], ['Amethyst', '#9a7bff'], ['Topaz', '#ffc24f'], ['Ruby', '#ff5f6f']],
+    desc: 'Crystal Spire (crystal-spire): a padded climbing glove with crystal knuckle studs and a glowing grip shard for the long climb.' },
+  { id: 'cs_shard_pin', name: 'Summit Beacon Pin', slot: 'neck', price: 150, icon: '📍', rarity: 'uncommon', defaultColor: '#5fd6ff',
+    colorPresets: [['Glacier', '#5fd6ff'], ['Amethyst', '#9a7bff'], ['Gold', '#ffd24f'], ['Rose', '#ff8fcf']],
+    desc: 'Crystal Spire (crystal-spire): a gold summit pin holding a tiny floating spire shard that spins and sparkles on your chest.' },
+  { id: 'cs_crystal_pack', name: 'Shard-Cluster Backpack', slot: 'back', price: 360, icon: '🔷', rarity: 'epic', defaultColor: '#9a7bff',
+    colorPresets: [['Amethyst', '#9a7bff'], ['Glacier', '#5fd6ff'], ['Aurora', '#4fe0a0'], ['Sunstone', '#ffa64f']],
+    desc: 'Crystal Spire (crystal-spire): a climbing frame carrying a cluster of glowing spire crystals with orbiting sparkle motes.' },
+]) { const item = { kind: 'model', winter: true, customizable: true, ...c }; COSMETICS.push(item); COSMETIC_BY_ID[item.id] = item; }
