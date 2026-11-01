@@ -16,6 +16,7 @@
 // limited per sender, and ignored unless the sender is in the roster AND present. Chat text never
 // travels over broadcast: bubbles come from server-validated post_chat/get_chat (phrase ids).
 // Economy is untouched (RPC only).
+import { rigSpawn } from '../game/avatarRig.js';
 import { Avatar } from '../game/avatar.js';
 import { normalizeBodyType, BODY_TYPE_IDS } from '../game/bodyTypes.js';
 import { nameTagOffset } from '../chat/nameTag.js';
@@ -321,6 +322,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     if (!scene || engine.game.hideAvatar) return;
     const avatar = new AvatarClass();
     try { avatar.applyLoadout({ equipped: p.equipped || {}, rocketColors: p.rocketColors, cosmeticColors: p.cosmeticColors || {} }); } catch (e) { console.warn(e); }
+    rigSpawn(avatar, { local: false, remoteKey: k, bodyType: p.bodyType });   // R15 seam (designs/qol-r15-hooks.md)
     avatar.root.visible = false;                    // until the first position arrives
     avatar.root.userData.remotePlayer = k;          // visuals only: never engine.player, never collides or triggers
     scene.add(avatar.root);

@@ -17,6 +17,8 @@ import { UI } from './ui/ui.js';
 import { Menu } from './ui/menu.js';
 import { CreatorPanel } from './ui/creator.js';
 import { MobileStudio } from './ui/mobileStudio.js';
+import { rigSpawn } from './game/avatarRig.js';
+import { mountFriendsPanel } from './ui/friendsPanel.js';
 import { h } from './ui/dom.js';
 import { CREATOR, findGame } from './games/registry.js';
 import { getServerGame } from './studio/store.js';
@@ -53,6 +55,7 @@ async function boot() {
   const avatar = new Avatar();
   avatar.setBodyType(loadBodyType());
   avatar.applyLoadout(economy.profile);
+  rigSpawn(avatar, { local: true });   // R15 seam: Iceberg Avatars' rig attaches here (designs/qol-r15-hooks.md)
   const wear = modelPrefs.loadWear();
   if (wear && models.has(wear.modelId)) avatar.setCustomWear(models.instance(wear.modelId), wear);
 
@@ -62,12 +65,12 @@ async function boot() {
 
   let session = null;
   const goHome = () => { session?.stop(); session = null; mp.leave(); gameChat.leave(); engine.unloadGame(); testingDoc = null; backToEditor.classList.add('hidden'); menu.showGames(); music.play('winter'); };
-  const play = async (def) => {
+  const play = async (def, { friend = null } = {}) => {
     menu.hide(); testingDoc = null; backToEditor.classList.add('hidden');
     await engine.loadGame(def);
     gameChat.show(true);
     // multiplayer: pick/create a server instance (or the friend's from ?join=), then chat in that instance's room
-    const joinFriend = def.id === GAME_PARAM ? params.get('join') : null;
+    const joinFriend = friend || (def.id === GAME_PARAM ? params.get('join') : null);
     const inst = await mp.join(def.id, { friend: joinFriend }).catch((e) => { console.warn('multiplayer unavailable', e); return null; });
     if (inst?.note === 'friend_full') ui.toast('That server is full, so you joined another one.', '👥');
     else if (inst && joinFriend && !inst.note) ui.toast(`Joined ${joinFriend}'s server!`, '👋');
@@ -120,11 +123,17 @@ async function boot() {
   setInterval(() => music.rocket(engine.running && engine.player.flying), 80);
 
   mountTouchControls(engine);
+  // Friends QoL: 👥 sheet (add/accept/list, online/playing, Join friend in-app)
+  const friends = mountFriendsPanel({ getRemote: () => remote, ui, onJoin: async (gameId, username) => {
+    const def = findGame(gameId); if (!def) { ui.toast('That game is not on this build.', '⚠️'); return; }
+    if (engine.game) { mp.leave(); gameChat.leave(); }
+    await play(def, { friend: username });
+  } });
   await showDevicePicker(document.body);
   menu.showTitle();
 
   // Handy hooks for automated tests / debugging in the console.
-  window.iceberg = { engine, mobileStudio, economy, quests, getAudioListener, avatar, models, music, ui, menu, backend, remote, gameChat, mp, play: (id) => play(findGame(id)), edit, goHome };
+  window.iceberg = { engine, mobileStudio, economy, quests, getAudioListener, avatar, models, music, ui, menu, backend, remote, gameChat, mp, friends, play: (id) => play(findGame(id)), edit, goHome };
   if (SITE_ROOT) registerServiceWorker(SITE_ROOT);
 }
 

@@ -4,9 +4,12 @@
 // same save/publish path (src/studio/store.js) as the desktop Studio, so games
 // made here open on the computer too, and vice versa.
 //
-//   Tools:   🧱 Place (tap a surface) · 🎨 Paint (tap a block) · 🗑 Remove · 📍 Spawn (tap to move it)
+//   Tools:   🧱 Place (tap a surface, prefab picker) · ✋ Edit (tap to select; drag the selected
+//            part to move it; big nudge/rotate/scale/duplicate/delete strip) · 🎨 Paint · 🗑 Remove · 📍 Spawn
 //   Camera:  one-finger drag = orbit · pinch = zoom · two-finger drag = pan (mouse wheel zooms too)
-//   Bar:     ↶ Undo · ▶ Test · 💾 Save · ☰ More (name, 📱 mobile-playable, 🚀 Publish, ✕ Exit)
+//   Bar:     ↶ Undo · ↷ Redo · ▶ Test · 💾 Save · ☰ More (name, 📱 mobile-playable, 🚀 Publish, ✕ Exit)
+//   Save/Publish: src/studio/publishPipeline.js — the SAME pipeline as desktop (Publisher hooks there).
+//   Toolbars are event-driven and only rebuilt when their state signature changes (never per frame).
 //
 // While active it owns pointer input on the game canvas (capture-phase
 // listeners), so the desktop gizmo / box-select never see touches. The
@@ -16,19 +19,36 @@ import { h, clear } from './dom.js';
 import { hasPerk } from '../core/plus.js';
 import { bus } from '../core/events.js';
 import { isMobile } from '../core/device.js';
-import { drafts, publish, isPublished } from '../studio/store.js';
+import { drafts, publish, isPublished } from '../studio/store.js';   // canonical store API (Publisher rewires the guts)
 import './mobileStudio.css';
 
 export const MOBILE_COLORS = ['#a3a2a5', '#f7fbff', '#bfe9ff', '#3f8fd0', '#22262e', '#e2474b', '#ff8c2a', '#f5c542', '#2f9e6a', '#8b6cf0', '#ff7ac8', '#9a6b43'];
 export const BLOCK_SIZE = 2;   // studs per block (cubes on a 2-stud grid)
 const TAP_SLOP = 8, TAP_MS = 700;
+/** Prefab catalog for the phone (big tiles). size in studs; color null = use the palette color. */
+export const MOBILE_PREFABS = [
+  { id: 'block', icon: '🧱', label: 'Block', type: 'part', over: { shape: 'box', size: [2, 2, 2] } },
+  { id: 'slab', icon: '▬', label: 'Slab', type: 'part', over: { shape: 'box', size: [4, 1, 4] } },
+  { id: 'plank', icon: '🪵', label: 'Plank', type: 'part', over: { shape: 'box', size: [8, 1, 2], material: 'wood', color: '#9a6b43' } },
+  { id: 'wall', icon: '🧊', label: 'Wall', type: 'part', over: { shape: 'box', size: [8, 6, 1] } },
+  { id: 'pillar', icon: '🏛', label: 'Pillar', type: 'part', over: { shape: 'cylinder', size: [2, 8, 2] } },
+  { id: 'ball', icon: '⚪', label: 'Ball', type: 'part', over: { shape: 'sphere', size: [3, 3, 3] } },
+  { id: 'ramp', icon: '📐', label: 'Ramp', type: 'part', over: { shape: 'wedge', size: [4, 2, 6] } },
+  { id: 'ice', icon: '❄️', label: 'Ice', type: 'part', over: { shape: 'box', size: [4, 1, 4], material: 'ice', color: '#bfe9ff' } },
+  { id: 'snow', icon: '⛄', label: 'Snow', type: 'part', over: { shape: 'box', size: [4, 2, 4], material: 'snow', color: '#f7fbff' } },
+  { id: 'neon', icon: '💡', label: 'Neon', type: 'part', over: { shape: 'box', size: [2, 2, 2], material: 'neon' } },
+  { id: 'lava', icon: '🌋', label: 'Lava', type: 'part', over: { shape: 'box', size: [4, 1, 4], material: 'lava', color: '#ff5a1f' } },
+  { id: 'coin', icon: '🪙', label: 'Coin', type: 'coin', over: {} },
+  { id: 'checkpoint', icon: '🚩', label: 'Checkpoint', type: 'checkpoint', over: {} },
+];
+const NUDGE = 1, ROT_STEP = 15, SCALE_STEP = 1.25;
 const snapCell = (v) => Math.floor(v / BLOCK_SIZE) * BLOCK_SIZE + BLOCK_SIZE / 2;
 const r3 = (v) => Math.round(v * 1000) / 1000;
 
 export class MobileStudio {
   constructor(root, { engine, ui, onTest, onExit }) {
     Object.assign(this, { root, engine, ui, onTest, onExit });
-    this.tool = 'place'; this.color = MOBILE_COLORS[5]; this.active = false;
+    this.tool = 'place'; this.color = MOBILE_COLORS[5]; this.active = false; this.prefab = MOBILE_PREFABS[0]; this._sig = '';
     this.pointers = new Map(); this.gesture = null; this.dist = 30;
     this.raycaster = new THREE.Raycaster();
     this.el = h('div.mstudio.hidden#mobile-studio', { role: 'toolbar', 'aria-label': 'Mobile Studio' });
@@ -83,9 +103,10 @@ export class MobileStudio {
   // ---------- UI ----------
   render() {
     clear(this.el).append(h('div.ms-wrap',
+      this.strip = h('div.ms-strip#ms-strip'),
       this.palette = h('div.ms-palette#ms-palette', { role: 'radiogroup', 'aria-label': 'Block color' }),
       this.bar = h('div.ms-bar#ms-bar')));
-    this.renderPalette(); this.renderBar();
+    this._sig = ''; this.renderPalette(); this.renderBar();
   }
   renderPalette() {
     clear(this.palette).append(...MOBILE_COLORS.map(c => h('button.ms-swatch' + (c === this.color ? '.on' : ''), {
@@ -102,18 +123,81 @@ export class MobileStudio {
   }
   renderBar() {
     const ed = this.ed; if (!ed || !this.bar) return;
+    const sel = ed.selectedId || '';
+    const sig = [this.tool, ed.canUndo(), ed.canRedo?.(), sel, this.prefab.id].join('|');
+    if (sig === this._sig) return;          // persistent toolbar: no rebuild unless something changed
+    this._sig = sig;
+    this.renderStrip();
     const tool = (id, icon, label) => h('button.ms-btn' + (this.tool === id ? '.on' : ''), { type: 'button', 'data-mtool': id, 'aria-pressed': String(this.tool === id), onclick: () => this.setTool(id) }, h('span', icon), label);
     clear(this.bar).append(
-      tool('place', '🧱', 'Place'), tool('paint', '🎨', 'Paint'), tool('remove', '🗑', 'Remove'), tool('spawn', '📍', 'Spawn'),
+      tool('place', '🧱', 'Place'), tool('select', '✋', 'Edit'), tool('paint', '🎨', 'Paint'), tool('remove', '🗑', 'Remove'), tool('spawn', '📍', 'Spawn'),
       h('div.ms-sep'),
       h('button.ms-btn#ms-undo', { type: 'button', disabled: !ed.canUndo(), onclick: () => this.undo() }, h('span', '↶'), 'Undo'),
+      h('button.ms-btn#ms-redo', { type: 'button', disabled: !ed.canRedo?.(), onclick: () => this.redo() }, h('span', '↷'), 'Redo'),
       h('button.ms-btn.play#ms-test', { type: 'button', onclick: () => this.test() }, h('span', '▶'), 'Test'),
       h('button.ms-btn.save#ms-save', { type: 'button', onclick: () => this.save() }, h('span', '💾'), 'Save'),
       h('button.ms-btn#ms-more', { type: 'button', onclick: () => this.openSheet() }, h('span', '☰'), 'More'));
+    requestAnimationFrame(() => { if (this.active) this.layout(); });   // strip height changes with the tool
   }
-  setTool(t) { this.tool = t; this.renderBar(); }
+  /** context strip above the palette: prefab picker (Place) or transform controls (Edit + selection) */
+  renderStrip() {
+    const ed = this.ed; if (!this.strip) return;
+    clear(this.strip);
+    if (this.tool === 'place') {
+      this.strip.append(...MOBILE_PREFABS.map(p => h('button.ms-prefab' + (p.id === this.prefab.id ? '.on' : ''), {
+        type: 'button', 'data-prefab': p.id, 'aria-pressed': String(p.id === this.prefab.id), onclick: () => { this.prefab = p; this.renderBar(); } },
+        h('span', p.icon), p.label)));
+    } else if (this.tool === 'select') {
+      const inst = ed && ed.selectedId ? ed.doc.instances.find(i => i.id === ed.selectedId) : null;
+      if (!inst) { this.strip.append(h('p.ms-tip', '✋ Tap a part to select it, then drag it or use the buttons.')); return; }
+      const b = (id, icon, label, fn) => h('button.ms-tbtn', { type: 'button', 'data-tx': id, onclick: fn }, h('span', icon), label);
+      this.strip.append(
+        h('div.ms-tname', `${inst.name}`),
+        b('left', '⬅', 'Left', () => this.nudge(-NUDGE, 0, 0)), b('right', '➡', 'Right', () => this.nudge(NUDGE, 0, 0)),
+        b('fwd', '⬆', 'Back', () => this.nudge(0, 0, -NUDGE)), b('back', '⬇', 'Front', () => this.nudge(0, 0, NUDGE)),
+        b('up', '⤒', 'Up', () => this.nudge(0, NUDGE, 0)), b('down', '⤓', 'Down', () => this.nudge(0, -NUDGE, 0)),
+        b('rotl', '⟲', `${ROT_STEP}°`, () => this.rotate(-ROT_STEP)), b('rotr', '⟳', `${ROT_STEP}°`, () => this.rotate(ROT_STEP)),
+        b('rot90', '↻', '90°', () => this.rotate(90)),
+        b('smaller', '➖', 'Smaller', () => this.scale(1 / SCALE_STEP)), b('bigger', '➕', 'Bigger', () => this.scale(SCALE_STEP)),
+        b('dup', '⧉', 'Copy', () => this.duplicate()), b('del', '🗑', 'Delete', () => this.deleteSelected()),
+        b('focus', '🎯', 'Focus', () => { ed.focus?.(inst.id); this._initDist(); }),
+        b('done', '✓', 'Done', () => { ed.select(null); }));
+    }
+  }
+  selected() { const ed = this.ed; return ed?.selectedId ? ed.doc.instances.find(i => i.id === ed.selectedId) : null; }
+  nudge(dx, dy, dz) {
+    const ed = this.ed, i = this.selected(); if (!i) return;
+    // move relative to where the camera faces, so "Left" is always screen-left
+    const yaw = this.cam?.yaw || 0, q = Math.round(yaw / (Math.PI / 2)) * (Math.PI / 2);
+    const c = Math.cos(q), sn = Math.sin(q);
+    const wx = dx * c + dz * sn, wz = -dx * sn + dz * c;
+    ed.setProp(i.id, 'pos', [r3(i.pos[0] + Math.round(wx)), r3(i.pos[1] + dy), r3(i.pos[2] + Math.round(wz))]);
+  }
+  rotate(deg) { const ed = this.ed, i = this.selected(); if (!i || i.type === 'group') return; const r = [...(i.rot || [0, 0, 0])]; r[1] = r3(((r[1] + deg) % 360 + 360) % 360); ed.setProp(i.id, 'rot', r); }
+  scale(k) {
+    const ed = this.ed, i = this.selected(); if (!i || i.type === 'group' || i.type === 'spawn') return;
+    const size = i.size.map(v => r3(Math.min(200, Math.max(0.5, v * k))));
+    ed.setProp(i.id, 'size', size);
+  }
+  duplicate() { const ed = this.ed, i = this.selected(); if (!i) return; if (i.type === 'spawn') return this.ui.toast('Only one spawn point per game.', '📍'); const ids = ed.duplicate([i.id]); const id = Array.isArray(ids) ? ids[0] : ed.selectedId; const c = ed.doc.instances.find(x => x.id === id); if (c && c !== i) ed.setProp(c.id, 'pos', [c.pos[0] + 2, c.pos[1], c.pos[2] + 2]); }
+  deleteSelected() {
+    const ed = this.ed, i = this.selected(); if (!i) return;
+    if (i.type === 'spawn') return this.ui.toast('Every game needs a spawn point. Use 📍 Spawn to move it.', '📍');
+    ed.remove(i.id); ed.select(null); this.ui.toast('Deleted (↶ Undo to bring it back)', '🗑');
+  }
+  redo() { const ed = this.ed; if (ed?.redo?.()) { ed.select(null); this._sig = ''; this.renderBar(); } }
+  /** big-button confirm sheet (no tiny native confirm on phones) */
+  confirm(title, body, okLabel, onOk) {
+    document.querySelector('#ms-confirm')?.remove();
+    const back = h('div.ms-sheet-back#ms-confirm', { onclick: (e) => { if (e.target === back) back.remove(); } },
+      h('div.ms-sheet', { role: 'alertdialog', 'aria-label': title }, h('h3', title), h('p.ms-hint', body),
+        h('div.ms-row', h('button#ms-confirm-no', { type: 'button', onclick: () => back.remove() }, 'Cancel'),
+          h('button.pub#ms-confirm-yes', { type: 'button', onclick: () => { back.remove(); onOk(); } }, okLabel))));
+    document.body.append(back);
+  }
+  setTool(t) { this.tool = t; if (t !== 'select') this.ed?.select(null); this.renderBar(); }
   setColor(c) { this.color = c; this.renderPalette(); if (this.tool === 'remove' || this.tool === 'spawn') this.setTool('place'); }
-  undo() { const ed = this.ed; if (ed?.undo()) ed.select(null); }
+  undo() { const ed = this.ed; if (ed?.undo()) { ed.select(null); this._sig = ''; this.renderBar(); } }
 
   openSheet() {
     const ed = this.ed; if (!ed) return;
@@ -131,9 +215,9 @@ export class MobileStudio {
         h('p.ms-hint#ms-status', pub ? '✅ Published: it is in the Games menu. Publish again to update it.' : '📝 Draft: only you can see it. Publish to add it to the Games menu.'),
         h('div.ms-row',
           h('button.save#ms-sheet-save', { type: 'button', onclick: () => { this.setName(name.value); this.save(); close(); } }, '💾 Save'),
-          h('button.pub#ms-publish', { type: 'button', onclick: () => { this.setName(name.value); this.publishGame().catch(() => {}); close(); } }, '🚀 Publish')),
+          h('button.pub#ms-publish', { type: 'button', onclick: () => { this.setName(name.value); close(); this.confirm('🚀 Publish game?', pub ? 'This updates the live version in the Games menu for everyone.' : 'Your game will appear in the Games menu for everyone.', '🚀 Publish', () => this.publishGame()); } }, '🚀 Publish')),
         h('div.ms-row',
-          h('button#ms-exit', { type: 'button', onclick: () => { this.setName(name.value); close(); this.exit(); } }, '✕ Exit studio'),
+          h('button#ms-exit', { type: 'button', onclick: () => { this.setName(name.value); close(); this.confirm('Exit studio?', 'Your game is saved first, then you go back to the menu.', '✕ Exit', () => this.exit()); } }, '✕ Exit studio'),
           h('button#ms-close', { type: 'button', onclick: () => { this.setName(name.value); close(); } }, 'Done')),
         h('p.ms-hint', 'Want scripts, shapes and the animator? Open this game on a computer: it\'s the same game.')));
     document.body.append(back);
@@ -146,15 +230,21 @@ export class MobileStudio {
 
   // ---------- persistence (same path as the desktop Studio) ----------
   docWithThumb() { const d = this.ed.serialize(); if (d.mobile === undefined) d.mobile = true; try { d.thumbnail = this.engine.snapshot(); } catch { /* no WebGL frame yet */ } return d; }
+  // Same store API as desktop Studio (drafts.save / publish); works if Publisher makes them async. Returns the doc
+  // synchronously (tests/onTest) and exposes the promise as this.lastSave / this.lastPublish.
   save(silent = false) {
     const d = this.docWithThumb();
-    try { drafts.save(d); if (!silent) this.ui.toast(`Saved "${d.name}"`, '💾'); } catch { this.ui.toast('Could not save (browser storage full?)', '⚠️'); }
+    this.lastSave = Promise.resolve().then(() => drafts.save(d)).then(() => { if (!silent) this.ui.toast(`Saved "${d.name}"`, '💾'); return d; },
+      (e) => { this.ui.toast(`Could not save: ${e?.message || 'storage full?'}`, '⚠️'); throw e; });
+    this.lastSave.catch(() => {});
     return d;
   }
   publishGame() {
     const d = this.save(true);
-    return publish(d).then(({ remote, modelsLocalOnly }) => { if (modelsLocalOnly) setTimeout(() => this.ui.toast('Heads up: uploaded 3D models only show on your device; other players see a placeholder box', 'ℹ️'), 1500); bus.emit('games:changed'); this.ui.toast(remote ? `Published "${d.name}" for everyone!` : `Published "${d.name}" to your Games menu (sign in to share it)`, '🚀'); return d; },
-      (err) => { bus.emit('games:changed'); this.ui.toast(`Publish failed: ${err.message}`, '⚠️'); throw err; });
+    this.lastPublish = this.lastSave.then(() => publish(d)).then(({ remote, modelsLocalOnly } = {}) => { if (modelsLocalOnly) setTimeout(() => this.ui.toast('Heads up: uploaded 3D models only show on your device; other players see a placeholder box', 'ℹ️'), 1500); bus.emit('games:changed'); this.ui.toast(remote ? `Published "${d.name}" for everyone!` : `Published "${d.name}" to your Games menu (sign in to share it)`, '🚀'); return d; },
+      (err) => { bus.emit('games:changed'); this.ui.toast(`Publish failed: ${err?.message || err}`, '⚠️'); throw err; });
+    this.lastPublish.catch(() => {});
+    return this.lastPublish;
   }
   test() { const d = this.save(true); this.onTest?.(d); }
   exit() { if (!this.ed) return; this.save(true); this.ed.saveCamera(); this.onExit?.(); }
@@ -184,7 +274,8 @@ export class MobileStudio {
     const hit = this.hitAt(x, y);
     if (!hit) return null;
     const inst = hit.id ? ed.doc.instances.find(i => i.id === ed.topAncestor(hit.id)) : null;
-    if (this.tool === 'place') return this.placeBlock(hit);
+    if (this.tool === 'place') return this.prefab.id === 'block' ? this.placeBlock(hit) : this.placePrefab(hit, this.prefab);
+    if (this.tool === 'select') { const id = inst?.id || null; ed.select(id); if (!id) this.renderBar(); return { selected: id }; }
     if (this.tool === 'spawn') return this.placeSpawn(hit);
     if (this.tool === 'remove') {
       if (!inst) return null;
@@ -207,6 +298,36 @@ export class MobileStudio {
     const id = ed.insert('part', { name: 'Block', shape: 'box', size: [S, S, S], color: this.color, material: 'plastic', pos });
     ed.select(null);
     return { placed: id, pos };
+  }
+  placePrefab(hit, p) {
+    const ed = this.ed;
+    const over = JSON.parse(JSON.stringify(p.over));
+    if (p.type === 'part' && !over.color) over.color = this.color;
+    const size = over.size || (p.type === 'coin' ? [1, 1, 1] : [4, 0.4, 4]);
+    const n = hit.normal, half = (Math.abs(n.x) * size[0] + Math.abs(n.y) * size[1] + Math.abs(n.z) * size[2]) / 2;
+    const c = hit.point.clone().addScaledVector(n, half);
+    const pos = [Math.round(c.x), r3(c.y), Math.round(c.z)];
+    if (hit.ground) pos[1] = r3(Math.max(size[1] / 2, pos[1]));
+    if (p.type === 'coin') pos[1] = r3(pos[1] + 0.7);
+    const id = ed.insert(p.type, { ...over, name: p.label, pos });
+    ed.select(null);
+    return { placed: id, prefab: p.id, pos };
+  }
+  // drag-move the selected part across a horizontal plane at its height (one undo step)
+  _dragStart(x, y) {
+    const ed = this.ed, i = this.selected(); if (!i) return false;
+    const h0 = this.hitAt(x, y); if (!h0?.id || ed.topAncestor(h0.id) !== i.id) return false;
+    this._drag = { id: i.id, y: i.pos[1], start: [...i.pos], grab: null }; return true;
+  }
+  _dragMove(x, y) {
+    const d = this._drag, ed = this.ed, i = this.selected(); if (!d || !i) return;
+    const p = new THREE.Vector3();
+    if (!this.rayAt(x, y).ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -d.y), p)) return;
+    if (!d.grab) { d.grab = [p.x - d.start[0], p.z - d.start[2]]; ed.checkpoint(); }
+    const nx = Math.round(p.x - d.grab[0]), nz = Math.round(p.z - d.grab[1]);
+    if (nx === i.pos[0] && nz === i.pos[2]) return;
+    // live preview without stacking undo steps: mutate + rebuild through the editor (setProp would checkpoint each move)
+    const prev = ed.checkpoint; ed.checkpoint = () => {}; try { ed.setProp(i.id, 'pos', [nx, d.y, nz]); } finally { ed.checkpoint = prev; }
   }
   placeSpawn(hit) {
     const ed = this.ed;
@@ -249,7 +370,8 @@ export class MobileStudio {
     e.stopPropagation(); e.preventDefault();
     try { e.target.setPointerCapture(e.pointerId); } catch { /* synthetic */ }
     this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (this.pointers.size === 1) this.gesture = { mode: 'tap', x0: e.clientX, y0: e.clientY, t0: performance.now(), lx: e.clientX, ly: e.clientY };
+    if (this.pointers.size === 1 && this.tool === 'select' && this._dragStart(e.clientX, e.clientY)) this.gesture = { mode: 'drag' };
+    else if (this.pointers.size === 1) this.gesture = { mode: 'tap', x0: e.clientX, y0: e.clientY, t0: performance.now(), lx: e.clientX, ly: e.clientY };
     else if (this.pointers.size === 2) { const p = this._pair(); this.gesture = { mode: 'multi', d: p.d, mx: p.mx, my: p.my }; }
   }
   _move(e) {
@@ -257,6 +379,7 @@ export class MobileStudio {
     const pt = this.pointers.get(e.pointerId); pt.x = e.clientX; pt.y = e.clientY;
     const g = this.gesture; if (!g) return;
     if (this.pointers.size >= 2) {
+      if (g.mode === 'drag') this._drag = null;
       if (g.mode !== 'multi') { const p = this._pair(); this.gesture = { mode: 'multi', d: p.d, mx: p.mx, my: p.my }; return; }
       const p = this._pair();
       if (g.d > 10 && p.d > 10) this.zoom(g.d / p.d);
@@ -264,6 +387,7 @@ export class MobileStudio {
       Object.assign(g, { d: p.d, mx: p.mx, my: p.my });
       return;
     }
+    if (g.mode === 'drag') { this._dragMove(e.clientX, e.clientY); return; }
     if (g.mode === 'tap' && Math.hypot(e.clientX - g.x0, e.clientY - g.y0) > TAP_SLOP) g.mode = 'orbit';
     if (g.mode === 'orbit') this.orbit(e.clientX - g.lx, e.clientY - g.ly);
     g.lx = e.clientX; g.ly = e.clientY;
@@ -273,6 +397,7 @@ export class MobileStudio {
     this.pointers.delete(e.pointerId);
     const g = this.gesture;
     if (!cancelled && g?.mode === 'tap' && !this.pointers.size && performance.now() - g.t0 < TAP_MS) this.tap(e.clientX, e.clientY);
+    if (g?.mode === 'drag') this._drag = null;
     if (!this.pointers.size) this.gesture = null;
     else if (this.pointers.size === 1) { const [p] = this.pointers.values(); this.gesture = { mode: 'orbit', lx: p.x, ly: p.y }; }   // lifted one finger of a pinch
   }
