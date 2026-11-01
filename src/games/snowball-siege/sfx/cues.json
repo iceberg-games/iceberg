@@ -1,0 +1,58 @@
+{
+ "bgm_snowball-siege": {
+  "gain": 0.42,
+  "loop": true
+ },
+ "bgm_siege-lobby": {
+  "gain": 0.36,
+  "loop": true
+ },
+ "sfx_throw_charge": {
+  "gain": 0.7,
+  "loop": false
+ },
+ "sfx_throw_release": {
+  "gain": 1.0,
+  "loop": false
+ },
+ "sfx_snowball_hit": {
+  "gain": 1.0,
+  "loop": false
+ },
+ "sfx_snowball_whiff": {
+  "gain": 0.6,
+  "loop": false
+ },
+ "sfx_fort_hit": {
+  "gain": 1.0,
+  "loop": false
+ },
+ "sfx_fort_break": {
+  "gain": 1.0,
+  "loop": false
+ },
+ "sfx_capture_tick": {
+  "gain": 0.7,
+  "loop": false
+ },
+ "sfx_capture_win": {
+  "gain": 1.0,
+  "loop": false
+ },
+ "sfx_respawn": {
+  "gain": 1.0,
+  "loop": false
+ },
+ "sfx_reload": {
+  "gain": 1.0,
+  "loop": false
+ },
+ "sfx_cheer": {
+  "gain": 1.0,
+  "loop": false
+ },
+ "sfx_defeat": {
+  "gain": 1.0,
+  "loop": false
+ }
+}
