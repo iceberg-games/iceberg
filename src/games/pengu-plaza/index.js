@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import { Collision } from '../../engine/collision.js';
 import { getDeviceMode } from '../../core/device.js';
-import { GAME_ID, REWARD_SOURCE, PLAZA_R, RINK, COCOA, BELL, SPAWN, PHOTO_SPOTS, EMOTES, NPC_COUNT, POSTCARD_BB, PHYS, normalizeSave } from './config.js';
+import { GAME_ID, REWARD_SOURCE, PLAZA_R, RINK, COCOA, BELL, SPAWN, PHOTO_SPOTS, EMOTES, NPC_COUNT, NPC_POINTS, POSTCARD_BB, PHYS, normalizeSave } from './config.js';
 import { buildPlaza, buildPenguin } from './plaza.js';
 import { PlazaAudio } from './audio.js';
 import { PlazaUI } from './ui.js';
@@ -70,9 +70,12 @@ export default {
     const npcs = [];
     for (let i = 0; i < NPC_COUNT; i++) {
       const m = buildPenguin({ scarf: scarves[i % scarves.length], hat: i % 3 === 0 ? scarves[(i + 4) % 9] : null }); const s = 0.8 + (i % 4) * 0.08; m.scale.setScalar(s); scene.add(m);
-      const skater = i < 2, a = i * 2.1;
-      const n = { m, skater, x: skater ? RINK.x : Math.cos(a) * 14, z: skater ? RINK.z : Math.sin(a) * 14 + 6, tx: 0, tz: 0, wait: Math.random() * 3, phase: Math.random() * 6, react: 0, kind: null, honkT: 4 + Math.random() * 10 };
-      if (!skater) { n.tx = n.x; n.tz = n.z; } npcs.push(n);
+      const pt = NPC_POINTS[i], skater = pt.pose === 'skate';   // Set Builder stand points + poses
+      const n = { m, skater, pose: pt.pose, x: pt.x, z: pt.z, tx: pt.x, tz: pt.z, wait: 2 + Math.random() * 4, phase: Math.random() * 6, react: 0, kind: null, honkT: 4 + Math.random() * 10 };
+      m.rotation.y = pt.facing; m.position.set(pt.x, 0, pt.z);
+      if (pt.pose === 'cocoa' || pt.pose === 'sit') n.wait = 8 + Math.random() * 6;   // linger at the stand / bench before wandering
+      if (pt.pose === 'dance' || pt.pose === 'wave') { n.react = 3; n.kind = pt.pose; n.face = pt.facing; }
+      npcs.push(n);
     }
     function pickTarget(n) { for (let k = 0; k < 10; k++) { const a = Math.random() * 7, r = 4 + Math.random() * (PLAZA_R - 8), x = Math.cos(a) * r, z = Math.sin(a) * r; if (!inRink(x, z) && Math.hypot(x, z - 6) > 4.5 && Math.hypot(x - COCOA.x, z - COCOA.z) > 3) { n.tx = x; n.tz = z; return; } } }
     function npcReact(kind) { const p = player.pos; for (const n of npcs) if (Math.hypot(n.x - p.x, n.z - p.z) < 10) { n.react = 2.2; n.kind = kind; n.face = Math.atan2(p.x - n.x, p.z - n.z); } }
@@ -199,7 +202,7 @@ export default {
             n.m.userData.wings.forEach((w, i) => w.rotation.z = (i ? 1 : -1) * (n.kind === 'wave' && i ? 1.4 + Math.sin(k * 14) * 0.4 : 0.25 + Math.abs(Math.sin(k * 10)) * (n.kind === 'cheer' ? 1.2 : 0.3)));
             if (n.react <= 0 && n.kind !== 'honk' && Math.random() < 0.5) audio.play('sfx_penguin_honk', 0.35);
           } else if (n.skater) {
-            const a = n.phase * 0.35 + (npcs.indexOf(n) * Math.PI); n.x = RINK.x + Math.cos(a) * (RINK.rx - 2.5); n.z = RINK.z + Math.sin(a) * (RINK.rz - 2); n.m.rotation.y = Math.atan2(-Math.sin(a), Math.cos(a)); n.m.rotation.z = 0.15; n.m.position.y = 0;
+            const a = n.phase * 0.35 + (npcs.indexOf(n) * 2.094); n.x = RINK.x + Math.cos(a) * (RINK.rx - 2.5); n.z = RINK.z + Math.sin(a) * (RINK.rz - 2); n.m.rotation.y = Math.atan2(-Math.sin(a), Math.cos(a)); n.m.rotation.z = 0.15; n.m.position.y = 0;
           } else {
             const dx = n.tx - n.x, dz = n.tz - n.z, d = Math.hypot(dx, dz);
             if (d < 0.3) { n.wait -= dt; if (n.wait <= 0) { pickTarget(n); n.wait = 2 + Math.random() * 5; } }

@@ -1,7 +1,7 @@
 // Pengu Plaza procedural set: snowy round plaza at blue-hour, frozen fountain, ice rink, cocoa hut,
 // benches, Aurora Arch, Giant Ice Pengu statue, lantern lane, pines, falling snow + aurora sky.
 import * as THREE from 'three';
-import { PLAZA_R, RINK, COCOA, BELL, SEATS } from './config.js';
+import { PLAZA_R, RINK, COCOA, BELL, SEATS, PROPS } from './config.js';
 
 function tex(w, h, draw, rep = [1, 1]) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...rep); return t; }
 const snowTex = () => tex(256, 256, (g, w, h) => { g.fillStyle = '#e9f2ff'; g.fillRect(0, 0, w, h); for (let i = 0; i < 900; i++) { const v = 220 + Math.random() * 35; g.fillStyle = `rgba(${v - 20},${v - 5},255,.35)`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); } }, [14, 14]);
@@ -93,15 +93,15 @@ export function buildPlaza({ mobile = false } = {}) {
 
   // Aurora Arch (entrance)
   const archMat = M({ color: '#cfefff', emissive: '#58d6ff', emissiveIntensity: 0.6, roughness: 0.2, transparent: true, opacity: 0.9 });
-  const arch = add(new THREE.TorusGeometry(4.2, 0.45, 12, 40, Math.PI), archMat, 0, 0, 33);
-  colliders.push(['circle', -4.2, 33, 0.6, 9], ['circle', 4.2, 33, 0.6, 9]);
-  const as = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshBasicMaterial({ map: signTex('Pengu Plaza'), transparent: true })); as.position.set(0, 4.9, 32.6); as.rotation.y = Math.PI; disposables.push(as.geometry, as.material.map, as.material); scene.add(as);
+  const arch = add(new THREE.TorusGeometry(4.2, 0.45, 12, 40, Math.PI), archMat, PROPS.arch.x, 0, PROPS.arch.z);
+  colliders.push(['circle', PROPS.arch.x - 4.2, PROPS.arch.z, 0.6, 9], ['circle', PROPS.arch.x + 4.2, PROPS.arch.z, 0.6, 9]);
+  const as = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshBasicMaterial({ map: signTex('Pengu Plaza'), transparent: true })); as.position.set(PROPS.arch.x, 4.9, PROPS.arch.z - 0.4); as.rotation.y = Math.PI; disposables.push(as.geometry, as.material.map, as.material); scene.add(as);
 
   // Giant Ice Pengu statue
-  const statue = buildPenguin({ body: '#9fd8ff', scarf: '#5fd0ff' }); statue.scale.setScalar(4); statue.position.set(-25, 0.6, -22); statue.rotation.y = 0.8;
+  const statue = buildPenguin({ body: '#9fd8ff', scarf: '#5fd0ff' }); statue.scale.setScalar(4); statue.position.set(PROPS.icePengu.x, 0.6, PROPS.icePengu.z); statue.rotation.y = 0.8;
   statue.traverse(o => { if (o.isMesh && o.material.isMeshStandardMaterial) { o.material = o.material.clone(); o.material.transparent = true; o.material.opacity = 0.85; o.material.emissive = new THREE.Color('#3a8cc0'); o.material.emissiveIntensity = 0.35; o.material.roughness = 0.1; disposables.push(o.material); } }); scene.add(statue);
-  add(new THREE.CylinderGeometry(3, 3.3, 0.6, 24), stone, -25, 0.3, -22);
-  colliders.push(['circle', -25, -22, 3.3, 9]);
+  add(new THREE.CylinderGeometry(3, 3.3, 0.6, 24), stone, PROPS.icePengu.x, 0.3, PROPS.icePengu.z);
+  colliders.push(['circle', PROPS.icePengu.x, PROPS.icePengu.z, 3.3, 9]);
 
   // lantern lane (warm glows; real point lights only on desktop)
   const lanternMat = M({ color: '#ffd08a', emissive: '#ffae4a', emissiveIntensity: 1.6 }), lanterns = [];
