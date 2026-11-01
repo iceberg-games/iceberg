@@ -74,10 +74,15 @@ function gdMagnetScarf(color) {
   return { bone: 'torso', object: g };
 }
 function gdRocketSled(color) {
-  const g = new THREE.Group(); const S = new THREE.Group(); S.position.set(0, 0.15, -0.36); S.scale.setScalar(1.25); g.add(S);
+  const g = new THREE.Group(); const S = new THREE.Group(); S.position.set(0, 0.45, -0.4); S.rotation.x = -0.25; S.scale.setScalar(1.3); g.add(S);
   const body = std(color, { roughness: 0.3, metalness: 0.2 });
   const deck = mesh(new RoundedBoxGeometry(0.42, 0.7, 0.08, 3, 0.03), body); S.add(deck);
   const nose = mesh(new THREE.TorusGeometry(0.12, 0.03, 8, 16, Math.PI), std('#e6f4ff', { metalness: 0.5, roughness: 0.2 }), 0, 0.35, -0.08); nose.rotation.y = Math.PI / 2; S.add(nose);
+  const stripeM = std('#ffffff', { roughness: 0.4 }), boltM = std('#ffe14a', { emissive: '#ffcc00', emissiveIntensity: 0.7 });
+  S.add(mesh(new THREE.BoxGeometry(0.08, 0.66, 0.02), stripeM, 0, 0, -0.05));
+  const bolt = mesh(new THREE.ConeGeometry(0.07, 0.18, 3), boltM, 0, 0.05, -0.065); bolt.rotation.x = -Math.PI / 2; S.add(bolt);
+  const finM = std(tint(color, '#ffffff', 0.4), { roughness: 0.3 });
+  [-1, 1].forEach(sx => { const f = mesh(new THREE.BoxGeometry(0.16, 0.22, 0.03), finM, sx * 0.28, -0.25, -0.02); f.rotation.z = sx * 0.35; S.add(f); });
   const runM = std('#dfefff', { metalness: 0.7, roughness: 0.2 });
   [-1, 1].forEach(s => S.add(mesh(new THREE.BoxGeometry(0.03, 0.74, 0.03), runM, s * 0.19, 0, -0.07)));
   const jetM = std('#2b3550', { roughness: 0.4 });
@@ -85,8 +90,8 @@ function gdRocketSled(color) {
   const flame = stream(S, 18, '#9fe8ff', 0.1, p => { p.d.x = (Math.random() < 0.5 ? -1 : 1) * 0.1 + (Math.random() - 0.5) * 0.04; }, (p, L) => { p.s.position.set(p.d.x, -0.5 - L * 0.5, -0.02 - L * 0.15); p.s.material.opacity = 0.9 * (1 - L); p.s.scale.setScalar(0.12 * (1 - L) + 0.03); });
   const core = jets.map(j => { const c = glow('#ffffff', 0.14, 0.9); c.position.set(j.position.x, -0.52, -0.02); S.add(c); return c; });
   let t = 0;
-  g.userData.tick = (dt) => { t += dt; S.rotation.z = Math.sin(t * 1.4) * 0.04; S.position.y = 0.15 + Math.sin(t * 7) * 0.008; const f = 0.8 + Math.sin(t * 23) * 0.2; core.forEach(c => c.scale.setScalar(0.12 * f)); flame.tick(dt, 2.4); };
-  g.userData.setColor = (c) => body.color.set(c);
+  g.userData.tick = (dt) => { t += dt; S.rotation.z = Math.sin(t * 1.4) * 0.04; S.position.y = 0.45 + Math.sin(t * 7) * 0.008; const f = 0.8 + Math.sin(t * 23) * 0.2; boltM.emissiveIntensity = 0.5 + f * 0.5; core.forEach(c => c.scale.setScalar(0.12 * f)); flame.tick(dt, 2.4); };
+  g.userData.setColor = (c) => { body.color.set(c); finM.color.set(tint(c, '#ffffff', 0.4)); };
   return { bone: 'torso', object: g };
 }
 
@@ -207,19 +212,38 @@ function ppCocoaMug(color) {
   return { bone: 'armR', object: g };
 }
 function ppPenguBackpack(color) {
-  const g = new THREE.Group(); const P = new THREE.Group(); P.position.set(0, 0.05, -0.38); g.add(P);
-  const bodyM = std(color, { roughness: 0.7 }), bellyM = std('#ffffff', { roughness: 0.8 }), orange = std('#ffa63a', { roughness: 0.5 }), dark = std('#1a2440');
-  const body = mesh(new THREE.SphereGeometry(0.24, 20, 16), bodyM); body.scale.set(1, 1.25, 0.75); P.add(body);
-  const belly = mesh(new THREE.SphereGeometry(0.17, 18, 14), bellyM, 0, -0.03, -0.1); belly.scale.set(1, 1.3, 0.6); P.add(belly);
-  const eyes = [-1, 1].map(s => { const e = mesh(new THREE.SphereGeometry(0.025, 10, 8), dark, s * 0.07, 0.15, -0.16); P.add(e); return e; });
-  const beak = mesh(new THREE.ConeGeometry(0.03, 0.07, 8), orange, 0, 0.1, -0.2); beak.rotation.x = -Math.PI / 2; P.add(beak);
-  const flippers = [-1, 1].map(s => { const f = mesh(new THREE.SphereGeometry(0.08, 10, 8), bodyM, s * 0.23, 0, -0.02); f.scale.set(0.35, 1, 0.6); P.add(f); return f; });
-  [-1, 1].forEach(s => { const f = mesh(new THREE.SphereGeometry(0.05, 10, 8), orange, s * 0.08, -0.3, -0.06); f.scale.set(1, 0.4, 1.4); P.add(f); });
-  const strapM = std(tint(color, '#000000', 0.3)); [-1, 1].forEach(s => g.add(mesh(new THREE.BoxGeometry(0.06, 0.6, 0.03), strapM, s * 0.2, 0.05, 0.27)));
-  const notes = stream(P, 4, '#bfe8ff', 0.07, p => { p.d.x = (Math.random() - 0.5) * 0.2; }, (p, L) => { p.s.position.set(p.d.x + Math.sin(L * 7) * 0.05, 0.3 + L * 0.35, -0.12); p.s.material.opacity = 0.8 * Math.sin(L * Math.PI); });
+  // Blocky plush penguin riding on your back: body behind torso, head peeks above the shoulders so it reads from the front too.
+  const g = new THREE.Group(); const P = new THREE.Group(); P.position.set(0, 0.05, -0.47); g.add(P);
+  const bodyM = std(color, { roughness: 0.75 }), bellyM = std('#ffffff', { roughness: 0.85 }), orange = std('#ffa63a', { roughness: 0.45 });
+  const dark = std('#10182c', { roughness: 0.3 }), shine = std('#ffffff', { emissive: '#ffffff', emissiveIntensity: 0.6 }), blushM = std('#ff9fc0', { roughness: 1 });
+  const rb = (w, h, d, m, x, y, z, r = 0.06) => { const o = mesh(new RoundedBoxGeometry(w, h, d, 3, r), m, x, y, z); P.add(o); return o; };
+  rb(0.62, 0.72, 0.4, bodyM, 0, 0, 0, 0.12);                       // body
+  rb(0.44, 0.52, 0.06, bellyM, 0, -0.06, -0.19, 0.08);              // belly patch (outward face)
+  const H = new THREE.Group(); H.position.set(0.3, 0.6, 0.06); H.rotation.z = -0.18; P.add(H); // head (peeks over shoulders)
+  H.add(mesh(new RoundedBoxGeometry(0.5, 0.42, 0.4, 3, 0.12), bodyM));
+  const faceFor = (z, dir) => { // white mask + eyes + beak on given side
+    const F = new THREE.Group(); F.position.z = z; F.rotation.y = dir < 0 ? Math.PI : 0; H.add(F);
+    F.add(mesh(new RoundedBoxGeometry(0.4, 0.28, 0.04, 2, 0.06), bellyM, 0, -0.03, 0));
+    const eyes = [-1, 1].map(sx => { const e = new THREE.Group(); e.position.set(sx * 0.09, 0.03, 0.03); F.add(e);
+      e.add(mesh(new THREE.BoxGeometry(0.07, 0.09, 0.03), dark)); e.add(mesh(new THREE.BoxGeometry(0.025, 0.025, 0.01), shine, 0.015, 0.02, 0.02)); return e; });
+    [-1, 1].forEach(sx => F.add(mesh(new THREE.BoxGeometry(0.06, 0.03, 0.01), blushM, sx * 0.15, -0.06, 0.025)));
+    const beak = mesh(new THREE.ConeGeometry(0.05, 0.12, 4), orange, 0, -0.07, 0.07); beak.rotation.x = Math.PI / 2; beak.rotation.y = Math.PI / 4; F.add(beak);
+    return eyes;
+  };
+  const eyes = [...faceFor(-0.21, -1), ...faceFor(0.21, 1)]; // faces outward (back view) and peeks forward over your head
+  const tuft = mesh(new THREE.ConeGeometry(0.05, 0.12, 4), bodyM, 0, 0.26, 0); H.add(tuft);
+  const flippers = [-1, 1].map(sx => { const f = new THREE.Group(); f.position.set(sx * 0.33, 0.15, 0); P.add(f);
+    const w = mesh(new RoundedBoxGeometry(0.08, 0.42, 0.24, 2, 0.04), bodyM, sx * 0.03, -0.2, 0); f.add(w); return f; });
+  [-1, 1].forEach(sx => rb(0.16, 0.06, 0.2, orange, sx * 0.14, -0.38, -0.06, 0.03)); // feet
+  const scarfM = std('#7fd8ff', { roughness: 0.9 }); rb(0.6, 0.08, 0.42, scarfM, 0, 0.37, 0, 0.03); // icy scarf between head and body
+  const strapM = std(tint(color, '#000000', 0.3)); [-1, 1].forEach(sx => g.add(mesh(new THREE.BoxGeometry(0.07, 0.7, 0.03), strapM, sx * 0.22, 0.05, 0.27)));
+  const notes = stream(P, 6, '#bfe8ff', 0.08, p => { p.d.x = (Math.random() - 0.5) * 0.4; }, (p, L) => { p.s.position.set(p.d.x + Math.sin(L * 7) * 0.05, 0.85 + L * 0.4, -0.1); p.s.material.opacity = 0.85 * Math.sin(L * Math.PI); });
   let t = 0;
-  g.userData.tick = (dt) => { t += dt; const w = Math.max(0, Math.sin(t * 1.3)) ** 6; flippers[0].rotation.z = 0.2 + w * Math.sin(t * 18) * 0.6; flippers[1].rotation.z = -0.2;
-    P.rotation.z = Math.sin(t * 2.2) * 0.06; P.position.y = 0.05 + Math.abs(Math.sin(t * 2.2)) * 0.015; const bl = (t % 2.8) < 0.12 ? 0.15 : 1; eyes.forEach(e => e.scale.y = bl); notes.tick(dt, 0.4); };
+  g.userData.tick = (dt) => { t += dt; const w = Math.max(0, Math.sin(t * 1.3)) ** 6;
+    flippers[0].rotation.z = -0.15 - w * (0.6 + Math.sin(t * 18) * 0.4); flippers[1].rotation.z = 0.15 + Math.sin(t * 2.2) * 0.08;
+    P.rotation.z = Math.sin(t * 2.2) * 0.06; P.position.y = 0.05 + Math.abs(Math.sin(t * 2.2)) * 0.02;
+    H.rotation.y = Math.sin(t * 0.9) * 0.25; H.rotation.z = -0.18 + Math.sin(t * 1.7) * 0.06;
+    const bl = (t % 2.8) < 0.12 ? 0.12 : 1; eyes.forEach(e => e.scale.y = bl); notes.tick(dt, 0.4); };
   g.userData.setColor = (c) => { bodyM.color.set(c); strapM.color.set(tint(c, '#000000', 0.3)); };
   return { bone: 'torso', object: g };
 }
@@ -254,5 +278,5 @@ export const QOL_GAME_BUILDERS = {
 export const QOL_GAME_PREVIEW_FOCUS = {
   gd_boost_helmet: [0, 2.7, -0.2, 3.0], gd_drift_visor: [0, 2.4, 0.15, 2.4], gd_magnet_scarf: [0, 1.75, 0.25, 2.4], gd_rocket_sled: [0, 1.4, -0.5, 4.2],
   ss_fort_helm: [0, 2.85, 0, 2.8], ss_war_paint: [0, 2.3, 0.2, 1.9], ss_ammo_bandolier: [0, 1.4, 0.2, 3.2], ss_flag_banner: [0, 2.0, -0.4, 5.0], ss_snowball_launcher: [0.75, 0.9, 0.7, 2.6],
-  pp_beanie_pompom: [0, 2.7, 0, 2.6], pp_cocoa_mug: [0.75, 0.95, 0.35, 2.2], pp_pengu_backpack: [0, 1.45, -0.4, 3.0], pp_photo_camera: [0, 1.65, 0.3, 2.2],
+  pp_beanie_pompom: [0, 2.7, 0, 2.6], pp_cocoa_mug: [0.75, 0.95, 0.35, 2.2], pp_pengu_backpack: [0, 1.8, -0.4, 3.4], pp_photo_camera: [0, 1.65, 0.3, 2.2],
 };
