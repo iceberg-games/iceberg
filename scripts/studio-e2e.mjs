@@ -262,8 +262,14 @@ ok('workspace settings', await p.evaluate(() => { const d = window.iceberg.engin
 await p.click('#save-game'); await p.waitForTimeout(200);
 const draft = await p.evaluate(() => JSON.parse(localStorage.getItem('iceberg:v1:studioDrafts') || '[]').some(d => d.name === 'Studio Test World'));
 ok('save draft', draft);
-await p.click('#publish-game'); await p.waitForTimeout(200);
-ok('publish → in Games list', await p.evaluate(() => window.iceberg.backend.loadCustomGames().some(g => g.name === 'Studio Test World')));
+// file:// build has no accounts => guest. Guests cannot publish (signed-in only); the draft must survive.
+await p.click('#publish-game'); await p.waitForTimeout(300);
+ok('guest publish refused with sign-in message', /sign in to publish/i.test(await p.evaluate(() => document.body.innerText)));
+ok('guest publish: not listed, draft kept', await p.evaluate(() => !window.iceberg.backend.loadCustomGames().some(g => g.name === 'Studio Test World')
+  && JSON.parse(localStorage.getItem('iceberg:v1:studioDrafts') || '[]').some(d => d.name === 'Studio Test World')));
+// Signed-in publish is covered by tools/db/test-db.mjs (RPCs) + the two-browser smoke in DEPLOY.md.
+// Put the game in the local Games list (same path as Import) so the play-from-menu checks below still run.
+await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('iceberg:v1:studioDrafts')).find(d => d.name === 'Studio Test World'); window.iceberg.backend.saveCustomGame(d); });
 
 // Export
 const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#export-game')]);

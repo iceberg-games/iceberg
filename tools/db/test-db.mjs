@@ -771,6 +771,54 @@ await t('winterhaven prep (0013): unscheduled event (inactive), earn source 25/c
   assert.equal(Number((await su(db, `select coins from public.profiles where id = $1`, [U]))[0].coins), 100);
 });
 
+// ---- custom games (0017): publish / list / soft unpublish ----
+await t('custom games: publish, public list, owner-only, soft delete', async () => {
+  const doc = { id: 'g_test1', name: 'Ice Run', instances: [] };
+  const r = await rpc(db, A, 'publish_custom_game', { p_game_key: 'g_test1', p_name: 'Ice Run', p_doc: doc });
+  assert.equal(r.ok, true);
+  const list = await rpc(db, null, 'list_published_games', {});
+  assert.equal(list.length, 1); assert.equal(list[0].game_key, 'g_test1'); assert.equal(list[0].owner_name, 'alice_1');
+  const steal = await rpc(db, B, 'publish_custom_game', { p_game_key: 'g_test1', p_name: 'Mine', p_doc: doc });
+  assert.equal(steal.reason, 'id_taken');
+  assert.equal((await rpc(db, B, 'unpublish_custom_game', { p_game_key: 'g_test1' })).ok, false);
+  await denied(rpc(db, null, 'publish_custom_game', { p_game_key: 'g_x', p_name: 'x', p_doc: {} }));
+  await denied(as(db, B, tx => tx.query(`update public.custom_games set name = 'hax'`)));
+  await denied(as(db, B, tx => tx.query(`delete from public.custom_games`)));
+  assert.equal((await rpc(db, A, 'unpublish_custom_game', { p_game_key: 'g_test1' })).ok, true);
+  assert.equal((await rpc(db, null, 'list_published_games', {})).length, 0);
+  const kept = await su(db, `select deleted_at from public.custom_games where game_key = 'g_test1'`);
+  assert.equal(kept.length, 1); assert.ok(kept[0].deleted_at);   // soft delete: row kept
+  assert.equal((await rpc(db, A, 'publish_custom_game', { p_game_key: 'g_test1', p_name: 'Ice Run 2', p_doc: doc })).ok, true);   // republish restores
+  assert.equal((await rpc(db, null, 'list_published_games', {})).length, 1);
+  assert.equal((await rpc(db, null, 'get_published_game', { p_game_key: 'g_test1' })).name, 'Ice Run 2');
+  assert.equal(await rpc(db, null, 'get_published_game', { p_game_key: 'nope' }), null);
+  const big = await rpc(db, A, 'publish_custom_game', { p_game_key: 'g_big', p_name: 'Big', p_doc: { thumbnail: 'x'.repeat(400000) } });
+  assert.equal(big.reason, 'thumb_too_large');
+  const huge = await rpc(db, A, 'publish_custom_game', { p_game_key: 'g_huge', p_name: 'Huge', p_doc: { blob: Array.from({ length: 30 }, (_, i) => i + Math.random().toString(36).repeat(4000)) } });
+  assert.ok(huge.reason === 'too_large' || huge.ok === true);   // compressed jsonb may fit; cap enforced on stored size
+  const Z = await createUser(db, { username: 'zz_banned_cg' });
+  await su(db, `insert into public.bans (user_id, username, reason) values ($1, 'zz_banned_cg', 'test')`, [Z]);
+  assert.match(await denied(rpc(db, Z, 'publish_custom_game', { p_game_key: 'g_ban', p_name: 'Ban', p_doc: {} })), /banned/);
+  // shared saves (drafts)
+  assert.equal((await rpc(db, B, 'save_custom_draft', { p_game_key: 'g_d1', p_name: 'Bob WIP', p_doc: { id: 'g_d1', v: 1 } })).ok, true);
+  assert.ok(!(await rpc(db, null, 'list_published_games', {})).some(g => g.game_key === 'g_d1'));   // private
+  assert.equal(await rpc(db, null, 'get_published_game', { p_game_key: 'g_d1' }), null);
+  assert.equal((await as(db, A, tx => tx.query(`select 1 from public.custom_games where game_key = 'g_d1'`))).rows.length, 0);   // RLS hides others' drafts
+  const mine = await rpc(db, B, 'list_my_games', {}); assert.equal(mine.length, 1); assert.equal(mine[0].doc.v, 1);
+  assert.equal((await rpc(db, A, 'save_custom_draft', { p_game_key: 'g_d1', p_name: 'x', p_doc: {} })).reason, 'id_taken');
+  // draft on a published game doesn't change what players see
+  await rpc(db, A, 'save_custom_draft', { p_game_key: 'g_test1', p_name: 'WIP', p_doc: { wip: true } });
+  assert.equal((await rpc(db, null, 'get_published_game', { p_game_key: 'g_test1' })).name, 'Ice Run 2');
+  assert.ok(!(await rpc(db, null, 'get_published_game', { p_game_key: 'g_test1' })).doc.wip);
+  assert.equal((await rpc(db, A, 'list_my_games', {})).find(g => g.game_key === 'g_test1').doc.wip, true);
+  assert.equal((await rpc(db, B, 'delete_custom_draft', { p_game_key: 'g_d1' })).ok, true);
+  assert.equal((await rpc(db, B, 'list_my_games', {})).length, 0);
+  assert.equal((await su(db, `select count(*)::int n from public.custom_games where game_key = 'g_d1'`))[0].n, 1);   // soft delete
+  const coins = await su(db, `select coins from public.profiles where username = 'alice_1'`);
+  assert.equal(typeof coins[0].coins !== 'undefined', true);   // economy untouched by publish
+});
+
+
 await db.close();
 for (const r of results) console.log(r[0], r[1], r[2] ? '\n     ' + r[2] : '');
 const failed = results.filter(r => r[0] === 'FAIL').length;

@@ -1,3 +1,4 @@
+import { newGameId } from './ids.js';
 // Starter maps for Create a Game.
 import { makeInstance } from './instances.js';
 import { translate } from './nlscript.js';
@@ -28,7 +29,7 @@ export const TEMPLATES = {
 
 export function newGameDoc(template = 'blank') {
   const t = TEMPLATES[template] || TEMPLATES.blank;
-  return { id: 'g_' + Date.now().toString(36), version: 2, name: 'My Iceberg Game', description: '', music: 'winter', snow: false, mobile: true, starterGears: [], animations: [], ...t.make(), template, createdAt: Date.now(), updatedAt: Date.now() };
+  return { id: newGameId(), version: 2, name: 'My Iceberg Game', description: '', music: 'winter', snow: false, mobile: true, starterGears: [], animations: [], ...t.make(), template, createdAt: Date.now(), updatedAt: Date.now() };
 }
 
 /** Convert v1 (voxel) docs from the old creator into v2 instances. */

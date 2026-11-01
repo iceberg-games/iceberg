@@ -19,6 +19,7 @@ import { CreatorPanel } from './ui/creator.js';
 import { MobileStudio } from './ui/mobileStudio.js';
 import { h } from './ui/dom.js';
 import { CREATOR, findGame } from './games/registry.js';
+import { getServerGame } from './studio/store.js';
 import { customGameDef } from './games/customGame.js';
 import { showDevicePicker } from './ui/devicePicker.js';
 import { mountTouchControls } from './ui/touchControls.js';
@@ -98,6 +99,10 @@ async function boot() {
       if (got) ui.toast(`Daily bonus! +${got} Birg Bucks`, '🎁');
       const def = GAME_PARAM && findGame(GAME_PARAM);
       if (def) setTimeout(() => play(def), 0);   // after the menu renders the games list
+      else if (GAME_PARAM) {   // not built-in / not on this device: try a server-published game (play-by-link), else say so
+        getServerGame(GAME_PARAM).then(doc => { if (doc) play(customGameDef(doc)); else ui.toast(`Game not found: "${GAME_PARAM.slice(0, 40)}" (it may be unpublished)`, '❓'); },
+          err => ui.toast(`Couldn't load game "${GAME_PARAM.slice(0, 40)}": ${err.message}`, '⚠️'));
+      }
     },
   });
   const onTest = async (doc) => { testingDoc = doc; menu.hide(); await engine.loadGame(customGameDef(doc)); backToEditor.classList.remove('hidden'); };

@@ -10,6 +10,8 @@ import { BUILTIN_GAMES, CREATOR, allGames } from '../games/registry.js';
 import { TEMPLATES, newGameDoc, customGameDef } from '../games/customGame.js';
 import { backend } from '../backend/LocalBackend.js';
 import { exportGameJSON, importGameJSON, downloadText } from '../core/share.js';
+import { listServerGames, unpublish, newGameId, mergeOwn, drafts } from '../studio/store.js';
+import { getRemote } from '../net/session.js';
 
 export class Menu {
   constructor(root, { economy, models, ui, onPlay, onEdit, onStart }) {
@@ -17,6 +19,7 @@ export class Menu {
     this.el = h('div#menu.screen');
     root.append(this.el);
     bus.on('coins:changed', () => { const b = this.el.querySelector('.bucks-amount'); if (b) b.textContent = fmt(this.economy.coins); });
+    bus.on('drafts:sync', (e) => this.ui?.toast(`Saved on this device; cloud save failed: ${e.message || 'unknown error'}`, '⚠️'));
     bus.on('games:changed', () => { if (this.mode === 'games') this.showGames(); });
     // Re-render on device change (mobile opens the simple Mobile Studio, computer the full Studio).
     onDeviceChange(() => { if (this.mode === 'games') this.showGames(); });
@@ -40,6 +43,13 @@ export class Menu {
     this.mode = 'games';
     this.el.classList.remove('hidden');
     const custom = backend.loadCustomGames();
+    // Server-published games (everyone's), fetched async; local "Your Games" render immediately.
+    if (!this._serverLoading) { this._serverLoading = true; Promise.all([listServerGames(), drafts.pull().catch(() => 0)]).then(([g]) => { this.serverGames = g; this.serverError = null; }, e => { this.serverError = e.message; })
+      .finally(() => { if (this.mode === 'games') this.showGames(); setTimeout(() => { this._serverLoading = false; }, 30000); }); }
+    const myId = getRemote()?.signedIn ? getRemote().userId : null;
+    for (let i = 0; i < custom.length; i++) custom[i] = mergeOwn(custom[i], (this.serverGames || []).find(g => g.id === custom[i].id), myId);
+    const localIds = new Set(custom.map(g => g.id));
+    const community = (this.serverGames || []).filter(g => !localIds.has(g.id));
     const card = (def, extra = null) => h('div.game-card', { 'data-game': def.id },
       h('div.thumb', { style: { backgroundImage: `url(${gameThumb(def)})` } }),
       h('div.gc-body', h('div.gc-name', def.name), h('div.gc-tag', def.tagline || ''), h('div.gc-desc', def.description || '')),
@@ -54,11 +64,11 @@ export class Menu {
         h('button.btn.play', { onclick: () => this.onPlay(def) }, '▶ Play'),
         h('button.btn.small.secondary.edit-btn', { title: 'Edit', onclick: () => this.onEdit(doc) }, '✏️'),
         h('button.btn.small.secondary', { title: 'Export as file', onclick: () => downloadText(`${doc.name.replace(/[^\w-]+/g, '_')}.iceberg.json`, exportGameJSON(doc, this.models)) }, '⤓'),
-        h('button.btn.small.secondary', { title: 'Delete', onclick: async () => { if (await confirmModal(`Delete "${doc.name}"? This can't be undone.`, { title: 'Delete game?', okLabel: 'Delete', danger: true })) { backend.deleteCustomGame(doc.id); this.showGames(); } } }, '🗑')));
+        h('button.btn.small.secondary', { title: 'Delete', onclick: async () => { if (await confirmModal(`Remove "${doc.name}" from Your Games? Your draft is kept, and a server copy is hidden (not erased).`, { title: 'Unpublish game?', okLabel: 'Unpublish', danger: true })) { try { await unpublish(doc.id); this.serverGames = (this.serverGames || []).filter(g => g.id !== doc.id); } catch (err) { this.ui.toast(`Unpublish failed: ${err.message}`, '⚠️'); } this.showGames(); } } }, '🗑')));
     });
     const importInput = h('input#import-file', { type: 'file', accept: '.json', style: { display: 'none' }, onchange: async (e) => {
       const f = e.target.files[0]; if (!f) return;
-      try { const doc = await importGameJSON(await f.text(), this.models); backend.saveCustomGame(doc); this.ui.toast(`Imported "${doc.name}"`, '📥'); this.showGames(); }
+      try { const doc = await importGameJSON(await f.text(), this.models); if (backend.loadCustomGames().some(g => g.id === doc.id) || this.serverGames?.some(g => g.id === doc.id)) doc.id = newGameId(); backend.saveCustomGame(doc); this.ui.toast(`Imported "${doc.name}"`, '📥'); this.showGames(); }
       catch (err) { this.ui.toast(`Import failed: ${err.message}`, '⚠️'); }
     } });
 
@@ -74,6 +84,9 @@ export class Menu {
       h('section', h('h2', 'Games'), h('div.carousel#games-carousel', featured)),
       h('section', h('div.section-head', h('h2', 'Your Games'), h('div.row', importInput, h('button.btn.small.secondary#import-btn', { onclick: () => importInput.click() }, '📥 Import game (.json)'))),
         yours.length ? h('div.carousel#your-games', yours) : h('div.empty', 'No games yet — make one with ', h('b', 'Create a Game'), '!')),
+      (community.length || this.serverError) ? h('section', h('h2', 'Community Games'),
+        this.serverError ? h('div.empty.small', `Couldn't load community games: ${this.serverError}`) : null,
+        community.length ? h('div.carousel#community-games', community.map(doc => { const def = customGameDef(doc); def.tagline = `By ${doc.ownerName || 'a player'} · Made in Iceberg Studio`; return card(def); })) : null) : null,
       h('p.muted.small.center', 'Your avatar, Birg Bucks and cosmetics carry across every game.')));
   }
 

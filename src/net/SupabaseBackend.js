@@ -55,6 +55,16 @@ export class SupabaseBackend {
   gameHeartbeat(gameId)            { return this.client.rpc('game_heartbeat', { p_game_id: gameId }); }
   gameLeave()                      { return this.client.rpc('game_leave'); }
 
+  // ---- custom (Studio) games; see supabase/migrations/20261031000017_custom_games.sql ----
+  // Game docs only: never touches Birg Bucks / inventory.
+  publishCustomGame(doc)           { return this.client.rpc('publish_custom_game', { p_game_key: doc.id, p_name: (doc.name || 'Untitled').slice(0, 40), p_doc: doc }); }
+  unpublishCustomGame(gameKey)     { return this.client.rpc('unpublish_custom_game', { p_game_key: gameKey }); }
+  getPublishedGame(gameKey)        { return this.client.rpc('get_published_game', { p_game_key: gameKey }, { anon: !this.client.signedIn }); }
+  saveCustomDraft(doc)             { return this.client.rpc('save_custom_draft', { p_game_key: doc.id, p_name: (doc.name || 'Untitled').slice(0, 40), p_doc: doc }); }
+  deleteCustomDraft(gameKey)       { return this.client.rpc('delete_custom_draft', { p_game_key: gameKey }); }
+  listMyGames()                    { return this.client.rpc('list_my_games'); }
+  listPublishedGames(limit = 60)   { return this.client.rpc('list_published_games', { p_limit: limit }, { anon: !this.client.signedIn }); }
+
   // ---- friends ----
   listFriends()                    { return this.client.rpc('list_friends'); }
   sendFriendRequest(username)      { return this.client.rpc('send_friend_request', { p_username: username }); }

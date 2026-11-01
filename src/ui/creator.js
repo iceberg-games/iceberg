@@ -66,7 +66,11 @@ export class CreatorPanel {
   // ---------- persistence ----------
   docWithThumb() { const d = this.ed.serialize(); try { d.thumbnail = this.engine.snapshot(); } catch {} return d; }
   save(silent = false) { const d = this.docWithThumb(); try { drafts.save(d); if (!silent) this.ui.toast(`Saved draft "${d.name}"`, '💾'); } catch { this.ui.toast('Could not save (browser storage full?)', '⚠️'); } return d; }
-  publishGame() { const d = this.save(true); publish(d); bus.emit('games:changed'); this.ui.toast(`Published "${d.name}" to the Games menu!`, '🚀'); this.renderProps(); return d; }
+  publishGame() {
+    const d = this.save(true);
+    return publish(d).then(({ remote, modelsLocalOnly }) => { if (modelsLocalOnly) setTimeout(() => this.ui.toast('Heads up: uploaded 3D models only show on your device; other players see a placeholder box', 'ℹ️'), 1500); bus.emit('games:changed'); this.ui.toast(remote ? `Published "${d.name}" for everyone!` : `Published "${d.name}" to your Games menu (sign in to share it)`, '🚀'); this.renderProps(); return d; },
+      (err) => { bus.emit('games:changed'); this.ui.toast(`Publish failed: ${err.message}`, '⚠️'); this.renderProps(); throw err; });
+  }
 
   render() {
     clear(this.el).append(
@@ -104,7 +108,7 @@ export class CreatorPanel {
       h('div.st-group.st-game', h('div.st-gl', 'Game'), h('div.st-row',
         h('button.st-big.play#test-game', { onclick: () => this.onTest(this.save(true)) }, '▶ Test'),
         h('button.st-big#save-game', { onclick: () => this.save() }, '💾 Save'),
-        h('button.st-big.pub#publish-game', { onclick: () => this.publishGame() }, '🚀 Publish')),
+        h('button.st-big.pub#publish-game', { onclick: () => this.publishGame().catch(() => {}) }, '🚀 Publish')),
         h('div.st-row',
           h('button.st-mini#export-game', { onclick: () => { const d = this.save(true); downloadText(`${d.name.replace(/[^\w-]+/g, '_')}.iceberg.json`, exportGameJSON(d, this.models)); } }, '⤓ Export'),
           importInput, h('button.st-mini#import-game', { onclick: () => importInput.click() }, '⤒ Import'),
