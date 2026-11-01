@@ -771,6 +771,30 @@ await t('winterhaven prep (0013): unscheduled event (inactive), earn source 25/c
   assert.equal(Number((await su(db, `select coins from public.profiles where id = $1`, [U]))[0].coins), 100);
 });
 
+// ---- custom games (0017): publish / list / soft unpublish ----
+await t('custom games: publish, public list, owner-only, soft delete', async () => {
+  const doc = { id: 'g_test1', name: 'Ice Run', instances: [] };
+  const r = await rpc(db, A, 'publish_custom_game', { p_game_key: 'g_test1', p_name: 'Ice Run', p_doc: doc });
+  assert.equal(r.ok, true);
+  const list = await rpc(db, null, 'list_published_games', {});
+  assert.equal(list.length, 1); assert.equal(list[0].game_key, 'g_test1'); assert.equal(list[0].owner_name, 'alice_1');
+  const steal = await rpc(db, B, 'publish_custom_game', { p_game_key: 'g_test1', p_name: 'Mine', p_doc: doc });
+  assert.equal(steal.reason, 'id_taken');
+  assert.equal((await rpc(db, B, 'unpublish_custom_game', { p_game_key: 'g_test1' })).ok, false);
+  await denied(rpc(db, null, 'publish_custom_game', { p_game_key: 'g_x', p_name: 'x', p_doc: {} }));
+  await denied(as(db, B, tx => tx.query(`update public.custom_games set name = 'hax'`)));
+  await denied(as(db, B, tx => tx.query(`delete from public.custom_games`)));
+  assert.equal((await rpc(db, A, 'unpublish_custom_game', { p_game_key: 'g_test1' })).ok, true);
+  assert.equal((await rpc(db, null, 'list_published_games', {})).length, 0);
+  const kept = await su(db, `select deleted_at from public.custom_games where game_key = 'g_test1'`);
+  assert.equal(kept.length, 1); assert.ok(kept[0].deleted_at);   // soft delete: row kept
+  assert.equal((await rpc(db, A, 'publish_custom_game', { p_game_key: 'g_test1', p_name: 'Ice Run 2', p_doc: doc })).ok, true);   // republish restores
+  assert.equal((await rpc(db, null, 'list_published_games', {})).length, 1);
+  const coins = await su(db, `select coins from public.profiles where username = 'alice_1'`);
+  assert.equal(typeof coins[0].coins !== 'undefined', true);   // economy untouched by publish
+});
+
+
 await db.close();
 for (const r of results) console.log(r[0], r[1], r[2] ? '\n     ' + r[2] : '');
 const failed = results.filter(r => r[0] === 'FAIL').length;

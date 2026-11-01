@@ -131,7 +131,7 @@ export class MobileStudio {
         h('p.ms-hint#ms-status', pub ? '✅ Published: it is in the Games menu. Publish again to update it.' : '📝 Draft: only you can see it. Publish to add it to the Games menu.'),
         h('div.ms-row',
           h('button.save#ms-sheet-save', { type: 'button', onclick: () => { this.setName(name.value); this.save(); close(); } }, '💾 Save'),
-          h('button.pub#ms-publish', { type: 'button', onclick: () => { this.setName(name.value); this.publishGame(); close(); } }, '🚀 Publish')),
+          h('button.pub#ms-publish', { type: 'button', onclick: () => { this.setName(name.value); this.publishGame().catch(() => {}); close(); } }, '🚀 Publish')),
         h('div.ms-row',
           h('button#ms-exit', { type: 'button', onclick: () => { this.setName(name.value); close(); this.exit(); } }, '✕ Exit studio'),
           h('button#ms-close', { type: 'button', onclick: () => { this.setName(name.value); close(); } }, 'Done')),
@@ -151,7 +151,11 @@ export class MobileStudio {
     try { drafts.save(d); if (!silent) this.ui.toast(`Saved "${d.name}"`, '💾'); } catch { this.ui.toast('Could not save (browser storage full?)', '⚠️'); }
     return d;
   }
-  publishGame() { const d = this.save(true); publish(d); bus.emit('games:changed'); this.ui.toast(`Published "${d.name}" to the Games menu!`, '🚀'); return d; }
+  publishGame() {
+    const d = this.save(true);
+    return publish(d).then(({ remote }) => { bus.emit('games:changed'); this.ui.toast(remote ? `Published "${d.name}" for everyone!` : `Published "${d.name}" to your Games menu (sign in to share it)`, '🚀'); return d; },
+      (err) => { bus.emit('games:changed'); this.ui.toast(`Publish failed: ${err.message}`, '⚠️'); throw err; });
+  }
   test() { const d = this.save(true); this.onTest?.(d); }
   exit() { if (!this.ed) return; this.save(true); this.ed.saveCamera(); this.onExit?.(); }
 

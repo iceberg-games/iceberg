@@ -227,3 +227,9 @@ Rate limiting and trust:
 - Grant (comp/demo, not a payment): a dev/admin (`is_dev()`) uses Portal dev row → username → **❄️ Grant Plus** (30 days) / **Revoke Plus**, or SQL: `select public.grant_plus('username', 30, 'note');` while signed in as a dev. Service-role/SQL editor: `update profiles set plus_until = now() + interval '30 days' where username = '...';`. Clients cannot write `plus_until` (no update grant on profiles).
 - Real purchases: **none**. $9/mo stays "Coming soon"; no Stripe. Colin must re-confirm before any payment account. Note: $1/purchase held for App Store/Play fees; rest to cadavis84@gmail.com.
 - `economy.isPlus` (shop listing of wh_plus_* items) is still false client-side; server `buy_cosmetic` now honours real `is_plus()`.
+
+## Custom game publish (feature/custom-publish, migration 0017)
+- Migration: `supabase/migrations/20261031000017_custom_games.sql` (additive; `custom_games` table, soft delete via `deleted_at`; RPCs `publish_custom_game`, `unpublish_custom_game`, `list_published_games`). Apply to prod only from the primary publisher, after `node tools/db/test-db.mjs`.
+- Client: `src/studio/store.js` publish() writes the local copy first, then the server when signed in; it rejects (toast "Publish failed: …") instead of a false success. Games menu shows "Your Games" (local) + "Community Games" (server).
+- Drafts stay local (localStorage); only published games go to the server. Game docs never touch Birg Bucks.
+- Two-browser smoke (local only): `npm run build:site && npm run dev:backend`, then in two browser profiles sign up user A and user B. A: Create a Game → Publish (toast says "for everyone"). B: Games menu → Community Games shows A's game → Play. A: Your Games → 🗑 Unpublish → B's list no longer shows it; the DB row is kept with `deleted_at` set. A script version can follow `scripts/mp-two-browser.mjs`.
