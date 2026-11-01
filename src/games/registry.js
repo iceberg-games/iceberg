@@ -16,6 +16,7 @@ import snowballSiege from './snowball-siege/index.js';
 import rimebound from './rimebound/index.js';
 import glacierDrift from './glacier-drift/index.js';
 import penguPlaza from './pengu-plaza/index.js';
+import crystalSpire from './crystalSpire/index.js';
 import { withEventQuest, frostQuest, hqQuest, obbyQuest } from './_event/hooks.js'; // Natural Disasters event quests (remove to end the event)
 import { creatorDef, customGameDef } from './customGame.js';
 import { backend } from '../backend/LocalBackend.js';
@@ -36,6 +37,7 @@ export const BUILTIN_GAMES = [
   glacierDrift,
   snowballSiege,
   penguPlaza,
+  crystalSpire,
 ];
 export const CREATOR = creatorDef;
 
