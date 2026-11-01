@@ -4,13 +4,39 @@
 // publish() rejects with a real error if either the local save or the server call fails.
 import { backend } from '../backend/LocalBackend.js';
 import { getRemote } from '../net/session.js';
+import { bus } from '../core/events.js';
 const KEY = 'iceberg:v1:studioDrafts';
 const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } };
 export const drafts = {
   list: read,
   get: (id) => read().find(d => d.id === id) || null,
-  save(doc) { const l = read().filter(d => d.id !== doc.id); l.push(doc); try { localStorage.setItem(KEY, JSON.stringify(l)); } catch (e) { console.warn('draft save failed', e); throw e; } },
-  remove(id) { localStorage.setItem(KEY, JSON.stringify(read().filter(d => d.id !== id))); },
+  /** Local write is synchronous (throws if storage fails, as before). Signed in: also syncs to the server
+   *  (shared saves). Returns a Promise<{ remote, ok, reason? }> that never rejects; failures emit 'drafts:sync'. */
+  save(doc) {
+    const l = read().filter(d => d.id !== doc.id); l.push(doc);
+    try { localStorage.setItem(KEY, JSON.stringify(l)); } catch (e) { console.warn('draft save failed', e); throw e; }
+    const remote = signedInRemote();
+    if (!remote) return Promise.resolve({ remote: false, ok: true });
+    return remote.saveCustomDraft(doc).then(r => ({ remote: true, ok: r?.ok === true, reason: r?.reason }), e => ({ remote: true, ok: false, reason: e.message }))
+      .then(res => { if (!res.ok) bus.emit('drafts:sync', { id: doc.id, ...res, message: REASONS[res.reason] || res.reason }); return res; });
+  },
+  /** Local remove; signed in, a never-published server draft is soft-deleted (row kept). */
+  remove(id) {
+    localStorage.setItem(KEY, JSON.stringify(read().filter(d => d.id !== id)));
+    const remote = signedInRemote();
+    return remote ? remote.deleteCustomDraft(id).catch(() => null) : Promise.resolve(null);
+  },
+  /** Signed in: pull my server saves; a newer (or equal) server copy replaces the local draft. Returns count updated. */
+  async pull() {
+    const remote = signedInRemote(); if (!remote) return 0;
+    const rows = await remote.listMyGames(); const l = read(); let n = 0;
+    for (const g of rows || []) {
+      const sd = { ...g.doc, id: g.game_key, name: g.doc?.name || g.name }; const i = l.findIndex(d => d.id === sd.id);
+      if (i < 0) { l.push(sd); n++; } else if ((sd.updatedAt || 0) > (l[i].updatedAt || 0)) { l[i] = sd; n++; }
+    }
+    if (n) { try { localStorage.setItem(KEY, JSON.stringify(l)); } catch { /* keep server copy; local cache full */ } }
+    return n;
+  },
 };
 
 export { newGameId } from './ids.js';

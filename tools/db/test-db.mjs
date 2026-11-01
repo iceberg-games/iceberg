@@ -799,6 +799,21 @@ await t('custom games: publish, public list, owner-only, soft delete', async () 
   const Z = await createUser(db, { username: 'zz_banned_cg' });
   await su(db, `insert into public.bans (user_id, username, reason) values ($1, 'zz_banned_cg', 'test')`, [Z]);
   assert.match(await denied(rpc(db, Z, 'publish_custom_game', { p_game_key: 'g_ban', p_name: 'Ban', p_doc: {} })), /banned/);
+  // shared saves (drafts)
+  assert.equal((await rpc(db, B, 'save_custom_draft', { p_game_key: 'g_d1', p_name: 'Bob WIP', p_doc: { id: 'g_d1', v: 1 } })).ok, true);
+  assert.ok(!(await rpc(db, null, 'list_published_games', {})).some(g => g.game_key === 'g_d1'));   // private
+  assert.equal(await rpc(db, null, 'get_published_game', { p_game_key: 'g_d1' }), null);
+  assert.equal((await as(db, A, tx => tx.query(`select 1 from public.custom_games where game_key = 'g_d1'`))).rows.length, 0);   // RLS hides others' drafts
+  const mine = await rpc(db, B, 'list_my_games', {}); assert.equal(mine.length, 1); assert.equal(mine[0].doc.v, 1);
+  assert.equal((await rpc(db, A, 'save_custom_draft', { p_game_key: 'g_d1', p_name: 'x', p_doc: {} })).reason, 'id_taken');
+  // draft on a published game doesn't change what players see
+  await rpc(db, A, 'save_custom_draft', { p_game_key: 'g_test1', p_name: 'WIP', p_doc: { wip: true } });
+  assert.equal((await rpc(db, null, 'get_published_game', { p_game_key: 'g_test1' })).name, 'Ice Run 2');
+  assert.ok(!(await rpc(db, null, 'get_published_game', { p_game_key: 'g_test1' })).doc.wip);
+  assert.equal((await rpc(db, A, 'list_my_games', {})).find(g => g.game_key === 'g_test1').doc.wip, true);
+  assert.equal((await rpc(db, B, 'delete_custom_draft', { p_game_key: 'g_d1' })).ok, true);
+  assert.equal((await rpc(db, B, 'list_my_games', {})).length, 0);
+  assert.equal((await su(db, `select count(*)::int n from public.custom_games where game_key = 'g_d1'`))[0].n, 1);   // soft delete
   const coins = await su(db, `select coins from public.profiles where username = 'alice_1'`);
   assert.equal(typeof coins[0].coins !== 'undefined', true);   // economy untouched by publish
 });

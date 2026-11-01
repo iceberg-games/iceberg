@@ -10,7 +10,7 @@ import { BUILTIN_GAMES, CREATOR, allGames } from '../games/registry.js';
 import { TEMPLATES, newGameDoc, customGameDef } from '../games/customGame.js';
 import { backend } from '../backend/LocalBackend.js';
 import { exportGameJSON, importGameJSON, downloadText } from '../core/share.js';
-import { listServerGames, unpublish, newGameId, mergeOwn } from '../studio/store.js';
+import { listServerGames, unpublish, newGameId, mergeOwn, drafts } from '../studio/store.js';
 import { getRemote } from '../net/session.js';
 
 export class Menu {
@@ -19,6 +19,7 @@ export class Menu {
     this.el = h('div#menu.screen');
     root.append(this.el);
     bus.on('coins:changed', () => { const b = this.el.querySelector('.bucks-amount'); if (b) b.textContent = fmt(this.economy.coins); });
+    bus.on('drafts:sync', (e) => this.ui?.toast(`Saved on this device; cloud save failed: ${e.message || 'unknown error'}`, '⚠️'));
     bus.on('games:changed', () => { if (this.mode === 'games') this.showGames(); });
     // Re-render on device change (mobile opens the simple Mobile Studio, computer the full Studio).
     onDeviceChange(() => { if (this.mode === 'games') this.showGames(); });
@@ -43,7 +44,7 @@ export class Menu {
     this.el.classList.remove('hidden');
     const custom = backend.loadCustomGames();
     // Server-published games (everyone's), fetched async; local "Your Games" render immediately.
-    if (!this._serverLoading) { this._serverLoading = true; listServerGames().then(g => { this.serverGames = g; this.serverError = null; }, e => { this.serverError = e.message; })
+    if (!this._serverLoading) { this._serverLoading = true; Promise.all([listServerGames(), drafts.pull().catch(() => 0)]).then(([g]) => { this.serverGames = g; this.serverError = null; }, e => { this.serverError = e.message; })
       .finally(() => { if (this.mode === 'games') this.showGames(); setTimeout(() => { this._serverLoading = false; }, 30000); }); }
     const myId = getRemote()?.signedIn ? getRemote().userId : null;
     for (let i = 0; i < custom.length; i++) custom[i] = mergeOwn(custom[i], (this.serverGames || []).find(g => g.id === custom[i].id), myId);
