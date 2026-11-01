@@ -1,4 +1,5 @@
 // Blocky Roblox-style avatar + 3D cosmetics. Shared across every game.
+import { rigSetBody } from './avatarRig.js';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 const _bodyGlb = {};
@@ -2136,6 +2137,7 @@ export class Avatar {
       const a = S.anchors[slot], g = this.clothAnchors[bone];
       g.position.set(...a.offset); g.scale.set(...a.scale);
     }
+    rigSetBody(this, t);   // R15 seam (src/game/avatarRig.js): external rig re-fits to the body type
     return this;
   }
   /** Blender body overlay (S.mesh .glb): 'torso' node replaces the torso box, 'head' node rides the head. */
