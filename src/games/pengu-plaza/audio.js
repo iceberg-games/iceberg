@@ -1,10 +1,15 @@
 // Pengu Plaza audio: Sound Designer pack (./sfx/<cue>.ogg) through the shared music ctx/master,
 // with a procedural WebAudio fallback for every cue (incl. a gentle music-box BGM loop).
 const URLS = (() => { try { return import.meta.glob('./sfx/*.ogg', { eager: true, query: '?url', import: 'default' }); } catch { return {}; } })();
-export const CUES = ['bgm_pengu-plaza', 'sfx_emote_wave', 'sfx_emote_dance', 'sfx_emote_cheer', 'sfx_sit', 'sfx_skate_loop', 'sfx_skate_stop', 'sfx_cocoa', 'sfx_penguin_honk', 'sfx_camera_shutter', 'sfx_foot_crunch', 'sfx_bell_chime'];
-const GAIN = { sfx_foot_crunch: 0.6, sfx_skate_loop: 0.45 };   // Sound Designer manifest gains (others 1.0)
+export const CUES = ['bgm_pengu-plaza', 'sfx_emote_wave', 'sfx_emote_dance', 'sfx_emote_cheer', 'sfx_sit', 'sfx_skate_loop', 'sfx_skate_stop', 'sfx_cocoa', 'sfx_penguin_honk', 'sfx_camera_shutter', 'sfx_foot_crunch', 'sfx_bell_chime',
+  // BIG update (designs/pengu-plaza-big-cues.md) — Sound 2 add-on pack in ./sfx; synth fallback if a file is missing
+  'amb_harbor', 'amb_grotto', 'amb_woods', 'amb_ridge', 'amb_village',
+  'sfx_photo_new', 'sfx_photo_rare', 'sfx_photo_legendary', 'sfx_album_open', 'sfx_page_flip', 'sfx_reward', 'sfx_zoom', 'sfx_camera_mode', 'sfx_area_discover',
+  'sfx_whale_breach', 'sfx_shooting_star', 'sfx_sled_lift', 'sfx_seal_bark', 'sfx_puffin', 'sfx_fox_yip', 'sfx_owl_hoot', 'sfx_crystal_chime'];
+const GAIN = { sfx_foot_crunch: 0.6, sfx_skate_loop: 0.45, sfx_zoom: 0.7, sfx_sled_lift: 0.8, sfx_seal_bark: 0.8, sfx_puffin: 0.8, sfx_fox_yip: 0.8, sfx_owl_hoot: 0.8 };   // Sound Designer 2 manifest gains (others 1.0; amb 0.35, bgm 0.4)
+const AMB_GAIN = 0.35;
 const BGM_GAIN = 0.4;
-const JITTER = new Set(['sfx_foot_crunch', 'sfx_penguin_honk', 'sfx_emote_wave']);
+const JITTER = new Set(['sfx_foot_crunch', 'sfx_penguin_honk', 'sfx_emote_wave', 'sfx_seal_bark', 'sfx_puffin', 'sfx_fox_yip', 'sfx_crystal_chime', 'sfx_zoom']);
 
 export class PlazaAudio {
   constructor(music) { this.music = music; this.bufs = {}; this.loading = false; this.bgm = null; this.skate = null; this.played = 0; this._noise = null; }
@@ -31,12 +36,12 @@ export class PlazaAudio {
     const ctx = this.ctx, o = ctx.createOscillator(), g = ctx.createGain(); o.type = type;
     o.frequency.setValueAtTime(f, t); if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
     g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(this.out); o.start(t); o.stop(t + dur + 0.05); return { o, g };
+    o.connect(g).connect(this._dest || this.out); o.start(t); o.stop(t + dur + 0.05); return { o, g };
   }
   _noiseBuf() { if (this._noise) return this._noise; const c = this.ctx, b = c.createBuffer(1, c.sampleRate, c.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return (this._noise = b); }
   _hiss(t, dur, { freq = 2000, q = 1, vol = 0.1, type = 'bandpass' } = {}) {
     const c = this.ctx, s = c.createBufferSource(); s.buffer = this._noiseBuf(); const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
-    const g = c.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); s.connect(f).connect(g).connect(this.out); s.start(t); s.stop(t + dur + 0.05);
+    const g = c.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur); s.connect(f).connect(g).connect(this._dest || this.out); s.start(t); s.stop(t + dur + 0.05);
   }
   _synth(name, vol) {
     const t = this.ctx.currentTime, v = vol;
@@ -51,6 +56,23 @@ export class PlazaAudio {
       case 'sfx_camera_shutter': this._hiss(t, 0.05, { freq: 3000, vol: 0.25 * v }); this._hiss(t + 0.09, 0.07, { freq: 1800, vol: 0.2 * v }); this._tone(2400, t + 0.2, 0.15, { vol: 0.03 * v }); break;
       case 'sfx_foot_crunch': this._hiss(t, 0.09, { freq: 900 + Math.random() * 600, q: 1.5, vol: 0.08 * v }); break;
       case 'sfx_bell_chime': [1046, 1318, 1568].forEach((f, i) => { this._tone(f, t + i * 0.18, 1.8, { vol: 0.08 * v }); this._tone(f * 2.76, t + i * 0.18, 0.6, { vol: 0.015 * v }); }); break;
+      case 'sfx_photo_new': this._tone(1318, t, 0.35, { type: 'triangle', vol: 0.08 * v }); this._tone(1760, t + 0.08, 0.4, { vol: 0.05 * v }); break;
+      case 'sfx_photo_rare': [880, 1108, 1318, 1760].forEach((f, i) => this._tone(f, t + i * 0.09, 0.6, { type: 'triangle', vol: 0.08 * v })); this._hiss(t + 0.2, 0.8, { freq: 7000, vol: 0.03 * v }); break;
+      case 'sfx_photo_legendary': [523, 659, 784, 1046, 1318, 1568].forEach((f, i) => { this._tone(f, t + i * 0.11, 1.4, { type: 'triangle', vol: 0.07 * v }); this._tone(f * 2, t + i * 0.11 + 0.05, 0.6, { vol: 0.02 * v }); }); this._hiss(t + 0.3, 1.6, { freq: 8000, vol: 0.04 * v }); break;
+      case 'sfx_album_open': this._tone(140, t, 0.18, { vol: 0.12 * v, f2: 80 }); this._hiss(t + 0.03, 0.25, { freq: 2500, q: 0.7, vol: 0.06 * v }); break;
+      case 'sfx_page_flip': this._hiss(t, 0.22, { freq: 3200, q: 0.5, vol: 0.09 * v, type: 'highpass' }); break;
+      case 'sfx_reward': [523, 659, 784, 1046].forEach((f, i) => this._tone(f, t + i * 0.12, 0.5, { type: 'square', vol: 0.035 * v })); this._tone(1046, t + 0.5, 1.0, { type: 'triangle', vol: 0.08 * v }); this._tone(1318, t + 0.5, 1.0, { type: 'triangle', vol: 0.06 * v }); break;
+      case 'sfx_zoom': this._tone(2200 + Math.random() * 300, t, 0.04, { type: 'square', vol: 0.015 * v }); break;
+      case 'sfx_camera_mode': this._hiss(t, 0.05, { freq: 2600, vol: 0.15 * v }); this._tone(500, t + 0.05, 0.22, { type: 'sawtooth', vol: 0.015 * v, f2: 900 }); break;
+      case 'sfx_area_discover': [392, 523, 659, 784].forEach((f, i) => this._tone(f, t + i * 0.14, 1.2, { vol: 0.07 * v })); break;
+      case 'sfx_whale_breach': this._tone(220, t, 1.6, { type: 'sine', vol: 0.06 * v, f2: 140 }); this._tone(330, t + 0.2, 1.2, { vol: 0.03 * v, f2: 260 }); this._hiss(t + 0.4, 1.8, { freq: 600, q: 0.4, vol: 0.25 * v, type: 'lowpass' }); break;
+      case 'sfx_shooting_star': this._tone(1200, t, 1.2, { vol: 0.04 * v, f2: 3200 }); this._hiss(t, 1.2, { freq: 6000, vol: 0.03 * v }); break;
+      case 'sfx_sled_lift': for (let i = 0; i < 10; i++) this._hiss(t + i * 0.3, 0.06, { freq: 1500, q: 3, vol: 0.06 * v }); this._tone(1568, t + 0.1, 0.8, { vol: 0.04 * v }); break;
+      case 'sfx_seal_bark': { const r = 0.85 + Math.random() * 0.3; this._tone(300 * r, t, 0.16, { type: 'sawtooth', vol: 0.04 * v, f2: 200 * r }); this._tone(320 * r, t + 0.2, 0.14, { type: 'sawtooth', vol: 0.035 * v, f2: 220 * r }); break; }
+      case 'sfx_puffin': this._tone(900, t, 0.12, { type: 'triangle', vol: 0.05 * v, f2: 1400 }); this._tone(1100, t + 0.14, 0.1, { type: 'triangle', vol: 0.04 * v, f2: 700 }); break;
+      case 'sfx_fox_yip': this._tone(1200, t, 0.1, { type: 'triangle', vol: 0.06 * v, f2: 800 }); break;
+      case 'sfx_owl_hoot': this._tone(420, t, 0.35, { vol: 0.07 * v, f2: 380 }); this._tone(400, t + 0.5, 0.5, { vol: 0.06 * v, f2: 350 }); break;
+      case 'sfx_crystal_chime': { const f = [1568, 1760, 2093, 2349][(Math.random() * 4) | 0]; this._tone(f, t, 1.2, { vol: 0.04 * v }); this._tone(f * 2.01, t, 0.5, { vol: 0.012 * v }); break; }
       default: this._tone(660, t, 0.2, { type: 'triangle', vol: 0.08 * v });
     }
   }
@@ -83,5 +105,25 @@ export class PlazaAudio {
     const t = ctx.currentTime; const k = this.skate.real ? GAIN.sfx_skate_loop * (0.35 + Math.min(1, speed) * 0.65) : 0.02 + Math.min(1, speed) * 0.09;
     this.skate.g.gain.setTargetAtTime(on ? k : 0, t, 0.08); if (this.skate.real) this.skate.s.playbackRate.setTargetAtTime(0.85 + Math.min(1, speed) * 0.3, t, 0.1); this.skate.f.frequency.setTargetAtTime(2200 + speed * 2500, t, 0.1);
   }
-  stop() { this.stopMusic(); try { this.skate?.s.stop(); } catch {} this.skate = null; }
+  // ---- per-area ambience: file loop (amb_<area>.ogg) if present, else a procedural bed + sparse one-shots; crossfades ----
+  setAmbience(id) {
+    if (id === this.ambId && (this.amb || !id)) return; const ctx = this.ctx;
+    if (this.amb) { const o = this.amb; try { o.g.gain.setTargetAtTime(0, ctx.currentTime, 0.6); } catch {} clearInterval(o.timer); setTimeout(() => { o.nodes.forEach(n => { try { n.stop(); } catch {} }); try { o.g.disconnect(); } catch {} }, id ? 3000 : 700); this.amb = null; }
+    this.ambId = null; if (!id || !this.ok()) return; this.ambId = id; this._load(); const t = ctx.currentTime;
+    const g = ctx.createGain(); g.gain.value = 0; g.connect(this.out); const nodes = []; const b = this.bufs[id];
+    if (b) { const s = ctx.createBufferSource(); s.buffer = b; s.loop = true; s.connect(g); s.start(); nodes.push(s); g.gain.setTargetAtTime(AMB_GAIN, t, 0.8); this.amb = { g, nodes, timer: 0 }; return; }
+    const bed = (type, freq, q, vol, lfo = 0) => { const s = ctx.createBufferSource(); s.buffer = this._noiseBuf(); s.loop = true; const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; const e = ctx.createGain(); e.gain.value = vol; s.connect(f).connect(e).connect(g); s.start(); nodes.push(s);
+      if (lfo) { const o = ctx.createOscillator(), og = ctx.createGain(); o.frequency.value = lfo; og.gain.value = vol * 0.8; o.connect(og).connect(e.gain); o.start(); nodes.push(o); } };
+    const P = { amb_harbor: () => bed('lowpass', 420, 0.7, 0.09, 0.12), amb_grotto: () => bed('bandpass', 260, 2, 0.05, 0.05), amb_woods: () => bed('highpass', 1600, 0.4, 0.025, 0.08), amb_ridge: () => bed('bandpass', 900, 0.6, 0.05, 0.07), amb_village: () => bed('lowpass', 700, 0.5, 0.025, 0) };
+    (P[id] || P.amb_woods)();
+    const sparkle = () => { if (!this.ok() || this.ambId !== id || !this.amb) return; const tt = ctx.currentTime; this._dest = g;
+      try { if (id === 'amb_harbor') { this._tone(1800, tt, 0.25, { type: 'triangle', vol: 0.05, f2: 1300 }); this._tone(1700, tt + 0.3, 0.2, { type: 'triangle', vol: 0.04, f2: 1250 }); }
+        else if (id === 'amb_grotto') { this._tone(1300 + Math.random() * 600, tt, 0.12, { vol: 0.08, f2: 500 }); if (Math.random() < 0.4) this._tone(2093, tt + 0.2, 1.5, { vol: 0.02 }); }
+        else if (id === 'amb_woods') { const f = 2600 + Math.random() * 1200; for (let i = 0; i < 3; i++) this._tone(f + i * 150, tt + i * 0.09, 0.07, { vol: 0.03 }); }
+        else if (id === 'amb_ridge') { this._tone([523, 659, 784][(Math.random() * 3) | 0], tt, 2.5, { vol: 0.03, attack: 0.8 }); }
+        else if (id === 'amb_village') { for (let i = 0; i < 4; i++) this._hiss(tt + Math.random() * 0.6, 0.03, { freq: 1800, q: 1, vol: 0.06 }); } } finally { this._dest = null; } };
+    const timer = setInterval(() => { if (Math.random() < 0.45) sparkle(); }, 1500);
+    g.gain.setTargetAtTime(AMB_GAIN * 1.6, t, 1.0); this.amb = { g, nodes, timer };
+  }
+  stop() { this.stopMusic(); try { this.skate?.s.stop(); } catch {} this.skate = null; this.setAmbience(null); }
 }

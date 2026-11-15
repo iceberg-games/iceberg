@@ -2,6 +2,8 @@
 // benches, Aurora Arch, Giant Ice Pengu statue, lantern lane, pines, falling snow + aurora sky.
 import * as THREE from 'three';
 import { PLAZA_R, RINK, COCOA, BELL, SEATS, PROPS } from './config.js';
+import { PLAZA_EXITS } from './set/areas.js';
+const EXIT_ANGLES = PLAZA_EXITS.map(e => e.a);   // keep the pine ring open where the new-area paths leave
 
 function tex(w, h, draw, rep = [1, 1]) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(...rep); return t; }
 const snowTex = () => tex(256, 256, (g, w, h) => { g.fillStyle = '#e9f2ff'; g.fillRect(0, 0, w, h); for (let i = 0; i < 900; i++) { const v = 220 + Math.random() * 35; g.fillStyle = `rgba(${v - 20},${v - 5},255,.35)`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); } }, [14, 14]);
@@ -28,21 +30,21 @@ export function buildPenguin(colors = {}) {
 
 export function buildPlaza({ mobile = false } = {}) {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#203a6b'); scene.fog = new THREE.Fog('#2c4a80', 40, 140);
+  scene.background = new THREE.Color('#203a6b'); scene.fog = new THREE.Fog('#2c4a80', 45, 175);
   const disposables = [], colliders = [], seatsOut = [];
   const M = (o) => { const m = new THREE.MeshStandardMaterial(o); disposables.push(m); return m; };
   const add = (geo, mat, x, y, z, parent = scene) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = m.receiveShadow = true; parent.add(m); disposables.push(geo); return m; };
 
   // lights: cool moon + warm fill
   scene.add(new THREE.HemisphereLight('#bcd8ff', '#3a4a6a', 0.9));
-  const moon = new THREE.DirectionalLight('#dfe9ff', 1.1); moon.position.set(-20, 40, 20); moon.castShadow = !mobile; moon.shadow.mapSize.set(1024, 1024); Object.assign(moon.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40 }); scene.add(moon);
+  const moon = new THREE.DirectionalLight('#dfe9ff', 1.1); moon.position.set(-20, 40, 20); moon.castShadow = !mobile; moon.shadow.mapSize.set(1024, 1024); Object.assign(moon.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40 }); scene.add(moon, moon.target);
 
   // sky dome with aurora ribbons
   const sky = new THREE.Mesh(new THREE.SphereGeometry(300, 32, 16), new THREE.MeshBasicMaterial({ side: THREE.BackSide, fog: false, map: tex(1024, 512, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#0a1433'); gr.addColorStop(0.45, '#1d3570'); gr.addColorStop(0.55, '#4a6fb0'); gr.addColorStop(1, '#2c4a80'); g.fillStyle = gr; g.fillRect(0, 0, w, h); for (let i = 0; i < 300; i++) { g.fillStyle = `rgba(255,255,255,${Math.random() * 0.8})`; g.fillRect(Math.random() * w, Math.random() * h * 0.45, 2, 2); } for (let k = 0; k < 3; k++) { g.beginPath(); for (let x = 0; x <= w; x += 8) g.lineTo(x, 110 + k * 30 + Math.sin(x / 90 + k) * 30); g.lineWidth = 30 - k * 7; g.strokeStyle = ['rgba(90,255,190,.35)', 'rgba(130,190,255,.3)', 'rgba(220,130,255,.3)'][k]; g.shadowColor = '#7fffd0'; g.shadowBlur = 30; g.stroke(); } }) }));
   disposables.push(sky.geometry, sky.material.map, sky.material); scene.add(sky);
 
   // ground
-  const ground = add(new THREE.CircleGeometry(120, 64), M({ map: snowTex(), roughness: 0.95 }), 0, 0, 0); ground.rotation.x = -Math.PI / 2;
+  const ground = add(new THREE.CircleGeometry(120, 96), M({ map: snowTex(), roughness: 0.95 }), 0, 0, 0); ground.rotation.x = -Math.PI / 2;
   const cob = add(new THREE.RingGeometry(3, PLAZA_R - 6, 64), M({ map: cobbleTex(), roughness: 0.8 }), 0, 0.01, 6); cob.rotation.x = -Math.PI / 2;
   // ice rink: glossy ellipse + snow rim + boards
   const iceMat = M({ map: iceTex(), roughness: 0.05, metalness: 0.15, color: '#d8f3ff' });
@@ -110,16 +112,17 @@ export function buildPlaza({ mobile = false } = {}) {
 
   // pines + snow mounds around the edge
   const pine = M({ color: '#1f5a4e', roughness: 0.9 }), trunk = M({ color: '#5a3a22' }), snowM = M({ color: '#f4f8ff', roughness: 1 });
-  for (let i = 0; i < 34; i++) { const a = i / 34 * Math.PI * 2 + Math.sin(i) * 0.05, r = PLAZA_R + 3 + (i % 3) * 2.5, x = Math.cos(a) * r, z = Math.sin(a) * r + 2; if (Math.abs(x) < 7 && z > 25) continue; const s = 0.8 + (i * 37 % 10) / 15; add(new THREE.CylinderGeometry(0.25 * s, 0.3 * s, 1.4 * s, 6), trunk, x, 0.7 * s, z); for (let k = 0; k < 3; k++) { add(new THREE.ConeGeometry((2 - k * 0.5) * s, 2 * s, 8), pine, x, (2 + k * 1.2) * s, z); add(new THREE.ConeGeometry((1.2 - k * 0.3) * s, 0.6 * s, 8), snowM, x, (2.7 + k * 1.2) * s, z); } }
+  for (let i = 0; i < 34; i++) { const a = i / 34 * Math.PI * 2 + Math.sin(i) * 0.05, r = PLAZA_R + 3 + (i % 3) * 2.5, x = Math.cos(a) * r, z = Math.sin(a) * r + 2; if (EXIT_ANGLES.some(e => Math.abs(Math.atan2(Math.sin(a - e), Math.cos(a - e))) < 0.2)) continue; const s = 0.8 + (i * 37 % 10) / 15; add(new THREE.CylinderGeometry(0.25 * s, 0.3 * s, 1.4 * s, 6), trunk, x, 0.7 * s, z); for (let k = 0; k < 3; k++) { add(new THREE.ConeGeometry((2 - k * 0.5) * s, 2 * s, 8), pine, x, (2 + k * 1.2) * s, z); add(new THREE.ConeGeometry((1.2 - k * 0.3) * s, 0.6 * s, 8), snowM, x, (2.7 + k * 1.2) * s, z); } }
   for (let i = 0; i < 16; i++) { const a = i * 2.4, r = 20 + (i % 4) * 3; const m = add(new THREE.SphereGeometry(1, 12, 8), snowM, Math.cos(a) * r, -0.3, Math.sin(a) * r + 4); m.scale.set(1.6, 0.8, 1.3); }
 
   // falling snow
   const SN = mobile ? 900 : 2500, sp = new Float32Array(SN * 3); for (let i = 0; i < SN; i++) sp.set([(Math.random() - 0.5) * 90, Math.random() * 40, (Math.random() - 0.5) * 90], i * 3);
   const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(sp, 3));
-  const snowPts = new THREE.Points(sg, new THREE.PointsMaterial({ color: '#ffffff', size: 0.18, transparent: true, opacity: 0.85, depthWrite: false })); snowPts.frustumCulled = false; scene.add(snowPts); disposables.push(sg, snowPts.material);
+  const flake = (() => { const c = document.createElement('canvas'); c.width = c.height = 32; const g = c.getContext('2d'), r = g.createRadialGradient(16, 16, 0, 16, 16, 16); r.addColorStop(0, 'rgba(255,255,255,1)'); r.addColorStop(0.5, 'rgba(255,255,255,.7)'); r.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = r; g.fillRect(0, 0, 32, 32); return new THREE.CanvasTexture(c); })();
+  const snowPts = new THREE.Points(sg, new THREE.PointsMaterial({ color: '#ffffff', size: 0.22, map: flake, transparent: true, opacity: 0.9, depthWrite: false })); snowPts.frustumCulled = false; scene.add(snowPts); disposables.push(sg, snowPts.material, flake);   // follows the player (index.js moves snowPts.position)
 
   return {
-    scene, seats: seatsOut, colliders, mugs, bell, spire, lanterns, barista: cocoaBarista, arch, sky,
+    scene, seats: seatsOut, colliders, mugs, bell, spire, lanterns, barista: cocoaBarista, arch, sky, snowPts, moon, hemi: scene.children.find(o => o.isHemisphereLight), lanternMat,
     update(dt, t) {
       for (let i = 0; i < SN; i++) { const j = i * 3; sp[j + 1] -= dt * (1.2 + (i % 5) * 0.2); sp[j] += Math.sin(t * 0.7 + i) * dt * 0.3; if (sp[j + 1] < 0) sp[j + 1] = 40; }
       sg.attributes.position.needsUpdate = true;
