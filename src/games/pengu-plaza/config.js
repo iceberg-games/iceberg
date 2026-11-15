@@ -12,9 +12,17 @@ export const EMOTES = [
 ];
 import { NPC_POINTS as _NPC } from './set/layout.js';
 export const NPC_COUNT = _NPC.length;   // 9 stand points from the set bones
-export const POSTCARD_BB = 15;  // one-time: snapped all 5 photo spots
+export const POSTCARD_BB = 15;  // one-time: snapped all 5 plaza photo spots (kept from the QoL build)
 export const PHYS = { skateSpeed: 1.7, skateGlide: 0.985 };
+// Save (server per-game blob <= 16 KB, so thumbnails live in localStorage only — see album.js).
+// album: { [targetId]: [bestScore, stars, firstSeenUnix, bonus(0|1)] }
 export function normalizeSave(s) {
   s = s && typeof s === 'object' ? s : {};
-  return { photos: Array.isArray(s.photos) ? [...new Set(s.photos)] : [], cocoa: s.cocoa | 0, emotes: s.emotes | 0, skateTime: +s.skateTime || 0, postcard: !!s.postcard, visits: s.visits | 0 };
+  const arr = (v) => Array.isArray(v) ? [...new Set(v.filter(x => typeof x === 'string'))] : [];
+  const album = {}; if (s.album && typeof s.album === 'object') for (const [k, v] of Object.entries(s.album)) if (Array.isArray(v) && v.length >= 2) album[k] = [Math.max(0, Math.min(100, v[0] | 0)), Math.max(1, Math.min(3, v[1] | 0)), v[2] | 0, v[3] ? 1 : 0];
+  const photos = arr(s.photos);
+  for (const id of photos) if (!album[id]) album[id] = [60, 2, 0, 0];   // QoL-build landmark snaps carry over as 2-star entries
+  return { photos, album, areas: arr(s.areas), rewards: arr(s.rewards), filters: arr(s.filters), frames: arr(s.frames), titles: arr(s.titles),
+    filter: typeof s.filter === 'string' ? s.filter : 'none', frame: typeof s.frame === 'string' ? s.frame : 'polaroid', title: typeof s.title === 'string' ? s.title : 'Tourist',
+    shots: s.shots | 0, cocoa: s.cocoa | 0, emotes: s.emotes | 0, skateTime: +s.skateTime || 0, postcard: !!s.postcard, visits: s.visits | 0, lifts: s.lifts | 0 };
 }
