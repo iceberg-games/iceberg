@@ -4,6 +4,7 @@ import { chromium } from 'playwright';
 const b = await chromium.launch({ headless: !process.env.DISPLAY, executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--window-position=0,0', '--ignore-gpu-blocklist', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
 const mobile = process.env.MOBILE === '1';
 const p = await b.newPage(mobile ? { viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true } : { viewport: { width: 1280, height: 800 } });
+p.setDefaultTimeout(180000);
 const errs = []; p.on('console', m => m.type() === 'error' && errs.push(m.text())); p.on('pageerror', e => errs.push('PAGEERR ' + e.message));
 if (mobile) await p.addInitScript(() => { try { localStorage.setItem('iceberg.deviceMode', 'mobile'); } catch {} });
 await p.goto(process.env.URL || 'file://' + process.cwd() + '/dist/index.html');

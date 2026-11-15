@@ -145,9 +145,9 @@ export const AREA_ORDER = ['meadow', 'caverns', 'coast', 'peak'];
 // area boss tamers (+ the repeatable Battle Ring champions)
 export const TAMERS = {
   holly:    { id: 'holly', name: 'Ranger Holly', area: 'meadow', title: 'Pinefrost Ranger', color: '#2f7d5b', team: [['puffpaw', 6], ['breezlet', 7]], flakes: 120, quote: 'Let\'s see if your Frostlings are trail-ready!' },
-  quartz:   { id: 'quartz', name: 'Miner Quartz', area: 'caverns', title: 'Gem Foreman', color: '#7a3fd0', team: [['geodeer', 10], ['shardling', 11], ['magmane', 11]], flakes: 220, quote: 'These caves are full of sparkle — and so are my pals!' },
-  brine:    { id: 'brine', name: 'Captain Brine', area: 'coast', title: 'Tidepool Captain', color: '#1c5bb8', team: [['shellsnap', 14], ['squallray', 14], ['tidalbelle', 15]], flakes: 320, quote: 'Ahoy! The tide waits for no tamer!' },
-  borealis: { id: 'borealis', name: 'Sage Borealis', area: 'peak', title: 'Keeper of the Lights', color: '#a43b9a', team: [['borealynx', 18], ['glacieron', 18], ['aurorion', 19]], flakes: 600, quote: 'The aurora sings for those who listen. Show me your bond.' },
+  quartz:   { id: 'quartz', name: 'Miner Quartz', area: 'caverns', title: 'Gem Foreman', color: '#7a3fd0', team: [['geodeer', 12], ['shardling', 13], ['magmane', 14]], flakes: 220, quote: 'These caves are full of sparkle — and so are my pals!' },
+  brine:    { id: 'brine', name: 'Captain Brine', area: 'coast', title: 'Tidepool Captain', color: '#1c5bb8', team: [['shellsnap', 16], ['squallray', 17], ['tidalbelle', 17]], flakes: 320, quote: 'Ahoy! The tide waits for no tamer!' },
+  borealis: { id: 'borealis', name: 'Sage Borealis', area: 'peak', title: 'Keeper of the Lights', color: '#a43b9a', team: [['prismoth', 17], ['galecrest', 17], ['borealynx', 18]], flakes: 600, quote: 'The aurora sings for those who listen. Show me your bond.' },
 };
 export const TAMER_ORDER = ['holly', 'quartz', 'brine', 'borealis'];
 
