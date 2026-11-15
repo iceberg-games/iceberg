@@ -461,7 +461,7 @@ export default {
       const st = QUESTS.map(q => ({ q, ...quests.status(q) })), done = st.filter(x => x.st === 'done').length;
       const av = st.filter(x => x.st === 'available'), lock = st.find(x => x.st === 'locked');
       return (hintCache.s = done === QUESTS.length ? `✔ All ${QUESTS.length} quests complete` : av.length
-        ? `❗ ${av.length} new quest${av.length > 1 ? 's' : ''}: ${[...new Set(av.map(x => NPC_NAMES[x.q.giver]))].join(', ')} <span>${done}/${QUESTS.length}</span>`
+        ? `❗ ${av.length} new quest${av.length > 1 ? 's' : ''}: ${((g) => g.slice(0, 2).join(', ') + (g.length > 2 ? ` +${g.length - 2}` : ''))([...new Set(av.map(x => NPC_NAMES[x.q.giver]))])} <span>${done}/${QUESTS.length}</span>`
         : lock ? `Next: ${esc(lock.q.title)} (${esc(lock.why)}) <span>${done}/${QUESTS.length}</span>` : 'Visit Elder Wick by the Quest Board');
     }
     // camera vs rock walls (caves + mine): march the camera boom over the walkable SDF and pull the camera in
