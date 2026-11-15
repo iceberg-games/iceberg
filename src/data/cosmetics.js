@@ -420,3 +420,11 @@ for (const c of [
     colorPresets: [['Amethyst', '#9a7bff'], ['Glacier', '#5fd6ff'], ['Aurora', '#4fe0a0'], ['Sunstone', '#ffa64f']],
     desc: 'Crystal Spire (crystal-spire): a climbing frame carrying a cluster of glowing spire crystals with orbiting sparkle motes.' },
 ]) { const item = { kind: 'model', winter: true, customizable: true, ...c }; COSMETICS.push(item); COSMETIC_BY_ID[item.id] = item; }
+
+// ---- FINAL showcase (lane 2): premium legendary hand piece. Builder in game/cosmetics/finalShowcaseLane2.js
+// (classic-space at the handR anchor; each preset is its own palette: ice, trim, core glow, aurora ribbon gradient).
+for (const c of [
+  { id: 'fs_aurora_lantern_staff', name: 'Aurora Lantern Staff', slot: 'hand', price: 15000, icon: '🏮', rarity: 'legendary', premium: true, defaultColor: '#3fe0c8',
+    colorPresets: [['Aurora Teal', '#3fe0c8'], ['Rose Dawn', '#ff8fb8'], ['Violet Night', '#9a6bff'], ['Ember Gold', '#ffb84a']],
+    desc: 'A spiral-carved ice staff whose rune rings pulse light up to a floating crystal lantern, circled by drifting snowflakes and slow aurora ribbons.' },
+]) { const item = { kind: 'model', winter: true, customizable: true, ...c }; COSMETICS.push(item); COSMETIC_BY_ID[item.id] = item; }
