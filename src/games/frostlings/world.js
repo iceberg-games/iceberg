@@ -278,6 +278,6 @@ export function buildStage(scene, ox, oz) {
   ring(th('ring'), 16, 22, (i) => { const o = new THREE.Group(); const p = new THREE.Mesh(BOXG, mat(i % 2 ? '#3fa8ff' : '#ff5d8a')); p.scale.set(0.8, 3, 0.8); p.position.y = 1.5; o.add(p); const fl = new THREE.Mesh(BOXG, mat('#ffffff')); fl.scale.set(1.6, 1, 0.1); fl.position.set(0.8, 2.6, 0); o.add(fl); return o; });
   const setTheme = (id) => { for (const [k, t] of Object.entries(themes)) t.visible = k === (themes[id] ? id : 'village'); };
   const w = (p) => new THREE.Vector3(ox + p.x, 0, oz + p.z);
-  return { group: g, setTheme, myPos: w(myPad), foePos: w(foePad), myTamer: w({ x: myPad.x - 3.2, z: myPad.z + 3.4 }), foeTamer: w({ x: foePad.x + 3.4, z: foePad.z - 3.2 }),
-    cam: w({ x: -13, z: 13 }).setY(6.4), look: w({ x: 0.5, z: -0.5 }).setY(1.2), center: w({ x: 0, z: 0 }) };
+  return { group: g, setTheme, myPos: w(myPad), foePos: w(foePad), myTamer: w({ x: myPad.x - 2.2, z: myPad.z - 3.6 }), foeTamer: w({ x: foePad.x + 3.6, z: foePad.z + 2.2 }),
+    cam: w({ x: -11, z: 11.5 }).setY(5.6), look: w({ x: 1.6, z: -1.2 }).setY(1.3), center: w({ x: 0, z: 0 }) };
 }

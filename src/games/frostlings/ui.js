@@ -4,7 +4,7 @@ import { TYPES, EMOTES } from './config.js';
 const CSS = `
 .fl{position:absolute;inset:0;pointer-events:none;z-index:12;color:#16325a;font-family:inherit;--glass:linear-gradient(180deg,rgba(255,255,255,.96),rgba(223,243,255,.94))}
 .fl button{pointer-events:auto;font-family:inherit;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;border:0}
-.fl .card{background:var(--glass);border:3px solid #fff;border-radius:18px;box-shadow:0 5px 0 #9cc9ea,0 12px 26px rgba(10,30,70,.28)}
+.fl .fl-card{background:var(--glass);border:3px solid #fff;border-radius:18px;box-shadow:0 5px 0 #9cc9ea,0 12px 26px rgba(10,30,70,.28)}
 .fl-top{position:absolute;top:62px;left:14px;padding:8px 12px;min-width:200px;font-weight:800;font-size:13px}
 .fl-top .area{font-size:16px;font-weight:900;display:flex;gap:6px;align-items:center}
 .fl-top .row{display:flex;justify-content:space-between;gap:10px;margin-top:3px}
@@ -56,13 +56,13 @@ const CSS = `
 /* battle */
 .fl-bt{position:absolute;inset:0;display:none;pointer-events:none;z-index:60}
 .fl-bt.show{display:block}
-.fl-bc{position:absolute;padding:8px 12px;width:min(300px,44vw);font-weight:900;font-size:14px}
+.fl-bc{position:absolute;display:block!important;text-align:left;padding:8px 12px;width:min(300px,44vw);font-weight:900;font-size:14px}
 .fl-bc .nm{display:flex;justify-content:space-between;align-items:center;gap:6px}
-.fl-bc .fl-bar{height:12px;margin-top:5px}.fl-bc .hpn{font-size:12px;text-align:right;margin-top:2px}
+.fl-bc>*{width:100%;box-sizing:border-box}.fl-bc .fl-bar{height:12px;margin-top:5px}.fl-bc .hpn{font-size:12px;text-align:right;margin-top:2px}
 .fl-bc .st{font-size:11px;padding:1px 6px;border-radius:6px;color:#fff;margin-left:4px}
 .fl-bc.foe{top:70px;right:16px}.fl-bc.me{bottom:200px;left:16px}
-.fl-msg{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);width:min(860px,96vw);min-height:58px;padding:10px 16px;font-size:17px;font-weight:800;display:flex;align-items:center}
-.fl-opts{position:absolute;right:16px;bottom:96px;width:min(520px,94vw);display:grid;grid-template-columns:1fr 1fr;gap:8px;pointer-events:auto}
+.fl-msg{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);width:min(860px,96vw);min-height:58px;padding:12px 18px;font-size:17px;font-weight:800;display:block!important;text-align:left;box-sizing:border-box;z-index:2}
+.fl-opts{position:absolute;right:16px;bottom:104px;width:min(520px,94vw);display:grid;grid-template-columns:1fr 1fr;gap:8px;pointer-events:auto}
 .fl-opt{min-height:58px;border-radius:14px;padding:6px 10px;font-size:16px;font-weight:900;color:#fff;text-align:left;box-shadow:0 5px 0 rgba(0,0,0,.25);text-shadow:0 1px 0 rgba(0,0,0,.3);position:relative}
 .fl-opt small{display:block;font-size:11px;opacity:.9;font-weight:800}
 .fl-opt[disabled]{opacity:.4;filter:grayscale(.7)}
@@ -79,6 +79,8 @@ const CSS = `
 .fl-flash.on{opacity:1;transition:none}
 @keyframes flin{from{transform:scale(.7);opacity:0}}@keyframes flpop{from{transform:translateX(-50%) scale(.7)}}@keyframes flslide{from{transform:translateY(-12px);opacity:0}}
 @keyframes flboss{from{transform:translateX(-110%) skewX(-12deg)}}
+body.fl-hidetouch #touch-ui{display:none!important}
+@media (max-height:520px){.fl-bc{width:min(230px,34vw);font-size:12px;padding:6px 10px}.fl-bc.foe{top:52px;right:8px}.fl-bc.me{top:52px;bottom:auto;left:8px}.fl-opts{right:8px;bottom:8px;width:min(440px,54vw);gap:6px}.fl-opt{min-height:46px;font-size:14px;padding:4px 8px}.fl-msg{left:8px;transform:none;bottom:8px;width:calc(44vw - 20px);min-height:46px;font-size:14px;padding:8px 12px}.fl-panel{max-height:calc(100vh - 16px);padding:10px 12px}.fl-panel img.fl-st-img{width:60px!important;height:60px!important}.fl-banner{font-size:30px}}
 @media (max-width:760px){.fl-quests{display:none}.fl-top{min-width:150px;font-size:11px}.fl-pc{width:150px}.fl-pc img{width:32px;height:32px}.fl-bc.me{bottom:248px}.fl-opts{left:8px;right:8px;width:auto;bottom:84px}.fl-msg{font-size:15px}.fl-banner{font-size:30px}}
 `;
 export const typeBadge = (t) => `<span class="fl-type" style="background:${TYPES[t].color}">${TYPES[t].icon} ${TYPES[t].name}</span>`;
@@ -88,19 +90,19 @@ export class FrostUI {
     this.style = document.createElement('style'); this.style.textContent = CSS; document.head.appendChild(this.style);
     const r = this.root = document.createElement('div'); r.className = 'fl';
     r.innerHTML = `
-      <div class="fl-top card"><div class="area"><span data-tm>☀</span><span data-ar>Snowdrift Village</span></div>
+      <div class="fl-top fl-card"><div class="area"><span data-tm>☀</span><span data-ar>Snowdrift Village</span></div>
         <div class="row"><span>❄ <b data-fk>0</b> flakes</span><span>Rank <b data-rk>1</b></span></div><div class="fl-bar" style="margin-top:4px"><i data-rx style="background:linear-gradient(90deg,#ffd24a,#ff9a2e)"></i></div></div>
       <div class="fl-party" data-pt></div>
       <div class="fl-btns"><button data-b="party" title="Party (P)">🐾</button><button data-b="bag" title="Bag (B)">🎒</button><button data-b="dex" title="Frostdex (X)">📖</button><button data-b="quests" title="Quests (J)">📜</button></div>
-      <div class="fl-quests card" data-qt><h4>📜 QUESTS</h4><div data-ql></div></div>
+      <div class="fl-quests fl-card" data-qt><h4>📜 QUESTS</h4><div data-ql></div></div>
       <div class="fl-emotes">${EMOTES.map((e, i) => `<button data-em="${i}">${e}</button>`).join('')}</div>
-      <button class="fl-prompt card" data-pr></button>
+      <button class="fl-prompt fl-card" data-pr></button>
       ${mobile ? '<button class="fl-act" data-ac>✋<br><span data-acl>TALK</span></button>' : ''}
       <div class="fl-toasts" data-to></div><div class="fl-banner" data-bn></div>
       <div class="fl-help">${mobile ? 'Joystick move · walk into wild Frostlings to battle · ✋ to interact' : 'WASD move · drag camera · walk into wild Frostlings to battle · E interact · P party · B bag · X Frostdex · J quests · 1-4 emote'}</div>
       <div class="fl-bt" data-bt>
-        <div class="fl-bc foe card" data-bf></div><div class="fl-bc me card" data-bm></div>
-        <div class="fl-opts" data-bo></div><div class="fl-msg card" data-bg></div>
+        <div class="fl-bc foe fl-card" data-bf></div><div class="fl-bc me fl-card" data-bm></div>
+        <div class="fl-opts" data-bo></div><div class="fl-msg fl-card" data-bg></div>
       </div>
       <div class="fl-cine" data-cn></div><div class="fl-modal" data-md></div><div class="fl-flash" data-fs></div><div class="fl-wipe" data-wp></div>`;
     document.body.appendChild(r);
@@ -124,7 +126,7 @@ export class FrostUI {
     const sig = s.party.map(p => p.uid + ':' + p.sp + ':' + (p.hat || '')).join('|');
     if (sig !== this._partySig) {
       this._partySig = sig;
-      this.el.pt.innerHTML = s.party.map((p, i) => `<div class="fl-pc card${i === 0 ? ' lead' : ''}" data-u="${p.uid}"><img src="${s.portraits[p.sp] || ''}"><div style="flex:1"><div class="nm"><span data-n>${p.name}</span><span data-l>Lv${p.lv}</span></div><div class="fl-bar"><i data-h style="background:#5be37d"></i></div><div class="fl-bar" style="height:4px"><i data-x style="background:#6cb8ff"></i></div></div></div>`).join('');
+      this.el.pt.innerHTML = s.party.map((p, i) => `<div class="fl-pc fl-card${i === 0 ? ' lead' : ''}" data-u="${p.uid}"><img src="${s.portraits[p.sp] || ''}"><div style="flex:1"><div class="nm"><span data-n>${p.name}</span><span data-l>Lv${p.lv}</span></div><div class="fl-bar"><i data-h style="background:#5be37d"></i></div><div class="fl-bar" style="height:4px"><i data-x style="background:#6cb8ff"></i></div></div></div>`).join('');
       this._pcs = [...this.el.pt.children].map(c => ({ l: c.querySelector('[data-l]'), h: c.querySelector('[data-h]'), x: c.querySelector('[data-x]'), last: {} }));
     }
     s.party.forEach((p, i) => {
@@ -153,15 +155,17 @@ export class FrostUI {
   // ---------- modal ----------
   modal(html, { closable = true, onClose = null } = {}) {
     this._closable = closable; this._onClose = onClose;
-    this.el.md.innerHTML = `<div class="fl-panel card">${closable ? '<button class="fl-x" data-close>✕</button>' : ''}${html}</div>`;
-    this.el.md.classList.add('show');
+    this.el.md.innerHTML = `<div class="fl-panel fl-card">${closable ? '<button class="fl-x" data-close>✕</button>' : ''}${html}</div>`;
+    this.el.md.classList.add('show'); this._touch();
     this.el.md.querySelector('[data-close]')?.addEventListener('click', () => this.closeModal());
     return this.el.md.firstChild;
   }
   get modalOpen() { return this.el.md.classList.contains('show'); }
-  closeModal() { if (!this.modalOpen) return; this.el.md.classList.remove('show'); this.el.md.innerHTML = ''; const f = this._onClose; this._onClose = null; f?.(); this.h.onModalClosed?.(); }
+  closeModal() { if (!this.modalOpen) return; this.el.md.classList.remove('show'); this.el.md.innerHTML = ''; this._touch(); const f = this._onClose; this._onClose = null; f?.(); this.h.onModalClosed?.(); }
   // ---------- battle ----------
-  battleShow(on) { this.el.bt.classList.toggle('show', on); this.showWorldHud(!on); if (!on) this.el.bo.innerHTML = ''; }
+  battleShow(on) { this.el.bt.classList.toggle('show', on); this.showWorldHud(!on); if (!on) this.el.bo.innerHTML = ''; this._touch(); }
+  /** hide the shared joystick/JUMP while a battle or a panel is up (they would cover touch buttons) */
+  _touch() { document.body.classList.toggle('fl-hidetouch', this.el.bt.classList.contains('show') || this.modalOpen); }
   battleCard(which, c, extra = '') {
     const el = which === 'foe' ? this.el.bf : this.el.bm;
     if (!el._built || el._uid !== c.key) {
@@ -198,5 +202,5 @@ export class FrostUI {
     return c;
   }
   bossIntro(T, ms = 2400) { return this.cine(`<div class="fl-boss" style="background:linear-gradient(90deg,transparent,${T.color}ee 20%,${T.color}ee 80%,transparent)"><div style="font-size:14px;letter-spacing:4px;opacity:.9">${T.title.toUpperCase()}</div><h2>${T.name}</h2><i>“${T.quote}”</i></div>`, ms); }
-  dispose() { clearTimeout(this._bt); clearTimeout(this._ct); this.root.remove(); this.style.remove(); }
+  dispose() { document.body.classList.remove('fl-hidetouch'); clearTimeout(this._bt); clearTimeout(this._ct); this.root.remove(); this.style.remove(); }
 }

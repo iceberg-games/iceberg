@@ -226,7 +226,7 @@ export function createBattle(G) {
         const st = B.statsOf(c.mon); Object.assign(c, { lv: c.mon.lv, maxHp: st.hp, atk: st.atk, def: st.def, spd: st.spd, hp: c.mon.hp });
         audio.sfx('sfx_level_up'); cards();
         if (i === BT.b.sides[BT.ME].active && BT.models[BT.ME]) { const p = BT.models[BT.ME].position; burst(p.x, 1, p.z, 50, '#ffd24a', 5, -3, 1.2); }
-        await new Promise(res => ui.cine(`<div class="cc card"><div style="font-size:13px;letter-spacing:3px;font-weight:900;color:#e07a10">LEVEL UP!</div><img src="${portraits[c.sp]}"><h2>${c.name} → Lv ${ev.lv}</h2>
+        await new Promise(res => ui.cine(`<div class="cc fl-card"><div style="font-size:13px;letter-spacing:3px;font-weight:900;color:#e07a10">LEVEL UP!</div><img src="${portraits[c.sp]}"><h2>${c.name} → Lv ${ev.lv}</h2>
           <div style="font-weight:800;font-size:14px">HP +${ev.gain.hp} · ATK +${ev.gain.atk} · DEF +${ev.gain.def} · SPD +${ev.gain.spd}</div>
           ${ev.learned.map(m => `<div style="margin-top:6px;font-weight:900">✨ Learned <span style="color:${TYPES[MOVES[m].type].dark}">${MOVES[m].name}</span>!</div>`).join('')}
           <button class="fl-big" data-ok style="margin-top:10px">Nice!</button></div>`, 0, res)); guard();
@@ -258,7 +258,7 @@ export function createBattle(G) {
     cards(); G.save.stats.evolved++; G.questEvent('evolve');
     const wasNew = G.setDex(to.id, 2) < 2;
     if (wasNew) setTimeout(() => G.alive && audio.sfx('sfx_frostdex_new'), 700);
-    await new Promise(r => ui.cine(`<div class="cc card"><div style="font-size:13px;letter-spacing:3px;font-weight:900;color:#a43b9a">EVOLUTION!</div><img src="${portraits[to.id]}"><h2>${from.name} evolved into ${to.name}!</h2>${typeBadge(to.type)}
+    await new Promise(r => ui.cine(`<div class="cc fl-card"><div style="font-size:13px;letter-spacing:3px;font-weight:900;color:#a43b9a">EVOLUTION!</div><img src="${portraits[to.id]}"><h2>${from.name} evolved into ${to.name}!</h2>${typeBadge(to.type)}
       ${res.learned.map(mv => `<div style="margin-top:6px;font-weight:900">✨ Learned ${MOVES[mv].name}!</div>`).join('')}${wasNew ? '<div style="margin-top:6px;font-weight:900;color:#e07a10">📖 New Frostdex entry!</div>' : ''}
       <button class="fl-big" data-ok style="margin-top:10px">Amazing!</button></div>`, 0, r));
     BT.camFocus = 0; G.checkMilestones();
@@ -385,7 +385,7 @@ export function createBattle(G) {
       G.addRankXp(12 + foe.lv + (sp.rarity === 'rare' ? 20 : sp.rarity === 'legendary' ? 80 : 0));
       const wasNew = G.setDex(sp.id, 2) < 2;
       audio.music_(null); if (wasNew) setTimeout(() => G.alive && audio.sfx('sfx_frostdex_new'), 900);
-      await new Promise(r => ui.cine(`<div class="cc card"><div style="font-size:13px;letter-spacing:3px;font-weight:900;color:#2a9a68">TAMED!</div><img src="${portraits[sp.id]}"><h2>Gotcha! ${sp.name} joined you!</h2>
+      await new Promise(r => ui.cine(`<div class="cc fl-card"><div style="font-size:13px;letter-spacing:3px;font-weight:900;color:#2a9a68">TAMED!</div><img src="${portraits[sp.id]}"><h2>Gotcha! ${sp.name} joined you!</h2>
         ${typeBadge(sp.type)} <span class="fl-rar" style="background:${C.RARITY[sp.rarity].color}">${C.RARITY[sp.rarity].name}</span> · Lv ${foe.lv}
         <div style="margin-top:6px;font-size:13px;font-weight:700;opacity:.8">${sp.blurb}</div>
         ${wasNew ? `<div style="margin-top:6px;font-weight:900;color:#e07a10">📖 New Frostdex entry! (${C.dexCount(s)}/${C.SPECIES.length})</div>` : ''}

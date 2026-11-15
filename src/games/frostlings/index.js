@@ -200,7 +200,7 @@ export default {
       for (const id of C.AREA_ORDER) {
         const A = AREAS[id]; if (!unlocked(id)) continue;
         if (Math.hypot(player.pos.x - A.x, player.pos.z - A.z) > A.r + 45) continue;
-        if (wilds.filter(w => w.area === id).length < 7) spawnWild(id);
+        const n = wilds.filter(w => w.area === id).length; if (n < 7) spawnWild(id); if (n < 3) spawnWild(id);
       }
       for (const w of [...wilds]) { if (!spawnPool(w.area).some(([id]) => id === w.id) && Math.hypot(w.pos.x - player.pos.x, w.pos.z - player.pos.z) > 25) G.removeWild(w); }
     }
