@@ -1,0 +1,48 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Final showcase preview</title>
+<style>html,body{margin:0;height:100%;background:#cfe6f5;overflow:hidden}canvas{display:block}#l{position:fixed;left:8px;top:6px;font:600 13px system-ui,sans-serif;color:#1d3a55;opacity:.8}</style></head><body><div id="l"></div>
+<script type="module">
+// Final showcase (fs_*) preview, engine-like render (ACES, sRGB, shadows).
+// ?id=fs_glacier_wings[,fs_polar_cub_pal]&bodyType=classic&angle=front|back|side|threequarter|backthreequarter&color=%23hex&t=4.2&live=1&w=&h=
+import * as THREE from 'three';
+import { Avatar } from '/src/game/avatar.js';
+import { COSMETIC_BY_ID } from '/src/data/cosmetics.js';
+import { normalizeBodyType, getBodySlots } from '/src/game/bodyTypes.js';
+const q = new URLSearchParams(location.search);
+const ids = (q.get('id') || 'fs_glacier_wings').split(','), color = q.get('color'), angle = q.get('angle') || 'threequarter';
+const bodyType = normalizeBodyType(q.get('bodyType') || 'classic'), live = q.has('live');
+const S = getBodySlots(bodyType), hr = S.height / getBodySlots('classic').height;
+const W = +q.get('w') || innerWidth, H = +q.get('h') || innerHeight;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setSize(W, H);
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+{ const c = document.createElement('canvas'); c.width = 4; c.height = 256; const x = c.getContext('2d'); const g = x.createLinearGradient(0, 0, 0, 256); g.addColorStop(0, '#9fc9ea'); g.addColorStop(0.65, '#dcefff'); g.addColorStop(1, '#f4fbff'); x.fillStyle = g; x.fillRect(0, 0, 4, 256); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; scene.background = t; }
+scene.add(new THREE.HemisphereLight('#ffffff', '#9ab4c8', 1.5));
+const sun = new THREE.DirectionalLight('#fff6ea', 2.4); sun.position.set(3, 6, 5); sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); scene.add(sun);
+const rim = new THREE.DirectionalLight('#bfe4ff', 1.2); rim.position.set(-4, 3, -5); scene.add(rim);
+const floor = new THREE.Mesh(new THREE.CircleGeometry(2.4, 48), new THREE.MeshStandardMaterial({ color: '#f2f8fc', roughness: 0.9 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+const av = new Avatar(); scene.add(av.root);
+const equipped = {}, cc = {}; for (const id of ids) { const it = COSMETIC_BY_ID[id]; equipped[it.slot] = id; if (color && ids.length === 1) cc[id] = color; }
+av.applyLoadout({ bodyType, equipped, cosmeticColors: cc });
+av.setColors({ skin: '#f5cd30', shirt: q.get('shirt') || '#3d7bd9', pants: '#2b3a55' });
+const steps = Math.round((+q.get('t') || 4) * 30); for (let i = 0; i < steps; i++) av.animate(1 / 30, {});
+for (const b of ['armR', 'armL', 'legL', 'legR']) av.bones[b].rotation.x = 0;
+if (q.has('swing')) { const w = +q.get('swing'); av.bones.armR.rotation.x = w; av.bones.armL.rotation.x = -w; av.bones.legL.rotation.x = w; av.bones.legR.rotation.x = -w; for (const o of Object.values(av.attached)) o.userData.tick?.(0); }   // walk-cycle extremes (clipping checks)
+// frame the actual item(s): bounds of the worn meshes (particles excluded), so every body type is centred
+const box = new THREE.Box3(), tmp = new THREE.Box3(); av.root.updateMatrixWorld(true);
+for (const o of Object.values(av.attached)) o.traverse(m => { if (m.isMesh && m.geometry) { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); tmp.copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld); box.union(tmp); } });
+const ctr = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
+const whole = q.has('whole') || ids.length > 1;
+const focus = q.has('upper') ? [0, S.height * 0.72, 0, S.height * 1.15 + 0.9] : whole ? [0, S.height * 0.55, 0, S.height * 1.75 + 1.2] : [ctr.x, ctr.y, ctr.z, Math.max(size.x, size.y) * 1.75 + 0.35];
+const yaw = { front: 0, side: ids[0] === 'fs_polar_cub_pal' ? -Math.PI / 2 : Math.PI / 2, threequarter: ids[0] === 'fs_polar_cub_pal' ? -Math.PI / 4 : Math.PI / 4, back: Math.PI, backthreequarter: Math.PI * 0.78, sideback: Math.PI * 0.62 }[angle] ?? 0.6;
+const cam = new THREE.PerspectiveCamera(32, W / H, 0.05, 50);
+const place = (y) => { cam.position.set(focus[0] + Math.sin(y) * focus[3], focus[1] + focus[3] * 0.12, focus[2] + Math.cos(y) * focus[3]); cam.lookAt(focus[0], focus[1], focus[2]); };
+place(yaw); renderer.render(scene, cam);
+// Blender body overlays (yeti.glb) load async: wait for the swap, then re-render the still
+if (S.mesh) { for (let i = 0; i < 100 && av.bodyMeshes.torso.visible; i++) await new Promise(r => setTimeout(r, 50)); renderer.render(scene, cam); }
+document.getElementById('l').textContent = `${ids.map(i => COSMETIC_BY_ID[i].name).join(' + ')} · ${bodyType} · ${angle}${color ? ' · ' + color : ''}`;
+window.__ready = true;
+if (live) { let last = performance.now(), a = yaw; const loop = (n) => { const dt = Math.min(0.05, (n - last) / 1000); last = n; av.animate(dt, {}); if (q.has('spin')) { a += dt * 0.35; place(a); } renderer.render(scene, cam); requestAnimationFrame(loop); }; requestAnimationFrame(loop); }
+</script></body></html>
