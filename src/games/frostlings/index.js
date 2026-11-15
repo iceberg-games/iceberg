@@ -317,6 +317,7 @@ export default {
     const game = {
       scene, collision, spawn: new THREE.Vector3(0, 0, 6), spawnFacing: Math.PI, music: 'none', maxCamDist: 20,
       frostlings: {   // test hooks (scripts/frostlings-smoke.mjs)
+        get audio() { return audio; },
         get state() { const s = G.save, BT = battle.current; return { mode: G.mode, flakes: s.flakes, rank: s.rank, starter: s.starter, party: partyMons().map(m => ({ sp: m.sp, lv: m.lv, hp: m.hp, xp: m.xp, moves: m.moves })), mons: s.mons.length, dex: C.dexCount(s), beaten: [...s.beaten], wild: wilds.length, quests: activeQuests().map(q => q.id + ':' + questState(q).have), items: { ...s.items }, battle: BT ? { kind: BT.kind, turn: BT.b.turn, me: B.active(BT.b, BT.ME)?.hp, foe: B.active(BT.b, BT.FOE)?.hp, foeSp: B.active(BT.b, BT.FOE)?.sp } : null }; },
         get save() { return G.save; }, chooseStarter: (sp) => panels._starterPick?.(sp),
         startWild: (sp, lv = 4, area = 'meadow') => battle.startWild({ id: sp, lv, area, mesh: new THREE.Group(), pos: new THREE.Vector3(), cool: 0, fake: true }),

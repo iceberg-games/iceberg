@@ -26,11 +26,12 @@ export class FrostAudio {
   get ctx() { return this.music?.ctx; }
   get out() { return this.music?.master; }
   _load() {
-    const c = this.ctx; if (!c) return;
+    const c = this.ctx; if (!c || this._loaded) return; this._loaded = true;
     for (const n of CUES) { const u = urlFor(n); if (!u) continue;
       fetch(u).then(r => r.arrayBuffer()).then(a => c.decodeAudioData(a)).then(b => { this.bufs[n] = b; if (this.bgm === n) { const x = n; this.bgm = null; this._stop('bgm'); this.music_(x); } if (this.ambName === n) { const x = n; this.ambName = null; this._stop('amb'); this.amb(x); } }).catch(() => {}); }
   }
   play(n, vol = 1, rate = 1) {
+    if (!this._loaded) this._load();
     const c = this.ctx, b = this.bufs[n]; if (!c || !b || !this.out) return false;
     if (siteMuted()) return true;
     const s = c.createBufferSource(); s.buffer = b; s.playbackRate.value = rate; const g = c.createGain(); g.gain.value = (GAINS[n]?.gain ?? 1) * vol;
@@ -62,7 +63,7 @@ export class FrostAudio {
     setTimeout(() => { try { l.s?.stop(); } catch { /* */ } try { l.bus?.disconnect(); } catch { /* */ } (l.stops || []).forEach(x => { try { x.stop(); } catch { /* */ } }); }, 1500);
   }
   // ---- music ----
-  music_(name) {
+  music_(name) { if (!this._loaded) this._load();
     if (this.bgm === name) return;
     this._stop('bgm'); this.bgm = name; const c = this.ctx; if (!c || !this.out || !name) return;
     if (this.bufs[name]) return this._bufLoop('bgm', name, GAINS[name]?.gain ?? 0.45);
@@ -82,7 +83,7 @@ export class FrostAudio {
     }, 60);
     this.loops.bgm = { g: bus, bus, id };
   }
-  amb(name) {
+  amb(name) { if (!this._loaded) this._load();
     if (this.ambName === name) return;
     this._stop('amb'); this.ambName = name; const c = this.ctx; if (!c || !this.out || !name) return;
     if (this.bufs[name]) return this._bufLoop('amb', name, GAINS[name]?.gain ?? 0.4);

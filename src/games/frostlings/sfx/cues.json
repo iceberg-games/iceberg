@@ -1,142 +1,142 @@
 {
- "bgm_village": {
-  "gain": 0.4,
-  "loop": true
- },
- "bgm_battle_wild": {
-  "gain": 0.42,
-  "loop": true
- },
- "bgm_battle_tamer": {
-  "gain": 0.45,
-  "loop": true
- },
- "amb_meadow": {
-  "gain": 0.35,
-  "loop": true
- },
- "amb_caverns": {
-  "gain": 0.4,
-  "loop": true
- },
- "amb_coast": {
-  "gain": 0.4,
-  "loop": true
- },
- "amb_peak": {
-  "gain": 0.35,
-  "loop": true
- },
- "sfx_move_snow": {
-  "gain": 0.9,
-  "loop": false
- },
- "sfx_move_crystal": {
-  "gain": 0.9,
-  "loop": false
- },
- "sfx_move_tide": {
-  "gain": 0.9,
-  "loop": false
- },
- "sfx_move_ember": {
-  "gain": 0.9,
-  "loop": false
- },
- "sfx_move_gale": {
-  "gain": 0.85,
-  "loop": false
- },
- "sfx_move_aurora": {
-  "gain": 0.85,
-  "loop": false
- },
- "sfx_move_plain": {
-  "gain": 0.9,
-  "loop": false
- },
- "sfx_hit": {
-  "gain": 1.0,
-  "loop": false
- },
- "sfx_hit_super": {
-  "gain": 1.0,
-  "loop": false
- },
- "sfx_faint": {
-  "gain": 0.9,
-  "loop": false
- },
- "sfx_status_chill": {
-  "gain": 0.8,
-  "loop": false
- },
- "sfx_status_sleep": {
-  "gain": 0.8,
-  "loop": false
- },
- "sfx_status_burn": {
-  "gain": 0.8,
-  "loop": false
- },
- "sfx_heal": {
-  "gain": 0.8,
-  "loop": false
- },
- "sfx_encounter": {
-  "gain": 0.9,
-  "loop": false
- },
- "sfx_tamer_intro": {
-  "gain": 1.0,
-  "loop": false
- },
- "sfx_victory": {
-  "gain": 0.9,
-  "loop": false
- },
- "sfx_defeat": {
-  "gain": 0.8,
-  "loop": false
- },
- "sfx_snare_throw": {
-  "gain": 0.8,
-  "loop": false
- },
- "sfx_snare_shake": {
-  "gain": 0.9,
-  "loop": false
- },
- "sfx_catch_success": {
-  "gain": 1.0,
-  "loop": false
- },
- "sfx_catch_fail": {
-  "gain": 0.9,
-  "loop": false
- },
- "sfx_care": {
-  "gain": 0.8,
-  "loop": false
- },
- "sfx_level_up": {
-  "gain": 0.9,
-  "loop": false
- },
- "sfx_evolve": {
-  "gain": 1.0,
-  "loop": false
- },
- "sfx_frostdex_new": {
-  "gain": 0.9,
-  "loop": false
- },
- "sfx_quest_complete": {
-  "gain": 0.9,
-  "loop": false
- },
- "ui_click": {
-  "gain": 0.5,
-  "loop": false
- }
+  "bgm_village": {
+    "gain": 0.4,
+    "loop": true
+  },
+  "bgm_battle_wild": {
+    "gain": 0.42,
+    "loop": true
+  },
+  "bgm_battle_tamer": {
+    "gain": 0.42,
+    "loop": true
+  },
+  "amb_meadow": {
+    "gain": 0.5,
+    "loop": true
+  },
+  "amb_caverns": {
+    "gain": 0.5,
+    "loop": true
+  },
+  "amb_coast": {
+    "gain": 0.5,
+    "loop": true
+  },
+  "amb_peak": {
+    "gain": 0.5,
+    "loop": true
+  },
+  "sfx_move_snow": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_move_crystal": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_move_tide": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_move_ember": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_move_gale": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_move_aurora": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_move_plain": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_hit": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_hit_super": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_faint": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_status_chill": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_status_sleep": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_status_burn": {
+    "gain": 0.7,
+    "loop": false
+  },
+  "sfx_heal": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_encounter": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_tamer_intro": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_victory": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_defeat": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_snare_throw": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_snare_shake": {
+    "gain": 0.8,
+    "loop": false
+  },
+  "sfx_catch_success": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_catch_fail": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_care": {
+    "gain": 0.8,
+    "loop": false
+  },
+  "sfx_level_up": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_evolve": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_frostdex_new": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "sfx_quest_complete": {
+    "gain": 1.0,
+    "loop": false
+  },
+  "ui_click": {
+    "gain": 0.6,
+    "loop": false
+  }
 }
