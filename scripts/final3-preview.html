@@ -29,12 +29,13 @@ av.applyLoadout({ bodyType, equipped, cosmeticColors: cc });
 av.setColors({ skin: '#f5cd30', shirt: q.get('shirt') || '#3d7bd9', pants: '#2b3a55' });
 const steps = Math.round((+q.get('t') || 4) * 30); for (let i = 0; i < steps; i++) av.animate(1 / 30, {});
 for (const b of ['armR', 'armL', 'legL', 'legR']) av.bones[b].rotation.x = 0;
+if (q.has('swing')) { const w = +q.get('swing'); av.bones.armR.rotation.x = w; av.bones.armL.rotation.x = -w; av.bones.legL.rotation.x = w; av.bones.legR.rotation.x = -w; for (const o of Object.values(av.attached)) o.userData.tick?.(0); }   // walk-cycle extremes (clipping checks)
 // frame the actual item(s): bounds of the worn meshes (particles excluded), so every body type is centred
 const box = new THREE.Box3(), tmp = new THREE.Box3(); av.root.updateMatrixWorld(true);
 for (const o of Object.values(av.attached)) o.traverse(m => { if (m.isMesh && m.geometry) { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); tmp.copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld); box.union(tmp); } });
 const ctr = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3());
 const whole = q.has('whole') || ids.length > 1;
-const focus = whole ? [0, S.height * 0.55, 0, S.height * 1.75 + 1.2] : [ctr.x, ctr.y, ctr.z, Math.max(size.x, size.y) * 1.75 + 0.35];
+const focus = q.has('upper') ? [0, S.height * 0.72, 0, S.height * 1.15 + 0.9] : whole ? [0, S.height * 0.55, 0, S.height * 1.75 + 1.2] : [ctr.x, ctr.y, ctr.z, Math.max(size.x, size.y) * 1.75 + 0.35];
 const yaw = { front: 0, side: ids[0] === 'fs_polar_cub_pal' ? -Math.PI / 2 : Math.PI / 2, threequarter: ids[0] === 'fs_polar_cub_pal' ? -Math.PI / 4 : Math.PI / 4, back: Math.PI, backthreequarter: Math.PI * 0.78, sideback: Math.PI * 0.62 }[angle] ?? 0.6;
 const cam = new THREE.PerspectiveCamera(32, W / H, 0.05, 50);
 const place = (y) => { cam.position.set(focus[0] + Math.sin(y) * focus[3], focus[1] + focus[3] * 0.12, focus[2] + Math.cos(y) * focus[3]); cam.lookAt(focus[0], focus[1], focus[2]); };

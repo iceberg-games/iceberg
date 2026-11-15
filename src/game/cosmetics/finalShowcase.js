@@ -477,7 +477,9 @@ function buildPolarCub(color) {
     const headHalf = headMesh ? headMesh.scale.x / 2 : 0.31, armOuter = armL ? -armL.position.x + (armL.children[0]?.scale.x || 0.5) / 2 : 1;
     const wantX = Math.min(Math.max(F.sx / 2 + 0.02, headHalf + (headHalf > 0.36 ? 0.22 : 0.17) * F.k), armOuter - 0.02 * F.k);
     const fwd = THREE.MathUtils.clamp((headHalf - 0.31) * 0.8, 0, 0.09);   // big heads (Pip): nudge forward so the face doesn't hide it
-    P.position.set(-wantX / F.k, (F.sy / 2 - 0.012) / F.k, fwd / F.k);
+    // ride the walk cycle: when the arm swings, its top corners rise past the shoulder line; lift the cub over them
+    const armD = armL?.children[0]?.scale.z || 0.5, swingLift = armL ? Math.abs(Math.sin(armL.rotation.x)) * armD * 0.42 : 0;
+    P.position.set(-wantX / F.k, (F.sy / 2 - 0.012 + swingLift) / F.k, fwd / F.k);
     // breathing
     const br = Math.sin(t * 2.3);
     body.scale.set(1.05 * (1 + br * 0.018), 1.0 * (1 + br * 0.028), 0.98 * (1 + br * 0.018));
