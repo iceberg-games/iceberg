@@ -23,7 +23,8 @@ export const GAME_META = {
   'pengu-plaza':        { mobile: true, publishedAt: '2026-10-31T23:44:21-07:00' },  // NEW (QoL, unscheduled): joystick + emote bar + big action tap. Publisher: add publishedAt on Colin's yes.
   'snowcone-tycoon':    { mobile: true, publishedAt: '2026-10-31T23:51:10-07:00' },  // Wave 2: Snowcone Tycoon (published on Colin's publish-everything).
   'crystal-spire':      { mobile: true, publishedAt: '2026-10-31T23:56:07-07:00' },  // Crystal Spire (Colin publish-everything).
-  'frostlings':         { mobile: true, unscheduled: true },  // NEW (GM2 final batch): creature taming; joystick + big ✋ interact + touch battle grid. Publisher: add publishedAt on Colin's yes.
+  'lantern-hollow':     { mobile: true, publishedAt: '2026-11-15T08:27:00-07:00' },  // Final batch: co-op action RPG; shared joystick + jump, plus ⚔ / DASH / FLARE / ✋ / 🧪.
+  'frostlings':         { mobile: true, publishedAt: '2026-11-15T08:27:00-07:00' },  // Final batch: creature taming; joystick + big ✋ interact + touch battle grid.
   'rainbow-obby':       { publishedAt: '2026-10-16T22:11:58-07:00', retired: true },  // replaced by Giant Rainbow Obby
 };
 
