@@ -77,8 +77,8 @@ export default {
     for (const c of [...set.colliders, ...world.colliders]) { if (c[0] === 'circle') collision.addCircle(c[1], c[2], c[3], c[4]); else collision.addBox(...c.slice(1)); }
     let save = loadSave(economy); save.visits++; checkRewards(save); persist(economy, save);
     let thumbs = loadThumbs();
-    let live = true, debugOffset = 0;
-    const clock = () => (typeof mp?.now === 'function' ? mp.now() : Date.now()) / 1000 + debugOffset;
+    let live = true, debugOffset = 0, frozenT = null;
+    const clock = () => frozenT ?? (typeof mp?.now === 'function' ? mp.now() : Date.now()) / 1000 + debugOffset;
     let ev = eventState(clock());
     const unsubs = [];
 
@@ -168,7 +168,8 @@ export default {
       for (const n of npcs) if (Math.hypot(n.x - player.pos.x, n.z - player.pos.z) < 12) { n.react = 1.4; n.kind = 'cheer'; n.face = Math.atan2(player.pos.x - n.x, player.pos.z - n.z); }
       if (!res.length) { ui.toast('Nothing to file in the album — get a subject in frame', { icon: '🤔', ms: 2200 }); persist(economy, save); return; }
       const now = Math.floor(Date.now() / 1000); let img = null, top = null, newCount = 0;
-      for (const r of res.slice(0, 4)) {
+      for (const [ri, r] of res.slice(0, 4).entries()) {
+        if (ri > 0 && r.score < 45) continue;   // incidental subjects need a decent shot to be filed
         const prev = save.album[r.id], isNew = !prev, better = prev && r.score > prev[0];
         if (!isNew && !better) continue;
         save.album[r.id] = [Math.max(r.score, prev?.[0] || 0), Math.max(r.stars, prev?.[1] || 0), prev?.[2] || now, (r.bonus || prev?.[3]) ? 1 : 0];
@@ -250,7 +251,7 @@ export default {
         emote: doEmote, act: doAct, camera: (on = true) => (on ? openCamera() : closeCamera()), shutter, album: toggleAlbum,
         teleport: (x, z, y = 0, facing = 0) => { ride = null; world.rideChair.visible = false; player.mods.gravity = 1; player.enabled = !album.isOpen; player.teleport(new THREE.Vector3(x, y, z), facing); },
         aim: (x, y, z) => pcam.aim([x, y, z]), zoom: (z) => { pcam.setZoom(z); ui.setZoom(pcam.zoom); }, evaluate: () => pcam.evaluate().map(r => ({ id: r.id, score: r.score, stars: r.stars, bonus: r.bonus })),
-        setClock: (T) => { debugOffset = T - (clock() - debugOffset); }, runtime, targetPos: (id) => { const rt = runtime[id]; const pts = typeof rt.pts === 'function' ? rt.pts() : rt.pts; const p = pts[0]; return p ? { x: p.x, y: p.y + (rt.yOff || 0), z: p.z } : null; },
+        setClock: (T) => { debugOffset = T - (clock() - debugOffset); }, freezeClock: (T) => { frozenT = T ?? null; }, runtime, targetPos: (id) => { const rt = runtime[id]; const pts = typeof rt.pts === 'function' ? rt.pts() : rt.pts; const p = pts[0]; return p ? { x: p.x, y: p.y + (rt.yOff || 0), z: p.z } : null; },
       },
       update(dt, t) {
         if (!live) return;
@@ -317,7 +318,7 @@ export default {
         fogTarget.set(curArea.fog || PLAZA_AREA.fog).lerp(nightBg, ev.night * 0.55 * (1 - indoorK)); fogCol.lerp(fogTarget, Math.min(1, dt * 1.5)); scene.fog.color.copy(fogCol);
         scene.fog.near = 45 - indoorK * 30; scene.fog.far = 175 - indoorK * 120;
         scene.background = scene.background || new THREE.Color(); scene.background.copy(bg).lerp(nightBg, ev.night * 0.8).lerp(fogCol, indoorK);
-        hemiK += ((curArea.hemi ?? 0.9) * (1 - ev.night * 0.3) - hemiK) * Math.min(1, dt * 1.5); if (set.hemi) set.hemi.intensity = hemiK; if (set.moon) set.moon.intensity = 1.1 * (1 - indoorK * 0.85) * (1 - ev.night * 0.25);
+        hemiK += ((curArea.hemi ?? 0.9) * (1 - ev.night * 0.15) - hemiK) * Math.min(1, dt * 1.5); if (set.hemi) set.hemi.intensity = hemiK; if (set.moon) { set.moon.intensity = 1.1 * (1 - indoorK * 0.85) * (1 - ev.night * 0.2); set.moon.position.set(p.x - 20, p.y + 40, p.z + 20); set.moon.target.position.set(p.x, p.y, p.z); }
         if (set.sky?.material) set.sky.material.color.copy(white).lerp(skyNight, ev.night);
         if (set.lanternMat) set.lanternMat.emissiveIntensity = 1.6 + ev.night * 1.2;
         if (set.snowPts) { set.snowPts.visible = indoorK < 0.5; set.snowPts.position.set(p.x, Math.max(0, p.y - 2), p.z); }
@@ -385,7 +386,7 @@ export default {
       },
     };
     engine.penguPlaza = game;
-    if (typeof location !== 'undefined' && /[?&]pptest=1/.test(location.search)) window.__pp = game;   // headless smoke hook
+    if (typeof location !== 'undefined' && /[?&]pptest=1/.test(location.search)) { window.__pp = game; game.api.scene = scene; }   // headless smoke hook
     return game;
   },
 };

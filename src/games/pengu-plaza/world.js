@@ -17,8 +17,17 @@ export function areaAt(x, z, y = 0) {
   return null;
 }
 
+// Spatially chunked instancing: one Batch per 48 m cell so each InstancedMesh gets a tight bounding sphere and
+// frustum / shadow-camera culling can skip far-away areas (a single world-wide batch is never culled).
+class ChunkBatch {
+  constructor(size = 48) { this.size = size; this.cells = new Map(); }
+  _b(x, z) { const k = Math.floor(x / this.size) + ',' + Math.floor(z / this.size); let b = this.cells.get(k); if (!b) this.cells.set(k, b = new Batch()); return b; }
+  box(mat, x, y, z, ...r) { return this._b(x, z).box(mat, x, y, z, ...r); }
+  add(mat, geo, x, y, z, ...r) { return this._b(x, z).add(mat, geo, x, y, z, ...r); }
+  build(parent, o) { for (const b of this.cells.values()) b.build(parent, o); }
+}
 export function buildWorld(scene, { mobile = false, fx = null, audio = null } = {}) {
-  const R = rng(4242), B = new Batch(), G = new Batch(), disp = [], colliders = [], occluders = [], targets = {}, actors = [], lights = [];
+  const R = rng(4242), B = new ChunkBatch(), G = new ChunkBatch(), disp = [], colliders = [], occluders = [], targets = {}, actors = [], lights = [];
   const box = new THREE.BoxGeometry(1, 1, 1), cyl = new THREE.CylinderGeometry(1, 1, 1, 12), cone = new THREE.ConeGeometry(1, 1, 10), sph = new THREE.SphereGeometry(1, 14, 10), oct = new THREE.OctahedronGeometry(1, 0), dode = new THREE.DodecahedronGeometry(1, 0), half = new THREE.SphereGeometry(1, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2);
   disp.push(box, cyl, cone, sph, oct, dode, half);
   const std = (o) => { const m = new THREE.MeshStandardMaterial({ color: '#ffffff', ...o }); disp.push(m); return m; };
@@ -148,7 +157,7 @@ export function buildWorld(scene, { mobile = false, fx = null, audio = null } = 
   let fishT = 6;
   target('fisher', [fisher.position], { yOff: 0.9, maxDist: 30, bonus: () => fishT < 0 && fishT > -2.6 });
   // whale
-  const whale = buildWhale(); whale.position.set(H.whale.x, -12, H.whale.z); whale.rotation.y = -Math.PI / 2; add(whale);
+  const whale = buildWhale(); whale.position.set(H.whale.x, -12, H.whale.z); add(whale);   // side-on to the pier: breaches along z
   let whaleWas = false;
   target('whale', [whale.position], { maxDist: 75, active: () => ev.whale.active && whale.position.y > -2.5, bonus: () => Math.abs(ev.whale.k - 0.5) < 0.16 });
   const harborWander = H.wander.map(([x, z]) => wanderer(x, z, 4, 'harbor'));
@@ -358,7 +367,7 @@ export function buildWorld(scene, { mobile = false, fx = null, audio = null } = 
       puffins.forEach((o, i) => { o.userData.head.rotation.y = Math.sin(t * 1.5 + i) * 0.6; o.userData.wings.forEach((w, j) => w.rotation.z = (j ? 1 : -1) * (0.1 + Math.max(0, Math.sin(t * 9 + i * 2)) * (i === 3 ? 1 : 0.2))); });
       fishT -= dt; if (fishT < -2.6) fishT = 14 + Math.random() * 8;
       { const c = fishT < 0, k = c ? Math.min(1, -fishT / 0.4) : 0; rod.rotation.z = c ? 0.7 * k : Math.sin(t * 1.4) * 0.05; fish.visible = c; if (c) { fish.position.set(H.fisher.x + 2.2 + (1 - k) * 0.8, 1.4 + k * 1.0 + Math.sin(t * 20) * 0.05, H.fisher.z); fish.rotation.z = Math.sin(t * 25) * 0.6; } fisher.position.y = c ? Math.abs(Math.sin(t * 10)) * 0.15 : 0; }
-      { const on = ev.whale.active, k = ev.whale.k; if (on) { whale.position.y = -12 + Math.sin(k * Math.PI) * 15; whale.rotation.x = -(k - 0.5) * 2.4; whale.position.z = H.whale.z + (k - 0.5) * 6; whale.userData.tail.rotation.x = Math.sin(t * 4) * 0.3;
+      { const on = ev.whale.active, k = ev.whale.k; if (on) { whale.position.y = -12 + Math.sin(k * Math.PI) * 15; whale.rotation.x = (k - 0.5) * 2.4; whale.position.z = H.whale.z + (k - 0.5) * 10; whale.userData.tail.rotation.x = Math.sin(t * 4) * 0.3;
           if (!whaleWas) { whaleWas = true; if (near(H.whale.x, H.whale.z, 90)) audio?.play('sfx_whale_breach', 0.9); fx?.burst(tmp.set(H.whale.x, 0, H.whale.z), 60, [new THREE.Color('#eaf6ff'), new THREE.Color('#9fd8ff')], { y: 0.5, up: 10, spread: 8, grav: 10, life: 1.6 }); }
           if (k > 0.82 && k < 0.86) fx?.burst(tmp.set(H.whale.x, 0, H.whale.z + 3), 50, [new THREE.Color('#eaf6ff'), new THREE.Color('#9fd8ff')], { y: 0.5, up: 9, spread: 9, grav: 10, life: 1.4 }); }
         else { whaleWas = false; whale.position.y = -12; } }

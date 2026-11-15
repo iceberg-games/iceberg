@@ -16,7 +16,7 @@ export const AREAS_BIG = [
   { id: 'ridge', name: 'Aurora Ridge', icon: '🌌', x: 0, z: 88, r: 24, amb: 'amb_ridge', fog: '#2a3f78', hemi: 1.0 },
   { id: 'harbor', name: 'Frozen Harbor', icon: '⚓', x: 84, z: 0, r: 26, amb: 'amb_harbor', fog: '#3a5a8a', hemi: 0.95 },
   { id: 'grotto', name: 'Ice Cave Grotto', icon: '💎', x: -82, z: 0, r: 18, amb: 'amb_grotto', fog: '#160f38', hemi: 0.35, indoor: true },
-  { id: 'woods', name: 'Snowy Pine Woods', icon: '🌲', x: 0, z: -86, r: 28, amb: 'amb_woods', fog: '#24435a', hemi: 0.8 },
+  { id: 'woods', name: 'Snowy Pine Woods', icon: '🌲', x: 0, z: -86, r: 28, amb: 'amb_woods', fog: '#2a4a66', hemi: 0.95 },
   { id: 'village', name: 'Igloo Village', icon: '🔥', x: 60, z: 60, r: 22, amb: 'amb_village', fog: '#4a3a66', hemi: 1.0 },
   { id: 'garden', name: 'Sculpture Garden', icon: '🗿', x: -60, z: -60, r: 22, amb: 'amb_woods', fog: '#2f5a80', hemi: 1.05 },
 ];

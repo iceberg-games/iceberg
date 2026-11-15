@@ -45,7 +45,7 @@ const CSS = `
 .ppa-chips{display:flex;flex-wrap:wrap;gap:8px}
 .ppa-chip{border:2px solid #9fd0ff;background:#fff;border-radius:999px;padding:8px 12px;font-weight:800;font-size:13px;cursor:pointer;min-height:40px;color:#173a6e}
 .ppa-chip.on{background:#173a6e;color:#fff;border-color:#173a6e}.ppa-chip:disabled{opacity:.4;cursor:default}
-.ppa-map{width:100%;max-width:620px;aspect-ratio:1;display:block;margin:0 auto;border-radius:18px;background:#e9f2ff}
+.ppa-map{height:min(58vh,560px);width:auto;max-width:100%;aspect-ratio:1;display:block;margin:0 auto;border-radius:18px;background:#e9f2ff}
 @media (max-width:560px){.ppa-grid{grid-template-columns:repeat(2,1fr);gap:8px}.ppa-c .ph{height:70px}.ppa-hd h2{font-size:19px}}
 `;
 const el = (t, c, h = '') => { const e = document.createElement(t); if (c) e.className = c; e.innerHTML = h; return e; };
