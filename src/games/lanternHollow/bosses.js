@@ -5,7 +5,7 @@ const SCALE = (n) => 1 + 0.6 * (Math.min(5, Math.max(1, n)) - 1);
 export const BOSSES = {
   mossmaw: { name: 'Mother Mossmaw', hp: 900, r: 3.0, music: 'bgm_boss', reward: { embers: 120, sigil: 1 }, bb: 'boss_mossmaw', icon: '🌸', unlocks: 'mine', phases: [0.5] },
   foreman: { name: 'The Drowned Foreman', hp: 1600, r: 1.9, music: 'bgm_boss', reward: { embers: 200, sigil: 1, rustcog: 10 }, bb: 'boss_foreman', icon: '⚙️', phases: [0.5] },
-  queen: { name: 'The Hollow Queen', hp: 3200, r: 1.3, music: 'bgm_boss_queen', reward: { embers: 300, sigil: 1, shard: 10 }, bb: 'boss_queen', icon: '👑', phases: [0.66, 0.3] },
+  queen: { name: 'The Hollow Queen', hp: 2800, r: 1.3, music: 'bgm_boss_queen', reward: { embers: 300, sigil: 1, shard: 10 }, bb: 'boss_queen', icon: '👑', phases: [0.66, 0.3] },
 };
 const P10 = (v) => Math.round(v * 10), U10 = (v) => v / 10;
 const clampArena = (D, x, z, pad = 2.5) => { const dx = x - D.x, dz = z - D.z, l = Math.hypot(dx, dz), m = D.r - pad; return l > m ? [D.x + dx / l * m, D.z + dz / l * m] : [x, z]; };
@@ -37,7 +37,7 @@ class BossBase {
     b.hp -= dmg * mul; this.sim.bossDirty = true;
     const th = this.def.phases[b.ph - 1];
     if (th != null && b.hp <= b.max * th) { b.ph++; b.atk = 0; b.pts = []; b.phAt = now + 1700; b.nextAt = now + 3600; this.onPhase?.(b.ph, now); this.sim.ctx.send('phase', { a: this.sim.area, b: this.id, ph: b.ph, at: b.phAt }); }   // sfx_boss_phase builds 1.7 s: dark/changes land on phAt
-    if (b.hp <= 0) { b.hp = 0; b.dead = 1; b.atk = 0; this.sim.dun.bossDead = 1; this.sim.list = this.sim.list.filter(e => !e.boss); this.sim.dirty = true; this.sim.dirtyDun();
+    if (b.hp <= 0) { b.hp = 0; b.dead = 1; b.atk = 0; this.sim.dun.bossDead = 1; const D = this.D; this.sim.list = this.sim.list.filter(e => !e.boss && Math.hypot(e.x - D.x, e.z - D.z) > D.r + 2);   // adds + stragglers in the arena poof with the boss this.sim.dirty = true; this.sim.dirtyDun();
       this.sim.ctx.send('bossDown', { a: this.sim.area, b: this.id, s: (this.sim.rng() * 2 ** 31) | 0, by: opt.from || null }); }
     return { ok: true, mul };
   }
@@ -71,7 +71,7 @@ class Foreman extends BossBase {
     if (b.atk === 1 && now >= b.atkAt - 800 && now <= b.atkAt) { const k = 1 - (b.atkAt - now) / 800; b.x = b.sx + Math.sin(b.dir) * b.len * k; b.z = b.sz + Math.cos(b.dir) * b.len * k; this.sim.bossDirty = true; }
     else if (!b.atk && n && now >= b.stunUntil) { { let d = Math.atan2(n.t.x - b.x, n.t.z - b.z) - b.dir; d = Math.atan2(Math.sin(d), Math.cos(d)); b.dir += Math.sign(d) * Math.min(Math.abs(d), dt * 0.8); } }   // turns slowly (0.8 rad/s): dash behind him and FLARE
   }
-  mul(now) { const b = this.b; return b.ph === 2 && now >= b.phAt ? (now < b.stunUntil ? 1.7 : 0.35) : (now < b.stunUntil ? 1.4 : 1); }
+  mul(now) { const b = this.b; return b.ph === 2 && now >= b.phAt ? (now < b.stunUntil ? 1.8 : 0.45) : (now < b.stunUntil ? 1.4 : 1); }
   think(now, alive) {
     const b = this.b, D = this.D, rng = this.sim.rng, n = this.sim.nearest(b, alive, 99);
     const opts = b.ph === 1 ? [1, 1, 2, 3] : [1, 2, 3, 4, 2]; let pick = opts[Math.floor(rng() * opts.length)]; if (pick === 4 && this.addsAlive() >= 6) pick = 3;
@@ -117,9 +117,9 @@ class Queen extends BossBase {
     else { this.summon(['shade', 'shade', 'knight'], 6); b.atk = 3; b.atkAt = now + 400; b.atkEnd = b.atkAt + 300; }
     b.nextAt = b.atkEnd + (b.night && now < b.aur ? 1800 : b.ph === 1 ? 1300 : 1000);
   }
-  special(i, opt, now) {   // FLARE lights a brazier during the Long Night (12 s solo, 6 s window in co-op)
+  special(i, opt, now) {   // FLARE lights a brazier during the Long Night (14 s solo, 6 s each in co-op)
     const b = this.b; if (!b.night || now < b.phAt || b.aur || i < 0 || i > 3) return null; if (b.braz[i] > now) return null;
-    b.braz[i] = now + (this.alive > 1 ? 6000 : 12000); this.sim.bossDirty = true; this.sim.ctx.send('brazier', { a: this.sim.area, i });
+    b.braz[i] = now + (this.alive > 1 ? 6000 : 14000); this.sim.bossDirty = true; this.sim.ctx.send('brazier', { a: this.sim.area, i });
     if (b.braz.every(t => t > now)) { b.aur = now + 10000; b.braz = b.braz.map(() => b.aur); b.atk = 0; b.pts = []; b.nextAt = now + 2500; this.sim.ctx.send('aurora', { a: this.sim.area }); }
     return { ok: true };
   }

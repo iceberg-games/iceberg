@@ -83,7 +83,7 @@ const CSS = `
 .lh-end .cred{margin:12px auto;padding:10px;border-radius:12px;background:rgba(0,0,0,.25);font-size:13px;line-height:1.7;max-width:420px;color:#cfe8ff}.lh-end .cred div:first-child{font-weight:900;color:#ffcf8a}
 @media (max-width:700px){.lh-menu{top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 290px);left:10px;flex-direction:column}.lh-menu button{padding:6px 9px;font-size:12px}.lh-modal{top:calc(50% + 34px);max-height:calc(84vh - 70px);width:96vw}.lh-map{max-height:50vh}.lh-vitals{top:128px;left:8px;transform:scale(.82);transform-origin:left top}.lh-embers{top:128px;left:auto;right:8px;transform:none;font-size:14px;padding:5px 10px;gap:7px}.lh-area{top:164px;left:auto;right:12px;transform:none}.lh-track{top:184px;right:8px;width:46vw;padding:7px 9px}.lh-track .lh-q{font-size:12px}.lh-allies{top:206px;left:8px}.lh-boss{bottom:auto;top:272px;width:92vw}.lh-toasts{bottom:auto;top:330px;right:8px}}body:has(.lh.lh-mopen) #touch-ui,.lh.lh-mopen .lh-touch{visibility:hidden}
 .lh-res{text-align:center}.lh-res .big{font-size:56px}.lh-res .loot{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:10px 0 14px}
-.lh-mopen .lh-keys{display:none}.lh-keys{position:absolute;left:14px;bottom:64px;font-size:12px;font-weight:700;color:#ffe2b8;opacity:.85;padding:7px 12px}
+.lh-mopen .lh-keys{display:none}.lh-keys{position:absolute;left:14px;bottom:110px;max-width:calc(100vw - 28px);font-size:12px;font-weight:700;color:#ffe2b8;opacity:.85;padding:7px 12px;transition:opacity .8s}.lh-keys.dim{opacity:0}
 .lh-touch{position:absolute;right:124px;bottom:26px;width:230px;height:240px}
 .lh-touch button{position:absolute;border-radius:50%;color:#fff;font-weight:900;font-size:12px;background:rgba(60,36,90,.62);box-shadow:inset 0 0 0 2px rgba(255,200,130,.6);display:grid;place-items:center}
 .lh-touch button.on{background:rgba(255,160,70,.8)}
@@ -131,7 +131,19 @@ export class HollowUI {
       b.addEventListener('pointerdown', set(true)); for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, set(false));
     }
     this.syncDevice(); this.offDevice = onDeviceChange(() => this.syncDevice());
+    // key hints sit above the platform's bottom dock (measured, so they never overlap it) and fade out
+    // 10 s after the first input; they come back for a few seconds on every area change (showKeys).
+    this._onFirst = () => { removeEventListener('keydown', this._onFirst); removeEventListener('pointerdown', this._onFirst); this.showKeys(10000); };
+    addEventListener('keydown', this._onFirst); addEventListener('pointerdown', this._onFirst);
+    this._lay = () => this.layout(); addEventListener('resize', this._lay); this._layIv = setInterval(this._lay, 1500); requestAnimationFrame(this._lay);
   }
+  layout() {
+    const dock = document.querySelector('.bottombar'), rr = this.root.getBoundingClientRect(); if (!rr.height) return;
+    const dr = dock && dock.offsetParent ? dock.getBoundingClientRect() : null, above = dr && dr.height ? Math.max(0, rr.bottom - dr.top) + 10 : 14;
+    this.el.keys.style.bottom = `${above}px`;
+    if (getDeviceMode() !== 'mobile') this.el.boss.style.bottom = `${Math.max(118, above + 48)}px`; else this.el.boss.style.bottom = '';
+  }
+  showKeys(ms = 6000) { const k = this.el.keys; k.classList.remove('dim'); clearTimeout(this._kt); this._kt = setTimeout(() => k.classList.add('dim'), ms); }
   syncDevice() { const m = getDeviceMode() === 'mobile'; this.el.touch.hidden = !m; this.el.keys.hidden = m; }
   _set(el, key, html) { if (this['_' + key] !== html) { this['_' + key] = html; el.innerHTML = html; } }
   setVitals({ hp, maxHp, glow, maxGlow, power, flaring, dashCharges, dashMax, tonics, title }) {
@@ -152,8 +164,8 @@ export class HollowUI {
     this._set(this.el.mats, 'em', Object.entries(mats).filter(([, v]) => v > 0).map(([k, v]) => `${MAT_INFO[k][0]}${v}`).join(' '));
   }
   setArea(name) { this._set(this.el.area, 'ar', esc(name)); }
-  setQuests(rows, badge) {
-    this._set(this.el.ql, 'q', rows.map(r => `<div class="lh-q ${r.ready ? 'ready' : ''}">${esc(r.title)} <span>${r.ready ? '✔ turn in' : `${r.p}/${r.goal}`}</span><i><b style="width:${Math.min(100, r.p / r.goal * 100)}%"></b></i></div>`).join('') || '<div class="lh-q" style="opacity:.75">Visit Elder Wick by the Quest Board</div>');
+  setQuests(rows, badge, hint = 'Visit Elder Wick by the Quest Board') {
+    this._set(this.el.ql, 'q', rows.map(r => `<div class="lh-q ${r.ready ? 'ready' : ''}">${esc(r.title)} <span>${r.ready ? '✔ turn in' : `${r.p}/${r.goal}`}</span><i><b style="width:${Math.min(100, r.p / r.goal * 100)}%"></b></i></div>`).join('') || `<div class="lh-q" style="opacity:.75">${hint}</div>`);
     this.el.jBadge.hidden = !badge; if (badge) this.el.jBadge.textContent = badge;
   }
   setBoss(b) { const e = this.el.boss; if (!b) { e.hidden = true; return; } e.hidden = false; this._set(e.querySelector('h3'), 'bn', esc(b.name)); e.querySelector('b').style.width = `${Math.max(0, b.hp / b.max * 100)}%`; this._set(e.querySelector('.st'), 'bs', b.status || ''); }
@@ -173,6 +185,6 @@ export class HollowUI {
   modal(icon, title, sub, body, tag = null) { const m = this.el.modal; m.querySelector('.ic').textContent = icon; m.querySelector('h3').textContent = title; m.querySelector('.lh-mh p').textContent = sub || ''; m.querySelector('.lh-mb').innerHTML = body; m.hidden = false; this.modalTag = tag; this.root.classList.add('lh-mopen'); }
   get modalOpen() { return !this.el.modal.hidden; }
   closeModal() { if (this.el.modal.hidden) return; this.el.modal.hidden = true; this.root.classList.remove('lh-mopen'); const t = this.modalTag; this.modalTag = null; this.onCloseModal?.(t); }
-  dispose() { this.offDevice?.(); clearTimeout(this._bt); this.root.remove(); this.style.remove(); for (const k of ['KeyK', 'ShiftLeft', 'KeyQ', 'KeyE', 'KeyR']) this.engine.input.keys.delete(k); }
+  dispose() { this.offDevice?.(); clearTimeout(this._bt); clearTimeout(this._kt); clearInterval(this._layIv); removeEventListener('resize', this._lay); removeEventListener('keydown', this._onFirst); removeEventListener('pointerdown', this._onFirst); this.root.remove(); this.style.remove(); for (const k of ['KeyK', 'ShiftLeft', 'KeyQ', 'KeyE', 'KeyR']) this.engine.input.keys.delete(k); }
 }
 export { esc };

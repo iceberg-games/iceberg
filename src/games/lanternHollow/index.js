@@ -222,10 +222,12 @@ export default {
     });
     const partyName = (id) => party.get(id)?.name || net.players().find(x => x.id === id)?.name || id;
     // everyone: shared state
+    // joiners interpolate only their own area's enemy snapshot (ids are per-area; other areas' snapshots must not evict ours)
+    function applySnap(a) { const s = snaps[a]; if (net.isHost() || a !== area || !s) return; const seen = new Set();
+      for (const r of unpackEnemies(s)) { seen.add(r.id); const cur = interp.get(r.id); if (cur) Object.assign(cur, { ...r, x: cur.x, z: cur.z, tx: r.x, tz: r.z }); else interp.set(r.id, { ...r, tx: r.x, tz: r.z }); }
+      for (const id of [...interp.keys()]) if (!seen.has(id)) interp.delete(id); }
     for (const a of Object.keys(DUNS)) {
-      net.onState(`en.${a}`, (s) => { snaps[a] = s; if (net.isHost()) return; const now = net.now(); const seen = new Set();
-        for (const r of unpackEnemies(s)) { seen.add(r.id); const cur = interp.get(r.id); if (cur) Object.assign(cur, { ...r, x: cur.x, z: cur.z, tx: r.x, tz: r.z }); else interp.set(r.id, { ...r, tx: r.x, tz: r.z }); }
-        for (const id of [...interp.keys()]) if (!seen.has(id)) interp.delete(id); void now; });
+      net.onState(`en.${a}`, (s) => { snaps[a] = s; applySnap(a); });
       net.onState(`boss.${a}`, (b) => { boss[a] = b; });
       net.onState(`dun.${a}`, (d) => applyDun(a, d));
     }
@@ -298,8 +300,8 @@ export default {
     }
     function enterArea(a, pos, facing) {
       const fromVillage = area === 'village'; area = a; applyLook(a); player.teleport(pos, facing); player.vel.set(0, 0, 0);
-      audio.setArea(a); audio.stinger('sfx_area_enter'); ui.setArea(AREAS[a].name); ui.banner(AREAS[a].name, AREA_SUB[a] + (save.gloomPlus && a !== 'village' ? ' · GLOOM+' : ''), 2600);
-      telegraphs.clear(); pending.clear(); pickups.clear(); views.clear(); interp.clear(); announce(true);
+      audio.setArea(a); audio.stinger('sfx_area_enter'); ui.setArea(AREAS[a].name); ui.showKeys(6000); ui.banner(AREAS[a].name, AREA_SUB[a] + (save.gloomPlus && a !== 'village' ? ' · GLOOM+' : ''), 2600);
+      telegraphs.clear(); pending.clear(); for (const g of pickups.takeHoming()) grant(g); pickups.clear(); views.clear(); interp.clear(); applySnap(a); announce(true);
       if (a === 'village') { if (carried) { save.embers += carried; ui.toast(`🔥 Banked <b>${carried}</b> embers`); carried = 0; } if (quests.refreshBounties()) ui.toast('📌 New bounties on the Quest Board', 2600); saveNow(); }
       else { runSW = false; const pw = stats().power; if (pw < AREAS[a].power) setTimeout(() => !disposed && ui.toast(`⚠️ Recommended Power ${AREAS[a].power}+ (you: ${pw}). Upgrade in the village!`, 4000), 2800); }
       if (isDun(a) && fromVillage && save.wisp?.area === a) ui.toast(`✨ Your Ember Wisp is still glowing somewhere in the ${AREAS[a].name}…`);
@@ -443,7 +445,7 @@ export default {
     function openJournal() {
       const act = QUESTS.map(q => ({ q, ...quests.status(q), r: save.quests[q.id] })).filter(e => e.st === 'active' || e.st === 'ready');
       const done = QUESTS.filter(q => save.quests[q.id]?.turnedIn).length;
-      const body = (act.length ? questCards(act).replace(/<button[^>]*data-act="turnin"[^>]*>Turn in<\/button>/g, '<span class="lh-chip ok">Return to giver</span>') : '<p class="lh-say">No active quests. Visit Elder Wick and the Quest Board in the village.</p>')
+      const body = (act.length ? questCards(act).replace(/<button[^>]*data-act="turnin"[^>]*>Turn in<\/button>/g, '<span class="lh-chip ok">Return to giver</span>') : `<p class="lh-say">${trackerHint().startsWith('✔') ? 'Every quest is done. The Hollow is bright again, Lightbringer. Bounties still refresh.' : 'No active quests. Visit Elder Wick and the Quest Board in the village.'}</p>`)
         + (save.bounties.some(b => !b.paid) ? `<h4 style="margin:12px 0 6px;color:#ffcf8a">Bounties</h4>` + save.bounties.filter(b => !b.paid).map(b => { const B = BOUNTY_POOL[b.i]; return `<div class="d" style="margin:3px 0">${b.done ? '🌟' : '📌'} ${esc(B.t)} · <b>${b.p}/${B.goal}</b> · ${B.embers} 🔥</div>`; }).join('') : '')
         + `<div class="meta" style="margin-top:10px">Completed ${done} / ${QUESTS.length} · Kills ${save.stats.kills} · Revives ${save.stats.revives} · Veins ${save.veins.length}/5 · Charms ${save.charms.length}/${Object.keys(CHARMS).length}${save.title ? ` · Title: ${esc(save.title)}` : ''}</div>`;
       ui.modal('📜', 'Quest Journal', `${act.length} active`, body, { kind: 'journal' });
@@ -451,6 +453,33 @@ export default {
     function openParty() {
       const rows = net.players().map(p => { const pi = p.id === me() ? selfRecord() : party.get(p.id) || {}; return `<div class="lh-card ${pi.dn ? 'locked' : ''}"><div class="ic">${pi.dn ? '💀' : '🏮'}</div><div class="mid"><h4>${esc(pi.name || p.name)}${p.isHost ? ' <span class="lh-chip">host</span>' : ''}${p.id === me() ? ' <span class="lh-chip">you</span>' : ''}</h4><div class="d">${esc(AREAS[pi.a]?.name || '…')} · Power ${pi.pw || '?'} · ${pi.hp != null ? `${(pi.hp / 2).toFixed(1)}/${(pi.mhp || 6) / 2} ❤` : ''}</div></div></div>`; }).join('');
       ui.modal('👥', 'Party', `${net.players().length} in this server · ${net.online ? 'online' : 'solo'}`, rows + '<p class="d" style="opacity:.75;margin-top:8px">Everyone in the server shares dungeon progress. Loot is personal, so helping friends always pays. Downed friends can be revived by holding ✋/E next to them.</p>', { kind: 'party' });
+    }
+    // what the tracker says when no quest is active: the next real step, from actual quest state
+    let hintCache = { t: -1, s: '' };
+    function trackerHint() {
+      const now = performance.now(); if (now - hintCache.t < 1000) return hintCache.s; hintCache.t = now;
+      const st = QUESTS.map(q => ({ q, ...quests.status(q) })), done = st.filter(x => x.st === 'done').length;
+      const av = st.filter(x => x.st === 'available'), lock = st.find(x => x.st === 'locked');
+      return (hintCache.s = done === QUESTS.length ? `✔ All ${QUESTS.length} quests complete` : av.length
+        ? `❗ ${av.length} new quest${av.length > 1 ? 's' : ''}: ${((g) => g.slice(0, 2).join(', ') + (g.length > 2 ? ` +${g.length - 2}` : ''))([...new Set(av.map(x => NPC_NAMES[x.q.giver]))])} <span>${done}/${QUESTS.length}</span>`
+        : lock ? `Next: ${esc(lock.q.title)} (${esc(lock.why)}) <span>${done}/${QUESTS.length}</span>` : 'Visit Elder Wick by the Quest Board');
+    }
+    // camera vs rock walls (caves + mine): march the camera boom over the walkable SDF and pull the camera in
+    // before it would sit inside the rock band; eases back out. The player's own zoom (camPref) is preserved.
+    let camPref = null, camSet = null;
+    function camClip(dt) {
+      const pl = player; if (camPref == null || (camSet != null && Math.abs(pl.camDist - camSet) > 0.01)) camPref = pl.camDist;
+      if (area !== 'caves' && area !== 'mine') { if (camSet != null) { pl.camDist = camPref; camSet = null; } return; }
+      const sdf = DUNS[area].sdf, cp = Math.cos(pl.camPitch), sx = Math.sin(pl.camYaw) * cp, sz = Math.cos(pl.camYaw) * cp;
+      let clear = camPref; for (let d = 1.5; d <= camPref + 0.01; d += 0.5) if (sdf(pl.pos.x + sx * d, pl.pos.z + sz * d) > 0.9) { clear = Math.max(4.5, d - 1); break; }
+      const cur = camSet ?? pl.camDist, next = cur + (clear - cur) * Math.min(1, dt * (clear < cur ? 12 : 2.5));
+      pl.camDist = next; camSet = next;
+    }
+    function grant(g) {   // a collected pickup
+      if (g.kind === 'ember') { carried += g.value; audio.ember(); }
+          else if (g.kind === 'glowcap' || g.kind === 'rustcog' || g.kind === 'shard') { save.mats[g.kind]++; audio.play('sfx_material_pickup'); quests.emit(`collect:${g.kind}`); markDirty(); }
+          else if (g.kind === 'mote') { combat.glow = Math.min(stats().glow, combat.glow + g.value); audio.play('sfx_lantern_refill', { gain: 0.6 }); }
+          else if (g.kind === 'sigil') { save.mats.sigil++; audio.play('sfx_material_pickup', { rate: 0.7 }); ui.toast('🔱 Boss Sigil collected!'); markDirty(); }
     }
     function openMap() {
       const dots = [{ x: player.pos.x, z: player.pos.z, me: true }];
@@ -479,7 +508,7 @@ export default {
         <div class="loot">${loot.map(([i, t]) => `<span class="lh-chip">${i} ${esc(t)}</span>`).join('')}</div>
         <div class="stats"><span>⏱ ${mins} min</span><span>⚔️ ${s.kills} foes</span><span>💚 ${s.revives} revives</span><span>💀 ${s.deaths} gutterings</span></div>
         <div class="cred">${credits.map(c => `<div>${esc(c)}</div>`).join('')}</div>
-        <p class="d" style="opacity:.8">Turn in “Return the Aurora” to Elder Wick for the <b>Lightbringer</b> title. <b>Gloom+</b> is now available at the Waystone.</p>
+        <p class="d" style="opacity:.8">${save.quests.lh_q_hollow_queen?.a && !save.quests.lh_q_hollow_queen?.turnedIn ? 'Turn in “Return the Aurora” to Elder Wick for the <b>Lightbringer</b> title. ' : ''}<b>Gloom+</b> is now available at the Waystone.</p>
         <button class="lh-btn" data-act="close">Carry on</button></div>`, { kind: 'ending' });
       audio.play('sfx_quest_complete');
     }
@@ -615,7 +644,7 @@ export default {
         const targets = playersIn(a);
         if (targets.length) ensureSim(a);
         const sim = sims[a]; if (!sim) continue;
-        if (!targets.length) { emptyT[a] = (emptyT[a] || 0) + dt; if (emptyT[a] > 60 && (sim.list.length || sim.dun.posts.some(Boolean) || sim.dun.wave || sim.dun.bossDead || sim.dun.levers?.some(Boolean))) { sim.reset(); emptyT[a] = 0; } }
+        if (!targets.length) { emptyT[a] = (emptyT[a] || 0) + dt; if (emptyT[a] > (sim.dun.bossDead ? 20 : 60) && (sim.list.length || sim.dun.posts.some(Boolean) || sim.dun.wave || sim.dun.bossDead || sim.dun.levers?.some(Boolean))) { sim.reset(); emptyT[a] = 0; } }
         else { emptyT[a] = 0; sim.step(dt, targets); }
         if (pub) {
           if (sim.dirty || sim.list.length) { net.setState(`en.${a}`, packEnemies(sim.list, net.now())); sim.dirty = false; }
@@ -712,11 +741,7 @@ export default {
         if (b && !b.dead && DA) { const r = BOSSES[b.id]?.r || 3; bossCircle.x = b.x; bossCircle.z = b.z; bossCircle.r = r; if (!collision.circles.includes(bossCircle)) collision.circles.push(bossCircle); } else { const i = collision.circles.indexOf(bossCircle); if (i >= 0) collision.circles.splice(i, 1); }
         if (area === 'caves' && b) caves.setSacs(b.sacs || [1, 1, 1, 1]);
         // pickups
-        for (const g of pickups.update(dt, t, player.pos, stats().magnet)) {
-          if (g.kind === 'ember') { carried += g.value; audio.ember(); }
-          else if (g.kind === 'glowcap' || g.kind === 'rustcog' || g.kind === 'shard') { save.mats[g.kind]++; audio.play('sfx_material_pickup'); quests.emit(`collect:${g.kind}`); markDirty(); }
-          else if (g.kind === 'mote') { combat.glow = Math.min(stats().glow, combat.glow + g.value); audio.play('sfx_lantern_refill', { gain: 0.6 }); }
-          else if (g.kind === 'sigil') { save.mats.sigil++; audio.play('sfx_material_pickup', { rate: 0.7 }); ui.toast('🔱 Boss Sigil collected!'); markDirty(); } }
+        for (const g of pickups.update(dt, t, player.pos, stats().magnet)) grant(g);
         updateWisp(t); updateGhosts(t);
         // lantern light + decals
         const s = stats(), r = combat.radius;
@@ -745,7 +770,7 @@ export default {
         if (area === 'caves') caves.update(dt, t, { center: p, dark: ph2dark, sacPhase: !!ph2 });
         if (area === 'mine') { liftT = Math.max(0, liftT - dt); mine.update(dt, t, { center: p, dark: ph2dark, now, lampSwing: bossLive && b.atk === 3 && now < b.atkAt + 400 ? (b.pts || []).map(x => x[0] / 100) : null }); }
         if (area === 'throne') throne.update(dt, t, { center: p, braz: bossLive && b.braz ? b.braz.map(x => x > now) : null, night: bossLive && b.night ? 1 : 0, aurora: bossLive && b.aur > now });
-        particles.update(dt);
+        particles.update(dt); camClip(dt);
         // music: crossfade to the boss loop in the arena; the Queen's intense layer rises with her phases
         const inDen = DA && Math.hypot(p.x - DA.L.den.x, p.z - DA.L.den.z) < DA.L.den.r + 1, fight = inDen && bossLive;
         audio.setMusic(fight ? BOSSES[b.id].music : `bgm_${area}`);
@@ -753,7 +778,7 @@ export default {
         // HUD
         ui.setVitals({ hp: combat.hp, maxHp: combat.maxHp, glow: combat.glow, maxGlow: s.glow, power: s.power, flaring: combat.flaring, dashCharges: combat.dash.charges, dashMax: s.charges, tonics: save.tonics, title: save.title });
         ui.setEmbers(save.embers, carried, save.mats);
-        ui.setQuests(quests.tracked().map(({ q, r: qr }) => ({ title: q.title, p: qr?.p || 0, goal: q.goal, ready: !!qr?.done })), quests.readyCount() || '');
+        ui.setQuests(quests.tracked().map(({ q, r: qr }) => ({ title: q.title, p: qr?.p || 0, goal: q.goal, ready: !!qr?.done })), quests.readyCount() || '', trackerHint());
         ui.setBoss(fight ? { name: BOSSES[b.id].name, hp: b.hp, max: b.max, status: bossStatus(b, now) } : null);
         ui.setAllies([...party.entries()].filter(([id]) => id !== me() && net.players().some(x => x.id === id)).map(([, v]) => ({ name: v.name || '?', power: v.pw || 1, hpPct: v.mhp ? v.hp / v.mhp * 100 : 100, down: v.dn })));
         if (announcePending) announce(false);
@@ -786,12 +811,12 @@ export default {
       get music() { return { bgm: audio.want.bgm, cur: audio.cur.bgm?.name || null, intensity: audio.intensity }; },
       player, collision, travel, openWaystone, openJournal, openMap, openGiver, openHearth, quests, CAVE, MINE, THRONE,
     };
-    if (testMode) Object.assign(hooks, {
-      warpTo(x, z, facing = 0) { player.teleport(V(x, 0, z), facing); const a = areaAt(x, z); if (a && a !== area) { area = a; applyLook(a); audio.setArea(a); } },
+    if (testMode) Object.defineProperties(hooks, Object.getOwnPropertyDescriptors({   // descriptors keep getters live
+      warpTo(x, z, facing = 0) { player.teleport(V(x, 0, z), facing); const a = areaAt(x, z); if (a && a !== area) { area = a; applyLook(a); audio.setArea(a); views.clear(); interp.clear(); applySnap(a); } },
       give(o) { for (const [k, v] of Object.entries(o)) { if (k === 'embers') save.embers += v; else if (k in save.mats) save.mats[k] += v; else if (k === 'carried') carried += v; } markDirty(); },
       setSave(o) { save = normalizeSave({ ...save, ...o }); },
       damageAll(n = 999) { if (!net.isHost()) return; const sim = sims[area]; for (const e of [...(sim?.list || [])]) { if (e.st === ST.burrowed) e.st = ST.exposed; for (let k = 0; k < 20 && sim.list.includes(e); k++) sim.applyHit(e.id, n, { flare: 1 }); } },
-      damageBoss(n) { for (let k = 0; k < Math.ceil(n / 60); k++) sims[area]?.hitBoss(Math.min(60, n - k * 60)); }, burstSac(i, x, z) { sims[area]?.hitBoss(0, { sac: i, x, z }); },
+      damageBoss(n) { for (let k = 0; k < Math.ceil(n / 60); k++) sims[area]?.hitBoss(Math.min(60, n - k * 60)); }, burstSac(i, x, z) { return sims[area]?.hitBoss(0, { sac: i, x, z }); },
       god(on = true) { if (on && !combat._td) { combat._td = combat.takeDamage; combat.takeDamage = () => 0; } else if (!on && combat._td) { combat.takeDamage = combat._td; delete combat._td; } },
       openGate() { const s = sims[area]; if (s) { s.dun.gate = 0; s.dirtyDun(); } }, killAdds() { const s = sims[area]; if (s) for (const e of [...s.list]) if (e.boss) s.kill(e); },
       hurt(n) { combat.iframes = 0; return combat.takeDamage(n); }, press(code) { taps.add(code); },
@@ -799,8 +824,8 @@ export default {
         net.fakeEvent(f.id, 'at', { a: area, hp: o.down ? 0 : 6, mhp: 6, pw: 3, dn: !!o.down, r: 6, name: f.name }); return f.id; },
       allyDown(id, down = true) { const f = net.fakes?.find(x => x.id === id); if (f) { f.down = down; net.fakeEvent(id, 'at', { a: area, hp: down ? 0 : 6, mhp: 6, pw: 3, dn: down, r: 6, name: f.name }); } },
       allyRevivesMe(id) { const f = net.fakes?.find(x => x.id === id); if (!f) return; f.position = { x: player.pos.x + 1, y: 0, z: player.pos.z }; net.fakeEvent(id, 'revive', { t: me() }); },
-      sims, net,
-    });
+      sims, net, pickups, get allyNear() { return downedAllyNear(); }, get reviveHold() { return reviveHold; }, get modalOpen() { return ui.modalOpen; },
+    }));
     if (testMode) window.__lh = hooks;
 
     // ---------- start ----------

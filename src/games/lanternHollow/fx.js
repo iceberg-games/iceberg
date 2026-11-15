@@ -128,7 +128,7 @@ export class Pickups {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const p = this.list[i], m = p.m; p.age += dt;
       const dx = pos.x - m.position.x, dy = pos.y + 1.1 - m.position.y, dz = pos.z - m.position.z, d = Math.hypot(dx, dy, dz);
-      if (p.age > 0.45 && (d < magnet || (p.home && p.age > 1.8 + (i % 12) * 0.06))) { const s = Math.min(1, dt * (8 + (magnet - d) * 4)); m.position.x += dx * s; m.position.y += dy * s; m.position.z += dz * s; }
+      if (p.age > 0.45 && (d < magnet || (p.home && p.age > 1.8 + (i % 12) * 0.06))) { const s = Math.min(1, dt * (8 + Math.max(0, magnet - d) * 4)); m.position.x += dx * s; m.position.y += dy * s; m.position.z += dz * s; }
       else { p.v.y -= 18 * dt; m.position.addScaledVector(p.v, dt); if (m.position.y < 0.35) { m.position.y = 0.35; p.v.set(p.v.x * 0.5, Math.abs(p.v.y) * 0.3, p.v.z * 0.5); if (Math.abs(p.v.y) < 0.6) p.v.set(0, 0, 0); } if (!p.v.lengthSq()) m.position.y = 0.45 + Math.sin(t * 3 + i) * 0.1; }
       m.rotation.y += dt * 3;
       if (p.age > 0.45 && d < 0.75) { got.push({ kind: p.kind, value: p.value }); m.removeFromParent(); this.list.splice(i, 1); }
@@ -136,5 +136,7 @@ export class Pickups {
     }
     return got;
   }
+  /** Boss loot still flying to you when you leave the area: hand it over instead of losing it. */
+  takeHoming() { const out = this.list.filter(p => p.home).map(p => ({ kind: p.kind, value: p.value })); return out; }
   clear() { for (const p of this.list) p.m.removeFromParent(); this.list = []; }
 }
