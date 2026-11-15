@@ -105,7 +105,7 @@ export default {
       for (const m of C.MILESTONES) {
         if (G.save.milestones.includes(m.id) || !m.test(G.save)) continue;
         G.save.milestones.push(m.id);
-        try { economy.earn(m.bb, `Frostlings: ${m.label}`, { source: 'Frostlings' }); } catch { /* */ }
+        try { economy.earn(m.bb, `Frostlings: ${m.label}`, { source: 'game:frostlings' }); } catch { /* */ }
         ui.toast(`🏅 <b>+${m.bb} BB</b> · ${m.label}`, 4500);
       }
     };
