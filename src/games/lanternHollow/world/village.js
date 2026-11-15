@@ -6,7 +6,8 @@ import { makeMats, makeEmbers, makeLantern } from './common.js';
 
 const rnd = (() => { let s = 1337; return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; })();
 
-export function buildVillage({ mobile = false } = {}) {
+export function buildVillage({ mobile = false, lights } = {}) {
+  const vl = (x, y, z, c, i, d, o = {}) => lights.add(x, y, z, c, i, d, { area: 'village', ...o });
   const M = makeMats();
   const group = new THREE.Group(); group.name = 'village';
   const boxes = [], circles = [], interactables = [], animated = [], occluders = [];
@@ -41,8 +42,7 @@ export function buildVillage({ mobile = false } = {}) {
   const flames = [];
   for (let i = 0; i < 7; i++) { const f = new THREE.Mesh(new THREE.ConeGeometry(0.35 + rnd() * 0.25, 1.4 + rnd() * 0.8, 7), i % 2 ? M.flame : M.flameCore);
     const a = i / 7 * Math.PI * 2; f.position.set(Math.cos(a) * 0.45 * (i ? 1 : 0), 0.6, Math.sin(a) * 0.45 * (i ? 1 : 0)); fire.add(f); flames.push(f); }
-  const hearthLight = new THREE.PointLight('#ff9a3c', 60, 34, 1.6); hearthLight.position.set(0, 3.2, 0); hearthLight.castShadow = !mobile;
-  hearthLight.shadow.mapSize.set(512, 512); group.add(hearthLight);
+  const hearthLight = vl(0, 3.2, 0, '#ff9a3c', 60, 34, { flicker: 0.12 });
   const embers = makeEmbers(new THREE.Vector3(0, 2.4, 0), mobile ? 30 : 70, 1.2); group.add(embers.points);
   circles.push([0, 0, 3.3, 6]);
   interactables.push({ id: 'hearth', name: 'Great Hearth', x: 0, z: 0, r: 4.8, verb: 'Rekindle' });
@@ -92,9 +92,10 @@ export function buildVillage({ mobile = false } = {}) {
   add(new THREE.BoxGeometry(1.1, 0.35, 0.45), M.iron, 0, 0.85, 0, { parent: anvil });
   add(new THREE.ConeGeometry(0.22, 0.5, 4), M.iron, 0.75, 0.88, 0, { parent: anvil, rz: Math.PI / 2 });
   add(new THREE.CylinderGeometry(0.5, 0.45, 0.9, 12), M.wood, 2.8, 0.75, -1.8, { parent: forge });
-  const forgeLight = new THREE.PointLight('#ff6a2a', 18, 14, 1.8); forgeLight.position.set(17 - 2.2, 1.6, -13 - 0.4); group.add(forgeLight);
+  const forgeLight = vl(17 - 2.2, 1.6, -13 - 0.4, '#ff6a2a', 18, 14, { flicker: 0.15 });
   solid(13, -16, 21, -10, 4.2); occluders.push(forge);
-  for (const [dx, dz] of [[6.5, 1], [6.5, 4]]) { const d = new THREE.Group(); d.position.set(17 + dx, 0, -13 + dz); group.add(d);
+  const dummies = [];
+  for (const [dx, dz] of [[6.5, 1], [6.5, 4]]) { const d = new THREE.Group(); d.position.set(17 + dx, 0, -13 + dz); group.add(d); dummies.push({ g: d, x: 17 + dx, z: -13 + dz, wob: 0 });
     add(new THREE.CylinderGeometry(0.1, 0.1, 1.8, 6), M.wood, 0, 0.9, 0, { parent: d }); add(new THREE.CylinderGeometry(0.35, 0.3, 0.9, 10), M.paper, 0, 1.5, 0, { parent: d });
     add(new THREE.BoxGeometry(1.2, 0.12, 0.12), M.wood, 0, 1.6, 0, { parent: d }); add(new THREE.SphereGeometry(0.25, 10, 8), M.paper, 0, 2.15, 0, { parent: d }); circles.push([d.position.x, d.position.z, 0.45, 2.4]); }
   interactables.push({ id: 'brann', name: 'Smith Brann', x: 17, z: -9, r: 3.2, verb: 'Forge' });
@@ -138,7 +139,7 @@ export function buildVillage({ mobile = false } = {}) {
     circles.push([x, -31 + z, 0.8, 3.4]); });
   const portal = add(new THREE.TorusGeometry(2.2, 0.22, 10, 40), M.stone, 0, 2.6, 0, { parent: way });
   const veil = add(new THREE.CircleGeometry(2.0, 40), new THREE.MeshBasicMaterial({ color: '#7fe3ff', transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }), 0, 2.6, 0, { parent: way, cast: false });
-  const wayLight = new THREE.PointLight('#5fd0ff', 10, 14, 1.8); wayLight.position.set(0, 2.6, -31); group.add(wayLight);
+  vl(0, 2.6, -31, '#5fd0ff', 10, 14);
   for (const s of [-1, 1]) circles.push([s * 2.2, -31, 0.35, 5]);
   interactables.push({ id: 'waystone', name: 'Waystone', x: 0, z: -28, r: 3.4, verb: 'Travel' });
 
@@ -150,13 +151,12 @@ export function buildVillage({ mobile = false } = {}) {
     for (let i = 0; i < 4; i++) add(new THREE.BoxGeometry(0.16, 1.0, 0.16), M.woodDark, s * 1.75, 0.5, 21.2 + i * 1.9); }
 
   // Lamp posts along paths (6 real lights, the rest emissive only)
-  const lights = [hearthLight, forgeLight, wayLight];
   const posts = [[3, -10], [-3, -20], [3, -24], [-3, 10], [3, 18], [-3, 30], [9, -2], [-9, 2]];
   posts.forEach(([x, z], i) => { const p = new THREE.Group(); p.position.set(x, 0, z); group.add(p);
     add(new THREE.CylinderGeometry(0.1, 0.14, 3.2, 8), M.iron, 0, 1.6, 0, { parent: p });
     add(new THREE.BoxGeometry(0.7, 0.08, 0.08), M.iron, 0.3, 3.15, 0, { parent: p });
     const l = makeLantern(M, 1.6); l.position.set(0.6, 2.85, 0); p.add(l); animated.push({ o: l, swing: i + 7 });
-    if (i < (mobile ? 3 : 6)) { const pl = new THREE.PointLight('#ffb35a', 8, 12, 1.8); pl.position.set(x + 0.6, 2.8, z); group.add(pl); lights.push(pl); }
+    vl(x + 0.6, 2.8, z, '#ffb35a', 8, 12, { flicker: 0.05 });
     circles.push([x, z, 0.25, 3.3]); });
 
   // Pines: 3-tier cones with snow tips, instanced
@@ -197,13 +197,12 @@ export function buildVillage({ mobile = false } = {}) {
 
   const t0 = { v: 0 };
   return {
-    group, interactables, lights, runes, occluders: occluders.flatMap(g => { const out = []; g.traverse(o => { if (o.isMesh) out.push(o); }); return out; }), // camera ray is non-recursive
+    group, interactables, runes, dummies, hearthLight, occluders: occluders.flatMap(g => { const out = []; g.traverse(o => { if (o.isMesh) out.push(o); }); return out; }), // camera ray is non-recursive
     colliders(col) { for (const b of boxes) col.addBox(...b); for (const [x, z, r, top] of circles) col.addCircle(x, z, r, top); },
     update(dt, t) {
       t0.v = t;
       flames.forEach((f, i) => { const k = 1 + Math.sin(t * (9 + i) + i * 1.7) * 0.18; f.scale.set(1 / Math.sqrt(k), k, 1 / Math.sqrt(k)); f.rotation.y = t * (0.6 + i * 0.1); });
-      hearthLight.intensity = 55 + Math.sin(t * 11) * 6 + Math.sin(t * 23.7) * 4;
-      forgeLight.intensity = 16 + Math.sin(t * 7.3) * 3;
+      for (const d of dummies) { if (d.wob > 0) d.wob = Math.max(0, d.wob - dt * 2); d.g.rotation.z = Math.sin(t * 25) * d.wob * 0.25; }
       embers.update(dt, t);
       veil.material.opacity = 0.28 + Math.sin(t * 2) * 0.08; veil.rotation.z = t * 0.3; portal.rotation.z = Math.sin(t * 0.5) * 0.05;
       runes.forEach((r, i) => { r.material.emissiveIntensity = 1.1 + Math.sin(t * 2 + i) * 0.4; });
