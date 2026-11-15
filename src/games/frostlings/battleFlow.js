@@ -127,8 +127,9 @@ export function createBattle(G) {
     m.scale.setScalar(0.01);
     audio.sfx('sfx_snare_throw'); burst(home.x, 1.2, home.z, 30, TYPES[c.type].color, 5, 2, 0.8);
     ui.battleMsg(side === BT.ME ? `Go, <b>${c.name}</b>!` : BT.kind === 'wild' ? `A wild <b>${c.name}</b> appeared!` : `${BT.foeName} sends out <b>${c.name}</b>!`);
+    cards();
     await tween(0.35, (k) => { m.scale.setScalar(s0 * Math.max(0.01, k < 0.7 ? k / 0.7 * 1.15 : 1.15 - (k - 0.7) / 0.3 * 0.15)); });
-    cards(); await wait(first ? 500 : 650); guard();
+    await wait(first ? 500 : 650); guard();
     if (side === BT.FOE) G.setDex(c.sp, 1);
   }
 
