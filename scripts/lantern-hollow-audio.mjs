@@ -1,24 +1,29 @@
 // Lantern Hollow: sync the Sound Designer pack into the game (same pattern as other games: oggs copied into
 // src/games/lanternHollow/sfx and bundled via import.meta.glob). Re-run whenever a new batch lands, then build.
 //   node scripts/lantern-hollow-audio.mjs [/workspace/iceberg-audio/lantern-hollow]
+// AUDIO_VARIANT is the single switch for the audio source: 'web' = the web-size re-render in <pack>/web/
+// (same filenames, mono ambience); '' = the full-size masters in the pack root. Gains/loops always come from manifest.json.
 // Writes sfx/*.ogg (canonical sfx_/bgm_/amb_ names only) and gains.js (suggested_gain from every manifest).
-import { readdirSync, copyFileSync, readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
+import { readdirSync, copyFileSync, readFileSync, writeFileSync, existsSync, statSync, unlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-const SRC = process.argv[2] || '/workspace/iceberg-audio/lantern-hollow';
+const AUDIO_VARIANT = 'web';
+const PACK = process.argv[2] || '/workspace/iceberg-audio/lantern-hollow';
+const SRC = AUDIO_VARIANT ? join(PACK, AUDIO_VARIANT) : PACK;
 const GAME = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'games', 'lanternHollow');
 const OUT = join(GAME, 'sfx');
 // Sound Designer notes: batch 1 (step_snow_3) and batch 3 (required enemy/boss gains)
 const OVERRIDES = { sfx_step_snow_3: 0.72, sfx_drill: 0.60, sfx_wraith_wail: 0.55, sfx_minecart_horn: 0.67, sfx_bat_screech: 0.73, sfx_boss_roar: 0.87 };
 if (!existsSync(SRC)) { console.log('no audio folder yet:', SRC); process.exit(0); }
-let n = 0;
-for (const f of readdirSync(SRC)) if (/^(sfx|bgm|amb)_[a-z0-9_]+\.ogg$/.test(f)) {
+let n = 0; const want = new Set();
+for (const f of readdirSync(SRC)) if (/^(sfx|bgm|amb)_[a-z0-9_]+\.ogg$/.test(f)) { want.add(f);
   const dst = join(OUT, f); if (!existsSync(dst) || statSync(dst).size !== statSync(join(SRC, f)).size) { copyFileSync(join(SRC, f), dst); n++; } }
+for (const f of readdirSync(OUT)) if (f.endsWith('.ogg') && !want.has(f)) { unlinkSync(join(OUT, f)); console.log('pruned stale', f); }
 // Source of truth: the merged manifest.json (cues[]: name, loop, suggested_gain). Older per-batch manifests only fill gaps.
 const gains = {}, loops = [];
-for (const dir of [join(SRC, 'src')]) if (existsSync(dir)) for (const f of readdirSync(dir)) if (/manifest.*\.json$/.test(f)) {
+for (const dir of [join(PACK, 'src'), join(SRC, 'src')]) if (existsSync(dir)) for (const f of readdirSync(dir)) if (/manifest.*\.json$/.test(f)) {
   try { const m = JSON.parse(readFileSync(join(dir, f), 'utf8')); for (const e of m.files || m.cues || []) if (e.name && Number.isFinite(e.suggested_gain)) gains[e.name] = e.suggested_gain; } catch (e) { console.warn('bad manifest', f, e.message); } }
-const MAIN = join(SRC, 'manifest.json');
+const MAIN = existsSync(join(SRC, 'manifest.json')) ? join(SRC, 'manifest.json') : join(PACK, 'manifest.json');
 if (existsSync(MAIN)) { const m = JSON.parse(readFileSync(MAIN, 'utf8')); for (const e of m.cues || m.files || []) { if (Number.isFinite(e.suggested_gain)) gains[e.name] = e.suggested_gain; if (e.loop) loops.push(e.name); } }
 for (const [k, v] of Object.entries(OVERRIDES)) { if (gains[k] != null && gains[k] !== v) console.warn(`gain mismatch ${k}: manifest ${gains[k]} vs note ${v} (manifest wins)`); gains[k] ??= v; }
 const keys = Object.keys(gains).sort();
