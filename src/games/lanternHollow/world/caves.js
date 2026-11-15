@@ -25,14 +25,14 @@ export const CAVE = {
   pools: [{ x0: -7, x1: -2.6, z0: Z - 3, z1: Z + 10 }, { x0: 2.6, x1: 7, z0: Z - 3, z1: Z + 10 }],
   chambers: {   // host spawns a chamber's enemies when a player first comes near
     grotto: { x: 0, z: Z + 59, r: 15, spawns: [['slime', -4, Z + 56], ['slime', 4, Z + 54], ['slime', 0, Z + 52]] },
-    hall: { x: 0, z: Z + 29, r: 17, spawns: [['slime', -6, Z + 32], ['slime', 5, Z + 24], ['slimeBig', 0, Z + 27], ['spore', -8, Z + 25], ['spore', 8, Z + 33]] },
+    hall: { x: 0, z: Z + 29, r: 17, spawns: [['slime', -6, Z + 32], ['slime', 5, Z + 24], ['slimeBig', 0, Z + 27], ['spore', -8, Z + 25], ['spore', 8, Z + 33], ['spore', 9, Z + 22]] },
     bridge: { x: 0, z: Z + 4, r: 14, spawns: [['creeper', 0, Z + 8], ['creeper', 0, Z - 2], ['slime', 0, Z + 3], ['creeper', -1, Z + 12]] },
-    hollow: { x: -21, z: Z + 4, r: 11, spawns: [['moth', -22, Z + 6], ['moth', -18, Z + 2], ['moth', -24, Z + 1]] },
+    hollow: { x: -21, z: Z + 4, r: 11, spawns: [['moth', -22, Z + 6], ['moth', -18, Z + 2], ['moth', -24, Z + 1], ['spore', -25, Z + 7]] },
   },
   garden: { x: 0, z: Z - 22, r: 12, waves: [
     [['slime', -6, Z - 18], ['slime', 6, Z - 18], ['slime', 0, Z - 28], ['spore', 0, Z - 20]],
-    [['creeper', -5, Z - 24], ['creeper', 5, Z - 24], ['moth', -8, Z - 15], ['moth', 8, Z - 15]],
-    [['slimeBig', -5, Z - 26], ['slimeBig', 5, Z - 26], ['spore', -9, Z - 22], ['moth', 0, Z - 15]],
+    [['creeper', -5, Z - 24], ['creeper', 5, Z - 24], ['moth', -8, Z - 15], ['moth', 8, Z - 15], ['spore', 7, Z - 28]],
+    [['slimeBig', -5, Z - 26], ['slimeBig', 5, Z - 26], ['spore', -9, Z - 22], ['spore', 9, Z - 20], ['moth', 0, Z - 15]],
   ] },
   gateRule: 'waves',
   gate: { x0: -3.2, x1: 3.2, z0: Z - 36.6, z1: Z - 35.4 },

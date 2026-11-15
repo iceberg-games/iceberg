@@ -136,5 +136,7 @@ export class Pickups {
     }
     return got;
   }
+  /** Boss loot still flying to you when you leave the area: hand it over instead of losing it. */
+  takeHoming() { const out = this.list.filter(p => p.home).map(p => ({ kind: p.kind, value: p.value })); return out; }
   clear() { for (const p of this.list) p.m.removeFromParent(); this.list = []; }
 }
