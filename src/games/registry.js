@@ -18,6 +18,7 @@ import glacierDrift from './glacier-drift/index.js';
 import penguPlaza from './pengu-plaza/index.js';
 import crystalSpire from './crystalSpire/index.js';
 import lanternHollow from './lanternHollow/index.js';
+import frostlings from './frostlings/index.js';
 import { withEventQuest, frostQuest, hqQuest, obbyQuest } from './_event/hooks.js'; // Natural Disasters event quests (remove to end the event)
 import { creatorDef, customGameDef } from './customGame.js';
 import { backend } from '../backend/LocalBackend.js';
@@ -40,6 +41,7 @@ export const BUILTIN_GAMES = [
   penguPlaza,
   crystalSpire,
   lanternHollow,
+  frostlings,
 ];
 export const CREATOR = creatorDef;
 
