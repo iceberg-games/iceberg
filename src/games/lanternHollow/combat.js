@@ -92,7 +92,7 @@ export class PlayerCombat {
     if (pressed('KeyR')) this.onTonic?.();
     // flare
     const wantFlare = held('KeyQ') && this.glow > 0.5;
-    if (wantFlare && !this.flaring) { this.audio.play('sfx_flare_start'); this.audio.loopOn('flare', 'sfx_flare_loop', 0.6); }
+    if (wantFlare && !this.flaring) { this.audio.play('sfx_flare_start'); this.audio.loopOn('flare', 'sfx_flare_loop'); }
     if (!wantFlare && this.flaring) this.audio.loopOff('flare');
     this.flaring = wantFlare;
     if (this.flaring) this.glow = Math.max(0, this.glow - 25 * dt); else this.glow = Math.min(s.glow, this.glow + 3 * regenMul * dt);

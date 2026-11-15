@@ -76,7 +76,7 @@ const CSS = `
 .lh-btn.alt{background:linear-gradient(180deg,#e9f9ff,#7fd4ff);box-shadow:0 4px 0 #3f88c0}.lh-btn.go{background:linear-gradient(180deg,#eaffef,#7dffa0);box-shadow:0 4px 0 #3aa860}
 .lh-tabs{display:flex;gap:6px;margin-bottom:10px}.lh-tabs button{padding:6px 12px;border-radius:10px;background:rgba(255,255,255,.07);font-weight:900;font-size:13px}.lh-tabs button.on{background:#ffb347;color:#2a1c44}
 .lh-res{text-align:center}.lh-res .big{font-size:56px}.lh-res .loot{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:10px 0 14px}
-.lh-keys{position:absolute;left:14px;bottom:64px;font-size:12px;font-weight:700;color:#ffe2b8;opacity:.85;padding:7px 12px}
+.lh-mopen .lh-keys{display:none}.lh-keys{position:absolute;left:14px;bottom:64px;font-size:12px;font-weight:700;color:#ffe2b8;opacity:.85;padding:7px 12px}
 .lh-touch{position:absolute;right:124px;bottom:26px;width:230px;height:240px}
 .lh-touch button{position:absolute;border-radius:50%;color:#fff;font-weight:900;font-size:12px;background:rgba(60,36,90,.62);box-shadow:inset 0 0 0 2px rgba(255,200,130,.6);display:grid;place-items:center}
 .lh-touch button.on{background:rgba(255,160,70,.8)}
@@ -163,9 +163,9 @@ export class HollowUI {
   setDowned(on, text = '', pct = 1) { const d = this.el.downed; d.hidden = !on; this.el.vDown.style.opacity = on ? 1 : 0; if (on) { this._set(d.querySelector('p'), 'dw', esc(text)); d.querySelector('.ring').style.setProperty('--p', `${Math.round(pct * 100)}%`); } }
   fade(on) { this.el.fade.classList.toggle('on', on); }
   /** Generic modal. body = HTML; buttons inside use data-act / data-v. */
-  modal(icon, title, sub, body, tag = null) { const m = this.el.modal; m.querySelector('.ic').textContent = icon; m.querySelector('h3').textContent = title; m.querySelector('.lh-mh p').textContent = sub || ''; m.querySelector('.lh-mb').innerHTML = body; m.hidden = false; this.modalTag = tag; }
+  modal(icon, title, sub, body, tag = null) { const m = this.el.modal; m.querySelector('.ic').textContent = icon; m.querySelector('h3').textContent = title; m.querySelector('.lh-mh p').textContent = sub || ''; m.querySelector('.lh-mb').innerHTML = body; m.hidden = false; this.modalTag = tag; this.root.classList.add('lh-mopen'); }
   get modalOpen() { return !this.el.modal.hidden; }
-  closeModal() { if (this.el.modal.hidden) return; this.el.modal.hidden = true; const t = this.modalTag; this.modalTag = null; this.onCloseModal?.(t); }
+  closeModal() { if (this.el.modal.hidden) return; this.el.modal.hidden = true; this.root.classList.remove('lh-mopen'); const t = this.modalTag; this.modalTag = null; this.onCloseModal?.(t); }
   dispose() { this.offDevice?.(); clearTimeout(this._bt); this.root.remove(); this.style.remove(); for (const k of ['KeyK', 'ShiftLeft', 'KeyQ', 'KeyE', 'KeyR']) this.engine.input.keys.delete(k); }
 }
 export { esc };

@@ -232,7 +232,7 @@ export default {
     net.onEvent('sac', (p) => { if (p?.a !== area) return; const s = caves.sacs[p.i]; if (s) { burstAt(s.x, s.z, ['#fff08a', '#ffd23a', '#ffffff'], 40, 2.4); audio.play('sfx_spore_burst'); } ui.banner('Mossmaw is stunned!', 'Strike now!', 1600); });
     net.onEvent('bossDown', (p) => {
       if (p?.a !== area || area !== 'caves') return; const [bx, bz] = CAVE.den.boss;
-      audio.play(ENEMY_SFX.boss.defeat); shake = 0.8; burstAt(bx, bz, ['#ff8fd0', '#ffd27a', '#ffffff', '#9dff7a'], 120, 3);
+      audio.play(ENEMY_SFX.boss.defeat); setTimeout(() => { if (!disposed) audio.stinger('sfx_victory_fanfare'); }, 1400); shake = 0.8; burstAt(bx, bz, ['#ff8fd0', '#ffd27a', '#ffffff', '#9dff7a'], 120, 3);
       for (let i = 0; i < 12; i++) pickups.spawn('ember', bx, bz + 4, 10);
       pickups.spawn('sigil', bx, bz + 4, 1);
       const first = !save.bosses.mossmaw; save.bosses.mossmaw++; quests.emit('boss:mossmaw');
@@ -254,7 +254,7 @@ export default {
     }
     function enterArea(a, pos, facing) {
       const fromVillage = area === 'village'; area = a; applyLook(a); player.teleport(pos, facing); player.vel.set(0, 0, 0);
-      audio.setArea(a); ui.setArea(AREAS[a].name); ui.banner(AREAS[a].name, a === 'village' ? 'Warm hearths, safe paths' : 'Glowing roots… and things that hate the light', 2600);
+      audio.setArea(a); audio.stinger('sfx_area_enter'); ui.setArea(AREAS[a].name); ui.banner(AREAS[a].name, a === 'village' ? 'Warm hearths, safe paths' : 'Glowing roots… and things that hate the light', 2600);
       telegraphs.clear(); pending.clear(); pickups.clear(); announce(true);
       if (a === 'village' && carried) { save.embers += carried; ui.toast(`🔥 Banked <b>${carried}</b> embers`); carried = 0; saveNow(); }
       if (a === 'caves' && fromVillage && save.wisp?.area === 'caves') ui.toast('✨ Your Ember Wisp is still glowing somewhere in the caves…');
@@ -449,7 +449,7 @@ export default {
     function scheduleAttacks(recs, b, now) {
       const add = (sh, src, id) => { if (pending.has(sh.key) || now > sh.t1 + 150) return; pending.set(sh.key, { ...sh, src, id, t0: sh.t0 });
         const dist = Math.hypot(sh.s.x - player.pos.x, sh.s.z - player.pos.z);
-        if (dist < 24) { const win = (sh.t1 - now) / 1000; if (src === 'enemy') { audio.telegraph(win, 0.8); const E = ENEMY_SFX[recs.find(r => r.id === id)?.type]; if (E) pending.get(sh.key).sfx = { name: E.attack, at: E.atImpact ? sh.t1 : sh.t0 + DEF[recs.find(r => r.id === id).type].windup * 1000, rate: E.rate || 1 }; }
+        if (dist < 24) { const win = (sh.t1 - now) / 1000; if (src === 'enemy') { audio.telegraph(win, 0.8); const E = ENEMY_SFX[recs.find(r => r.id === id)?.type]; if (E) pending.get(sh.key).sfx = E.fit ? { name: E.attack, at: sh.t0, fit: (sh.t1 - sh.t0) / 1000 } : { name: E.attack, at: E.atImpact ? sh.t1 : sh.t0 + DEF[recs.find(r => r.id === id).type].windup * 1000, rate: E.rate || 1, voices: E.voices }; }
           else { if (sh.key.endsWith(':0') || !sh.key.includes(':', 3)) audio.telegraph(Math.min(1, win), 1); pending.get(sh.key).sfx = { name: sh.key.startsWith('b1') || sh.key.startsWith('b2') ? ENEMY_SFX.boss.slam : 'sfx_spore_burst', at: sh.t1, rate: sh.key.startsWith('b2') ? 1.2 : 1 }; } } };
       for (const r of recs) for (const sh of enemyShapes(r)) add(sh, 'enemy', r.id);
       if (b && area === 'caves') for (const sh of bossShapes(b, CAVE.den.boss)) add(sh, 'boss', null);
@@ -461,7 +461,7 @@ export default {
         if (a.src === 'enemy' && !alive.has(a.id) && now < a.t1) { pending.delete(k); telegraphs.clear(k); continue; }
         if (a.src === 'boss' && (!b || b.dead || (b.stunUntil > now && now < a.t1))) { pending.delete(k); continue; }
         if (a.s) telegraphs.show(k, a.s, a.t0 / 1000, a.t1 / 1000);
-        if (a.sfx && now >= a.sfx.at) { audio.play(a.sfx.name, { rate: a.sfx.rate, minGap: 0.05 }); a.sfx = null; }
+        if (a.sfx && now >= a.sfx.at) { const x = a.sfx; a.sfx = null; if (x.fit) audio.playFit(x.name, x.fit); else if (x.voices) audio.playCapped(x.name, x.voices, { rate: x.rate }); else audio.play(x.name, { rate: x.rate, minGap: 0.05 }); }   // golem_charge: fit to the window; wraith_wail: voice-capped
         if (now >= a.t1) {
           if (a.s && !a.done) { a.done = true;
             if (inShape(a.s, player.pos.x, player.pos.z) && player.pos.y < 2.2) combat.takeDamage(a.dmg, { slow: a.slow });
@@ -515,7 +515,7 @@ export default {
     }
     function gutter() {
       const lost = Math.floor(carried * CARRY_LOSS); if (lost > 0 && area !== 'village') { save.wisp = { area, x: +player.pos.x.toFixed(1), z: +player.pos.z.toFixed(1), embers: lost }; carried -= lost; }
-      save.stats.deaths++; saveNow();
+      save.stats.deaths++; saveNow(); audio.stinger('sfx_guttered');
       const d = dun.caves, lit = d?.posts ? d.posts.map((v, i) => v ? i : -1).filter(i => i >= 0) : [];
       const post = area === 'caves' && lit.length ? CAVE.posts[lit[lit.length - 1]] : null;
       ui.fade(true);
