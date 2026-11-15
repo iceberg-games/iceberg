@@ -556,7 +556,8 @@ export default {
         } else { downT = 0; ui.setDowned(false); }
         // interactions (E) + revive (hold E)
         const ally = !combat.down && !modal ? downedAllyNear() : null;
-        if (ally) { if (held('KeyE')) { reviveHold += dt; if (reviveHold >= 2.5) { reviveHold = 0; net.sendEvent('revive', { t: ally.id }); } } else reviveHold = 0; ui.prompt(`Hold to revive ${ally.name}`, 'E', reviveHold > 0 ? reviveHold / 2.5 : null); }
+        const realDt = Math.min(0.5, (performance.now() - (game._lastT || performance.now())) / 1000); game._lastT = performance.now();   // hold timers are wall-clock
+        if (ally) { if (held('KeyE')) { reviveHold += Math.max(dt, realDt); if (reviveHold >= 2.5) { reviveHold = 0; net.sendEvent('revive', { t: ally.id }); } } else reviveHold = 0; ui.prompt(`Hold to revive ${ally.name}`, 'E', reviveHold > 0 ? reviveHold / 2.5 : null); }
         else { reviveHold = 0; const it = modal || combat.down ? null : nearestInteractable(); const txt = it ? promptFor(it) : null; ui.prompt(txt); if (txt && pressed('KeyE')) interact(it); }
         prevKeys = new Set(input.keys); taps.clear();
         // views
@@ -637,8 +638,8 @@ export default {
       warpTo(x, z, facing = 0) { player.teleport(V(x, 0, z), facing); const a = areaAt(x, z); if (a && a !== area) { area = a; applyLook(a); audio.setArea(a); } },
       give(o) { for (const [k, v] of Object.entries(o)) { if (k === 'embers') save.embers += v; else if (k in save.mats) save.mats[k] += v; else if (k === 'carried') carried += v; } markDirty(); },
       setSave(o) { save = normalizeSave({ ...save, ...o }); },
-      damageAll(n = 999) { if (!net.isHost()) return; const sim = sims.caves; for (const e of [...(sim?.list || [])]) sim.applyHit(e.id, n, { flare: 1 }); },
-      damageBoss(n) { sims.caves?.hitBoss(n); }, burstSac(i) { sims.caves?.hitBoss(0, { sac: i }); },
+      damageAll(n = 999) { if (!net.isHost()) return; const sim = sims.caves; for (const e of [...(sim?.list || [])]) { if (e.st === ST.burrowed) e.st = ST.exposed; for (let k = 0; k < 20 && sim.list.includes(e); k++) sim.applyHit(e.id, n, { flare: 1 }); } },
+      damageBoss(n) { for (let k = 0; k < Math.ceil(n / 60); k++) sims.caves?.hitBoss(Math.min(60, n - k * 60)); }, burstSac(i) { sims.caves?.hitBoss(0, { sac: i }); },
       hurt(n) { combat.iframes = 0; return combat.takeDamage(n); }, press(code) { taps.add(code); },
       addAlly(o = {}) { const f = net.addFake?.({ id: o.id || 'Pip', name: o.name || 'Pip', position: { x: player.pos.x + 1.5, y: 0, z: player.pos.z }, down: !!o.down }); if (!f) return null;
         net.fakeEvent(f.id, 'at', { a: area, hp: o.down ? 0 : 6, mhp: 6, pw: 3, dn: !!o.down, r: 6, name: f.name }); return f.id; },

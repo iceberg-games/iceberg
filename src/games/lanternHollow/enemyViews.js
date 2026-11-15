@@ -106,14 +106,16 @@ export class EnemyViews {
 export class MossmawView {
   constructor(scene, [x, z]) {
     const g = this.g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g); this.x = x; this.z = z;
-    const moss = this.moss = std('#3f6a3a', { roughness: 0.9, flatShading: true, emissive: '#1a3a10', emissiveIntensity: 0.4 });
+    const moss = this.moss = std('#4f8a46', { roughness: 0.85, flatShading: true, emissive: '#2f6a1a', emissiveIntensity: 0.75 });
+    // her own glow so she reads in the dark den (one fixed light, created once: no shader churn)
+    const glow = this.glow = new THREE.PointLight('#ff6ac8', 26, 24, 1.4); glow.position.set(x, 5.5, z + 3.5); scene.add(glow);   // in the scene (not the group) so hiding her never changes the light count
     const bulbGeo = new THREE.IcosahedronGeometry(1, 2), p = bulbGeo.attributes.position; for (let i = 0; i < p.count; i++) { const v = new THREE.Vector3().fromBufferAttribute(p, i); v.multiplyScalar(0.9 + Math.sin(v.x * 7) * Math.cos(v.z * 6) * 0.08); p.setXYZ(i, v.x, v.y, v.z); } bulbGeo.computeVertexNormals();
     const bulb = this.bulb = new THREE.Mesh(bulbGeo, moss); bulb.scale.set(3.0, 2.4, 3.0); bulb.position.y = 1.8; bulb.castShadow = true; g.add(bulb);
     const rootMat = std('#4a3226', { roughness: 0.85, emissive: '#2a1a3a', emissiveIntensity: 0.4 });
     this.tent = [];
     for (let i = 0; i < 9; i++) { const a = i / 9 * 6.28, pts = []; for (let k = 0; k <= 6; k++) { const t = k / 6, r = 2.4 + t * 4.5; pts.push(new THREE.Vector3(Math.cos(a + t * 0.6) * r, 1.4 * (1 - t) + Math.sin(t * Math.PI) * 0.8, Math.sin(a + t * 0.6) * r)); }
       const m = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 24, 0.32, 7), rootMat); m.castShadow = true; const pv = new THREE.Group(); pv.add(m); g.add(pv); this.tent.push(pv); }
-    const petalMat = this.petalMat = std('#e05aa8', { emissive: '#a01a6a', emissiveIntensity: 0.7, roughness: 0.5, side: THREE.DoubleSide });
+    const petalMat = this.petalMat = std('#e05aa8', { emissive: '#c02a80', emissiveIntensity: 1.3, roughness: 0.5, side: THREE.DoubleSide });
     this.petals = [];
     const maw = this.maw = new THREE.Group(); maw.position.y = 4.0; g.add(maw);
     for (let i = 0; i < 7; i++) { const pv = new THREE.Group(); pv.rotation.y = i / 7 * 6.28; maw.add(pv); const m = new THREE.Mesh(G.sphere, petalMat); m.scale.set(0.9, 0.15, 1.7); m.position.z = 1.5; pv.add(m); this.petals.push(pv); }
@@ -125,7 +127,7 @@ export class MossmawView {
   }
   flash() { this.flashT = 0.15; }
   update(b, dt, t, now) {
-    const show = !!b && !b.dead; this.g.visible = show || (this.deadT ?? 0) < 1.2; if (!this.g.visible) return;
+    const show = !!b && !b.dead; this.g.visible = show || (this.deadT ?? 0) < 1.2; this.glow.intensity = show ? 26 * (b.stunUntil > now ? 1.6 : 1) : 0; if (!this.g.visible) return;
     if (b?.dead) { this.deadT = (this.deadT ?? 0) + dt; this.g.scale.setScalar(Math.max(0.01, 1 - this.deadT * 0.8)); return; }
     this.deadT = 0; this.g.scale.setScalar(1);
     const stunned = b && now < b.stunUntil, wind = b?.atk && now < b.atkAt ? 1 - Math.max(0, (b.atkAt - now) / 1000) : 0;
@@ -138,5 +140,5 @@ export class MossmawView {
     this.moss.emissive.set(this.flashT > 0 ? '#ffffff' : stunned ? '#5a5a10' : '#1a3a10'); this.moss.emissiveIntensity = this.flashT > 0 ? 1.2 : stunned ? 0.9 + Math.sin(t * 20) * 0.3 : 0.4 + wind * 0.5;
     this.petalMat.emissiveIntensity = 0.7 + wind;
   }
-  dispose() { this.g.removeFromParent(); }
+  dispose() { this.g.removeFromParent(); this.glow.removeFromParent(); }
 }
