@@ -427,7 +427,7 @@ for (const c of [
 const FS = { kind: 'model', winter: true, customizable: true, premium: true, showcase: true, rarity: 'legendary' };
 for (const c of [
   { id: 'fs_glacier_wings', name: 'Glacier Wings', slot: 'back', price: 25000, icon: '🪽', defaultColor: '#4fc4ff',
-    colorPresets: [['Glacier Blue', '#4fc4ff'], ['Aurora Violet', '#a678ff'], ['Sunrise Gold', '#ffc35a'], ['Midnight Frost', '#3f63d8']],
+    colorPresets: [['Glacier Blue', '#4fc4ff'], ['Aurora Violet', '#a678ff'], ['Sunrise Gold', '#ffc35a'], ['Midnight Frost', '#2b3cb8']],
     desc: 'Showcase wings of cut glacier ice: four tiers of faceted crystal feathers with frost-lit veins that pulse, a slow breathing flap, and snowflakes that drift off the tips.' },
   { id: 'fs_polar_cub_pal', name: 'Polar Cub Shoulder Pal', slot: 'neck', price: 20000, icon: '🐻‍❄️', defaultColor: '#b8283f',
     colorPresets: [['Cranberry', '#b8283f'], ['Mint', '#5fcfa6'], ['Sky', '#5aaee8'], ['Honey', '#e8a93a']],

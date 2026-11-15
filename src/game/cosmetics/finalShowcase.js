@@ -13,6 +13,7 @@
 // accumulated from dt (deterministic, pauses with the game). Particles: one pooled THREE.Points per item, capped.
 // object.userData.dispose() frees per-item GPU resources (shared textures are module-cached and kept).
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 // ---------------------------------------------------------------- quality switch
 // 'high' = MeshPhysicalMaterial (clearcoat + iridescence + sheen). 'low' = MeshStandardMaterial, fewer particles,
@@ -241,14 +242,14 @@ function buildGlacierWings(color) {
 
   // --- wings
   const wings = [];
-  const arm = [[0.06, 0.02, 0], [0.32, 0.2, -0.04], [0.62, 0.42, -0.1], [0.82, 0.62, -0.14]];   // shoulder -> elbow -> wrist -> hand
+  const arm = [[0.05, 0.0, 0], [0.38, 0.12, -0.05], [0.74, 0.38, -0.11], [0.98, 0.66, -0.16]];   // shoulder -> elbow -> wrist -> hand
   const armCurve = new THREE.CatmullRomCurve3(arm.map(p => new THREE.Vector3(...p)));
   const armGeo = new THREE.TubeGeometry(armCurve, 24, 0.022, 6, false);
   // tiers: [count, from(curve t), to(curve t), length, width, angleFrom, angleTo, z, glowTier]
   const TIERS = [
-    { n: 8, t0: 0.55, t1: 1.0, len: [0.62, 0.98], wid: 0.085, a0: -1.05, a1: 0.55, z: 0.0 },    // primaries (long, fan from the hand)
-    { n: 7, t0: 0.12, t1: 0.62, len: [0.5, 0.62], wid: 0.08, a0: -1.62, a1: -1.12, z: -0.035 },  // secondaries (hang from the forearm)
-    { n: 7, t0: 0.15, t1: 0.95, len: [0.26, 0.36], wid: 0.07, a0: -1.45, a1: -0.25, z: -0.07 },  // coverts (short overlay)
+    { n: 9, t0: 0.55, t1: 1.0, len: [0.68, 1.08], wid: 0.09, a0: -1.1, a1: 0.5, z: 0.0 },    // primaries (long, fan from the hand)
+    { n: 8, t0: 0.1, t1: 0.62, len: [0.58, 0.74], wid: 0.085, a0: -1.66, a1: -1.08, z: -0.035 },  // secondaries (hang from the forearm)
+    { n: 8, t0: 0.12, t1: 0.95, len: [0.3, 0.4], wid: 0.072, a0: -1.45, a1: -0.25, z: -0.07 },  // coverts (short overlay)
     { n: 5, t0: 0.05, t1: 0.55, len: [0.15, 0.2], wid: 0.06, a0: -1.3, a1: -0.7, z: -0.1 },     // scapulars (tiny, along the shoulder)
   ];
   const tierGeos = [];
@@ -292,8 +293,8 @@ function buildGlacierWings(color) {
   g.userData.tick = (dt = 0) => {
     dt = Math.min(dt || 0, 0.1); t += dt;
     // uniform size from the torso; root sits on the real back surface (anchor z -0.25 == -td/2 on every body)
-    const F = fitHolder(fit, (sx, sy) => THREE.MathUtils.clamp(Math.sqrt(sx * sy) * 1.02, 0.78, 1.32)) || { sy: 1, sz: 1, k: 1 };
-    const rootY = (0.24 * F.sy) / F.k, breathe = Math.sin(t * 1.25 + 0.4) * 0.012;
+    const F = fitHolder(fit, (sx, sy) => THREE.MathUtils.clamp(Math.sqrt(sx * sy) * 1.08, 0.82, 1.38)) || { sy: 1, sz: 1, k: 1 };
+    const rootY = (0.14 * F.sy) / F.k, breathe = Math.sin(t * 1.25 + 0.4) * 0.012;
     root.position.set(0, rootY + breathe, (-0.25 * F.sz - 0.03) / F.k);
     // breathe/flap: slow, layered; outer tiers lag the inner ones so the wing "ripples"
     const b = Math.sin(t * 1.25), b2 = Math.sin(t * 1.25 - 0.6);
@@ -396,16 +397,16 @@ function buildPolarCub(color) {
 
   // --- body (sitting, chunky), belly patch, tail
   const bodyG = new THREE.Group(); P.add(bodyG);
-  const body = furry(fluffSphere(0.15, 30, 22, 0.05, 2), 0, 0.15, -0.01, [1.05, 1.0, 0.98]); bodyG.add(body);
+  const body = furry(fluffSphere(0.15, 24, 18, 0.05, 2), 0, 0.15, -0.01, [1.05, 1.0, 0.98]); bodyG.add(body);
   const belly = mesh(fluffSphere(0.1, 20, 14, 0.04, 5), cream, 0, 0.12, 0.085); belly.scale.set(1, 1.1, 0.6); bodyG.add(belly);
   bodyG.add(furry(new THREE.SphereGeometry(0.04, 12, 10), 0, 0.08, -0.155, [1, 1, 1], true));
   // hind legs stretched forward, paw pads showing (very readable from the front)
   for (const s of [-1, 1]) {
     const leg = furry(fluffSphere(0.065, 16, 12, 0.05, 3 + s), s * 0.085, 0.045, 0.08, [0.9, 0.8, 1.25], false); bodyG.add(leg);
     const foot = new THREE.Group(); foot.position.set(s * 0.09, 0.04, 0.165); bodyG.add(foot);
-    foot.add(mesh(new THREE.CircleGeometry(0.03, 16), pad, 0, 0, 0.002));
-    for (let k = 0; k < 3; k++) foot.add(mesh(new THREE.CircleGeometry(0.011, 10), pad, (k - 1) * 0.02, 0.035, 0.0));
-    foot.children.forEach(c => { c.castShadow = false; });
+    // big pad + three toe beans merged into one draw call
+    const beans = [new THREE.CircleGeometry(0.03, 16).translate(0, 0, 0.002), ...[0, 1, 2].map(k => new THREE.CircleGeometry(0.011, 10).translate((k - 1) * 0.02, 0.035, 0))];
+    const padM = mesh(mergeGeometries(beans), pad); padM.castShadow = false; foot.add(padM); beans.forEach(b => b.dispose());
   }
   // front paws: inner one rests on the knee; outer one (+x) is a pivot for the wave
   const pawRest = furry(fluffSphere(0.045, 14, 10, 0.05, 9), -0.075, 0.12, 0.115, [0.9, 1.3, 0.9], false); pawRest.rotation.x = 0.5; bodyG.add(pawRest);
@@ -422,8 +423,8 @@ function buildPolarCub(color) {
   const fringeM = new THREE.MeshStandardMaterial({ color, roughness: 1 });
   const wrap = mesh(new THREE.TorusGeometry(0.098, 0.032, 10, 28), scarfM, 0, 0.27, 0.0); wrap.rotation.x = Math.PI / 2 - 0.12; wrap.scale.set(1, 1, 0.85); bodyG.add(wrap);
   const knot = mesh(new THREE.SphereGeometry(0.034, 14, 10), scarfM, -0.055, 0.255, 0.085); knot.scale.set(1, 0.85, 0.8); bodyG.add(knot);
-  const scarfTail = new THREE.Group(); scarfTail.position.set(-0.05, 0.25, 0.135); bodyG.add(scarfTail);
-  const tailGeo = new THREE.PlaneGeometry(0.056, 0.16, 1, 6); { const p = tailGeo.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i); p.setZ(i, 0.03 * Math.sin((0.08 - y) * 9)); } tailGeo.computeVertexNormals(); }
+  const scarfTail = new THREE.Group(); scarfTail.position.set(-0.05, 0.25, 0.128); bodyG.add(scarfTail);
+  const tailGeo = new THREE.PlaneGeometry(0.056, 0.16, 1, 6); { const p = tailGeo.attributes.position; for (let i = 0; i < p.count; i++) { const y = p.getY(i); p.setZ(i, 0.012 * Math.sin((0.08 - y) * 9)); } tailGeo.computeVertexNormals(); }
   const tailMesh = mesh(tailGeo, tailM, 0, -0.08, 0.012); tailMesh.rotation.z = 0.12; scarfTail.add(tailMesh);
   for (let k = 0; k < 5; k++) { const fr = mesh(new THREE.CylinderGeometry(0.0045, 0.003, 0.03, 5), fringeM, -0.022 + k * 0.011 + 0.02, -0.172, 0.016 + 0.006); fr.rotation.z = 0.12; scarfTail.add(fr); }
   // ice-pick charm: wooden shaft, steel pick + adze, frosty grip band, tiny glinting crystal; swings on a cord
@@ -443,7 +444,7 @@ function buildPolarCub(color) {
   const headPivot = new THREE.Group(); headPivot.position.set(0, 0.3, 0.0); bodyG.add(headPivot);
   const H = new THREE.Group(); H.position.set(0, 0.09, 0.0); headPivot.add(H);
   // head shells skip the face cap (+Z) so eyes / muzzle stay crisp
-  H.add(furry(fluffSphere(0.118, 30, 22, 0.035, 4), 0, 0, 0, [1.08, 0.98, 1.0], true, fluffSphere(0.118, 24, 22, 0.035, 4, Math.PI / 2 + 1.05, Math.PI * 2 - 2.1)));
+  H.add(furry(fluffSphere(0.118, 26, 18, 0.035, 4), 0, 0, 0, [1.08, 0.98, 1.0], true, fluffSphere(0.118, 20, 16, 0.035, 4, Math.PI / 2 + 1.05, Math.PI * 2 - 2.1)));
   const muzzle = mesh(fluffSphere(0.058, 20, 14, 0.03, 6), cream, 0, -0.035, 0.092); muzzle.scale.set(1.12, 0.82, 0.9); H.add(muzzle);
   const nose = mesh(new THREE.SphereGeometry(0.022, 16, 12), gloss, 0, -0.012, 0.142); nose.scale.set(1.25, 0.8, 0.8); H.add(nose);
   H.add(mesh(new THREE.SphereGeometry(0.006, 8, 6), shine, -0.007, -0.004, 0.158));
@@ -451,7 +452,7 @@ function buildPolarCub(color) {
   const eyes = [], ears = [];
   for (const s of [-1, 1]) {
     const e = new THREE.Group(); e.position.set(s * 0.048, 0.022, 0.104); H.add(e); eyes.push(e);
-    const ball = mesh(new THREE.SphereGeometry(0.019, 16, 12), gloss); ball.scale.set(0.95, 1.15, 0.7); e.add(ball);
+    const ball = mesh(new THREE.SphereGeometry(0.019, 14, 10), gloss); ball.scale.set(0.95, 1.15, 0.7); e.add(ball);
     e.add(mesh(new THREE.SphereGeometry(0.0062, 8, 6), shine, s * 0.004 + 0.004, 0.008, 0.012));
     e.add(mesh(new THREE.SphereGeometry(0.003, 6, 4), shine, -0.004, -0.006, 0.013));
     const blush = mesh(new THREE.CircleGeometry(0.018, 14), new THREE.MeshBasicMaterial({ color: '#ff9fb4', transparent: true, opacity: 0.45, depthWrite: false }), s * 0.074, -0.03, 0.093);
@@ -498,10 +499,10 @@ function buildPolarCub(color) {
     let lift = 0, wag = 0;
     if (waveT >= 0) { waveT += dt; const D = 1.9, k = waveT / D;
       lift = k < 0.18 ? k / 0.18 : k > 0.82 ? (1 - k) / 0.18 : 1; lift = lift * lift * (3 - 2 * lift);
-      wag = Math.sin(waveT * 13) * lift; if (k >= 1) waveT = -1; }
-    waveArm.rotation.set(-0.35 - lift * 0.55, 0, 0.25 + lift * 2.1 + wag * 0.35);
+      wag = Math.sin(waveT * 11) * lift; if (k >= 1) waveT = -1; }
+    waveArm.rotation.set(-0.35 + lift * 0.2, 0, 0.25 + lift * 2.45 + wag * 0.3);
     // scarf tail + charm sway (a bit more while waving)
-    scarfTail.rotation.set(-0.22 + Math.sin(t * 1.9) * 0.06, 0, Math.sin(t * 1.4) * 0.1 + look.yaw * 0.1);
+    scarfTail.rotation.set(0.04 + Math.sin(t * 1.9) * 0.05, 0, Math.sin(t * 1.4) * 0.1 + look.yaw * 0.1);
     charm.rotation.set(Math.sin(t * 2.2 + 1) * 0.15, 0, Math.sin(t * 2.7) * 0.22 + wag * 0.15);
     charmGem.rotation.y = t * 2;
     bodyG.rotation.z = -lift * 0.06; bodyG.position.y = Math.abs(br) * 0.002;
