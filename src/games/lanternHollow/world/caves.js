@@ -34,8 +34,9 @@ export const CAVE = {
     [['creeper', -5, Z - 24], ['creeper', 5, Z - 24], ['moth', -8, Z - 15], ['moth', 8, Z - 15]],
     [['slimeBig', -5, Z - 26], ['slimeBig', 5, Z - 26], ['spore', -9, Z - 22], ['moth', 0, Z - 15]],
   ] },
+  gateRule: 'waves',
   gate: { x0: -3.2, x1: 3.2, z0: Z - 36.6, z1: Z - 35.4 },
-  den: { x: 0, z: Z - 54, r: 15, boss: [0, Z - 58], sacR: 10, exit: [0, Z - 46] },
+  den: { x: 0, z: Z - 54, r: 15, boss: [0, Z - 58], bossId: 'mossmaw', sacR: 10, exit: [0, Z - 46] },
 };
 
 function sdfShape(s, x, z) {

@@ -115,12 +115,12 @@ export function makeSlash() {
 export class Pickups {
   constructor(scene) {
     this.scene = scene; this.list = [];
-    this.geo = { ember: new THREE.OctahedronGeometry(0.16), glowcap: new THREE.SphereGeometry(0.17, 10, 8), mote: new THREE.SphereGeometry(0.12, 8, 6), sigil: new THREE.OctahedronGeometry(0.32) };
-    this.mat = { ember: new THREE.MeshBasicMaterial({ color: '#ff9a3c', toneMapped: false }), glowcap: new THREE.MeshBasicMaterial({ color: '#4ff0d0', toneMapped: false }), mote: new THREE.MeshBasicMaterial({ color: '#ffe08a', toneMapped: false }), sigil: new THREE.MeshBasicMaterial({ color: '#ff8fd0', toneMapped: false }) };
+    this.geo = { ember: new THREE.OctahedronGeometry(0.16), glowcap: new THREE.SphereGeometry(0.17, 10, 8), mote: new THREE.SphereGeometry(0.12, 8, 6), sigil: new THREE.OctahedronGeometry(0.32), rustcog: new THREE.TorusGeometry(0.15, 0.07, 6, 8), shard: new THREE.OctahedronGeometry(0.2) };
+    this.mat = { ember: new THREE.MeshBasicMaterial({ color: '#ff9a3c', toneMapped: false }), glowcap: new THREE.MeshBasicMaterial({ color: '#4ff0d0', toneMapped: false }), mote: new THREE.MeshBasicMaterial({ color: '#ffe08a', toneMapped: false }), sigil: new THREE.MeshBasicMaterial({ color: '#ff8fd0', toneMapped: false }), rustcog: new THREE.MeshBasicMaterial({ color: '#d08a4a', toneMapped: false }), shard: new THREE.MeshBasicMaterial({ color: '#8affe8', toneMapped: false }) };
   }
-  spawn(kind, x, z, value = 1, n = 1) {
+  spawn(kind, x, z, value = 1, n = 1, home = false) {   // home: boss loot flies to you after a beat so it's never left behind
     for (let i = 0; i < n; i++) { const m = new THREE.Mesh(this.geo[kind], this.mat[kind]); const a = Math.random() * 6.28, sp = 2 + Math.random() * 3;
-      m.position.set(x, 0.8, z); this.scene.add(m); this.list.push({ kind, value, m, v: V(Math.cos(a) * sp, 5 + Math.random() * 3, Math.sin(a) * sp), age: 0 }); }
+      m.position.set(x, 0.8, z); this.scene.add(m); this.list.push({ kind, value, m, v: V(Math.cos(a) * sp, 5 + Math.random() * 3, Math.sin(a) * sp), age: 0, home }); }
   }
   /** Returns array of collected {kind, value}. */
   update(dt, t, pos, magnet = 3.5) {
@@ -128,7 +128,7 @@ export class Pickups {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const p = this.list[i], m = p.m; p.age += dt;
       const dx = pos.x - m.position.x, dy = pos.y + 1.1 - m.position.y, dz = pos.z - m.position.z, d = Math.hypot(dx, dy, dz);
-      if (p.age > 0.45 && d < magnet) { const s = Math.min(1, dt * (8 + (magnet - d) * 4)); m.position.x += dx * s; m.position.y += dy * s; m.position.z += dz * s; }
+      if (p.age > 0.45 && (d < magnet || (p.home && p.age > 1.8 + (i % 12) * 0.06))) { const s = Math.min(1, dt * (8 + (magnet - d) * 4)); m.position.x += dx * s; m.position.y += dy * s; m.position.z += dz * s; }
       else { p.v.y -= 18 * dt; m.position.addScaledVector(p.v, dt); if (m.position.y < 0.35) { m.position.y = 0.35; p.v.set(p.v.x * 0.5, Math.abs(p.v.y) * 0.3, p.v.z * 0.5); if (Math.abs(p.v.y) < 0.6) p.v.set(0, 0, 0); } if (!p.v.lengthSq()) m.position.y = 0.45 + Math.sin(t * 3 + i) * 0.1; }
       m.rotation.y += dt * 3;
       if (p.age > 0.45 && d < 0.75) { got.push({ kind: p.kind, value: p.value }); m.removeFromParent(); this.list.splice(i, 1); }

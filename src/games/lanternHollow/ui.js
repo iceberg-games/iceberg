@@ -75,6 +75,13 @@ const CSS = `
 .lh-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #b8662a}.lh-btn[disabled]{filter:grayscale(.8) brightness(.7);cursor:default}
 .lh-btn.alt{background:linear-gradient(180deg,#e9f9ff,#7fd4ff);box-shadow:0 4px 0 #3f88c0}.lh-btn.go{background:linear-gradient(180deg,#eaffef,#7dffa0);box-shadow:0 4px 0 #3aa860}
 .lh-tabs{display:flex;gap:6px;margin-bottom:10px}.lh-tabs button{padding:6px 12px;border-radius:10px;background:rgba(255,255,255,.07);font-weight:900;font-size:13px}.lh-tabs button.on{background:#ffb347;color:#2a1c44}
+.lh-mapwrap{display:flex;justify-content:center;background:radial-gradient(circle at 50% 40%,rgba(60,40,110,.45),rgba(10,6,24,.6));border-radius:14px;padding:8px}
+.lh-map{width:100%;max-height:min(56vh,470px)}
+.lh-end{text-align:center;position:relative}.lh-end .aur{height:70px;margin:-6px -6px 8px;border-radius:12px;background:linear-gradient(100deg,#1a1450,#2affc0 30%,#7a3aff 55%,#2affc0 75%,#1a1450);background-size:300% 100%;animation:lh-aur 6s linear infinite;opacity:.85}
+@keyframes lh-aur{to{background-position:300% 0}}
+.lh-end .loot{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:10px 0}.lh-end .stats{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;font-weight:800;margin:8px 0;color:#ffe2b8}
+.lh-end .cred{margin:12px auto;padding:10px;border-radius:12px;background:rgba(0,0,0,.25);font-size:13px;line-height:1.7;max-width:420px;color:#cfe8ff}.lh-end .cred div:first-child{font-weight:900;color:#ffcf8a}
+@media (max-width:700px){.lh-menu{top:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 290px);left:10px;flex-direction:column}.lh-menu button{padding:6px 9px;font-size:12px}.lh-modal{top:calc(50% + 34px);max-height:calc(84vh - 70px);width:96vw}.lh-map{max-height:50vh}.lh-vitals{top:128px;left:8px;transform:scale(.82);transform-origin:left top}.lh-embers{top:128px;left:auto;right:8px;transform:none;font-size:14px;padding:5px 10px;gap:7px}.lh-area{top:164px;left:auto;right:12px;transform:none}.lh-track{top:184px;right:8px;width:46vw;padding:7px 9px}.lh-track .lh-q{font-size:12px}.lh-allies{top:206px;left:8px}.lh-boss{bottom:auto;top:272px;width:92vw}.lh-toasts{bottom:auto;top:330px;right:8px}}body:has(.lh.lh-mopen) #touch-ui,.lh.lh-mopen .lh-touch{visibility:hidden}
 .lh-res{text-align:center}.lh-res .big{font-size:56px}.lh-res .loot{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin:10px 0 14px}
 .lh-mopen .lh-keys{display:none}.lh-keys{position:absolute;left:14px;bottom:64px;font-size:12px;font-weight:700;color:#ffe2b8;opacity:.85;padding:7px 12px}
 .lh-touch{position:absolute;right:124px;bottom:26px;width:230px;height:240px}
@@ -100,7 +107,7 @@ export class HollowUI {
     this.root.innerHTML = `
       <div class="lh-vig hurt"></div><div class="lh-vig dark"></div><div class="lh-vig down"></div>
       <div class="lh-vitals lh-glass"><div class="lh-lamp"><span>🏮</span></div><div><div class="lh-hearts"></div><div class="lh-sub"><span class="lh-power"></span><span class="lh-dash"></span><span class="lh-tonic"></span></div></div></div>
-      <div class="lh-menu"><button class="lh-glass" data-act="journal">📜 Quests<b hidden></b></button><button class="lh-glass" data-act="party">👥 Party</button></div>
+      <div class="lh-menu"><button class="lh-glass" data-act="journal">📜 Quests<b hidden></b></button><button class="lh-glass" data-act="map">🗺 Map</button><button class="lh-glass" data-act="party">👥 Party</button></div>
       <div class="lh-allies"></div>
       <div class="lh-embers lh-glass"><span>🔥 <span class="lh-e">0</span></span><small class="lh-c"></small><span class="mat lh-m"></span></div>
       <div class="lh-area"></div>
@@ -111,7 +118,7 @@ export class HollowUI {
       <div class="lh-toasts"></div>
       <div class="lh-downed" hidden><h2>Your lantern gutters…</h2><p></p><div class="ring"></div></div>
       <div class="lh-modal lh-glass" hidden><div class="lh-mh"><span class="ic"></span><div><h3></h3><p></p></div><button class="x" data-act="close">✕</button></div><div class="lh-mb"></div></div>
-      <div class="lh-keys lh-glass">WASD move · Click/K attack · Shift dash · hold Q flare · E interact · R tonic · J quests · P party</div>
+      <div class="lh-keys lh-glass">WASD move · Click/K attack · Shift dash · hold Q flare · E interact · R tonic · J quests · N map · P party</div>
       <div class="lh-touch" hidden><button class="lh-t-atk" data-k="KeyK">⚔</button><button class="lh-t-dash" data-k="ShiftLeft">DASH</button><button class="lh-t-flare" data-k="KeyQ">FLARE</button><button class="lh-t-act" data-k="KeyE">✋</button><button class="lh-t-tonic" data-k="KeyR">🧪</button></div>
       <div class="lh-fade"></div>`;
     const q = (s) => this.root.querySelector(s); this.q = q;

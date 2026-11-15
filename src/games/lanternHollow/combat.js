@@ -66,11 +66,11 @@ export class PlayerCombat {
     this.dash.t = 0.18; this.dash.charges--; if (this.dash.cd <= 0) this.dash.cd = this.stats().cooldown; this.iframes = Math.max(this.iframes, 0.3);
     this.audio.play('sfx_dash', { rate: 0.95 + Math.random() * 0.1 }); this.swing = null;
   }
-  takeDamage(n, { slow = 0 } = {}) {
+  takeDamage(n, o = {}) { const slow = o.slow || 0;
     if (this.down || this.iframes > 0 || this.dashing || n <= 0) return 0;
-    this.hp = Math.max(0, this.hp - n); this.iframes = 0.65; if (slow) this.slowT = slow;
+    this.hp = Math.max(0, this.hp - n); this.iframes = 0.65; if (slow) this.slowT = slow; if (o.root) this.rootT = o.root;
     this.audio.play('sfx_player_hurt', { rate: 0.95 + Math.random() * 0.1 }); this.onHurt?.(n);
-    if (this.hp <= 0) this.goDown(); return n;
+    if (this.hp <= 0) { if (this.onSecondWind?.()) { this.hp = 4; this.iframes = 1.5; this.healFx = 0.8; } else this.goDown(); } return n;
   }
   goDown() { if (this.down) return; this.down = { t: 0 }; this.flaring = false; this.swing = null; this.player.mods.speed = 0.22; this.audio.play('sfx_player_down'); this.audio.loopOff('flare'); this.onDown?.(); }
   heal(n) { const before = this.hp; this.hp = Math.min(this.maxHp, this.hp + n); if (this.hp > before) { this.audio.play('sfx_heal'); this.healFx = 0.6; } return this.hp - before; }
@@ -85,7 +85,7 @@ export class PlayerCombat {
         if (collision.overlaps(nx - HW, p.pos.y + 0.05, nz - HW, nx + HW, p.pos.y + H, nz + HW)) break; p.pos.x = nx; p.pos.z = nz; }
       collision.clampBounds(p.pos); this.avatar.root.position.copy(p.pos);
       if (Math.random() < 0.8) this.particles.burst(p.pos.clone().add(new THREE.Vector3(0, 1.1, 0)), ['#ffd27a', '#ffffff', '#ff9a3c'], 3, 1, { up: 0.6, size: 0.1, life: 0.35, grav: 0 }); }
-    this.slowT = Math.max(0, this.slowT - dt); p.mods.speed = this.slowT > 0 ? 0.6 : (this.flaring ? 0.85 : 1);
+    this.slowT = Math.max(0, this.slowT - dt); this.rootT = Math.max(0, (this.rootT || 0) - dt); p.mods.speed = (this.rootT > 0 ? 0.05 : this.slowT > 0 ? 0.6 : (this.flaring ? 0.85 : 1)) * (s.speed || 1);
     // inputs
     if (pressed('KeyK')) this.attack(targets);
     if (pressed('ShiftLeft') || pressed('ShiftRight')) this.startDash();
@@ -95,7 +95,8 @@ export class PlayerCombat {
     if (wantFlare && !this.flaring) { this.audio.play('sfx_flare_start'); this.audio.loopOn('flare', 'sfx_flare_loop'); }
     if (!wantFlare && this.flaring) this.audio.loopOff('flare');
     this.flaring = wantFlare;
-    if (this.flaring) this.glow = Math.max(0, this.glow - 25 * dt); else this.glow = Math.min(s.glow, this.glow + 3 * regenMul * dt);
+    const still = Math.hypot(p.vel.x, p.vel.z) < 0.5;
+    if (this.flaring) { if (!(s.steady && still)) this.glow = Math.max(0, this.glow - 25 * (s.flareCost || 1) * dt); } else this.glow = Math.min(s.glow, this.glow + 3 * regenMul * dt);
     if (this.glow < s.glow * 0.2 && !this.lowWarned) { this.lowWarned = true; this.audio.play('sfx_lantern_low'); }
     if (this.glow > s.glow * 0.35) this.lowWarned = false;
     // swing timeline

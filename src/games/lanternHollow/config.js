@@ -49,14 +49,49 @@ export const BB_MILESTONES = [
 
 export const NPC_NAMES = { wick: 'Elder Wick', board: 'Quest Board', ysolde: 'Lamplighter Ysolde', brann: 'Smith Brann', moss: 'Apothecary Moss' };
 export const MAT_INFO = { embers: ['🔥', 'Embers'], glowcap: ['🍄', 'Glowcap'], rustcog: ['⚙️', 'Rustcog'], shard: ['💠', 'Aurora Shard'], sigil: ['🔱', 'Boss Sigil'] };
-export const BUILT_AREAS = ['village', 'caves'];   // Phase 2: Mine + Throne arrive in Phase 3
+export const BUILT_AREAS = ['village', 'caves', 'mine', 'throne'];
 export const TONIC = { price: 25, heal: 4, max: 3 };   // +1 max per Hearth tier 1
 export const CARRY_LOSS = 0.3;                        // carried embers dropped as an Ember Wisp on a wipe
-export const POST_BANK = 0.5;                         // lighting a lamp post banks this share of carried embers
+export const POST_BANK = 0.5;                         // lighting a lamp post banks this share of carried embers (75% at Hearth 2)
+export const postBank = (save) => (save.hearth >= 2 ? 0.75 : POST_BANK);
+export const charmSlots = (save) => (save.hearth >= 4 ? 3 : 2);
+export const throneOpen = (save) => save.bosses.foreman > 0 && save.hearth >= 3;
+export const OIL = { price: 30, refill: 60, max: 3 };   // Lantern Oil: auto-used when glow runs dry
+
+// Hearth Rekindle perks (brief §5.3), shown in the Rekindle dialog.
+export const HEARTH_PERKS = ['Tonic capacity +1', 'Lamp posts bank 75% of carried embers', 'Unlocks the Aurora Throne (with the Foreman defeated)', 'A 3rd charm slot', 'The aurora returns over the village, with fireworks'];
+
+// Charms (brief §5.2): crafted at Brann's forge or found; equip 2 (3 at Hearth 4).
+export const CHARMS = {
+  magnet:     { name: 'Ember Magnet', icon: '🧲', desc: 'Embers and motes fly to you from twice as far.', cost: { embers: 120, glowcap: 6 } },
+  swiftstep:  { name: 'Swiftstep', icon: '👟', desc: '+10% move speed.', from: 'Quest: Cogs for Brann' },
+  steadywick: { name: 'Steady Wick', icon: '🕯️', desc: 'Glow does not drain while you stand still and flare.', cost: { embers: 300, glowcap: 8, rustcog: 4 } },
+  thornlight: { name: 'Thornlight', icon: '🌵', desc: 'Reflect 20% of damage taken from shadow enemies.', from: 'Chest in the Wraith Tunnels' },
+  kindred:    { name: 'Kindred Spark', icon: '✨', desc: 'Kindred Glow damage bonus +10% (25% total).', from: 'Quest: Kindred Lights' },
+  secondwind: { name: 'Second Wind', icon: '🌬️', desc: 'Once per run, get back up at 2 hearts when you would go down.', cost: { embers: 400, shard: 6 } },
+};
+
+// Repeatable bounties (brief §6): 3 at a time from this pool, refreshed on each return to the village.
+export const BOUNTY_POOL = [
+  { k: 'kill:slime', goal: 12, embers: 50, t: 'Pop 12 Glimmer Slimes', area: 'caves' },
+  { k: 'kill:spore', goal: 6, embers: 50, t: 'Burst 6 Spore Puffs', area: 'caves' },
+  { k: 'kill:creeper', goal: 6, embers: 70, t: 'Uproot 6 Root Creepers', area: 'caves' },
+  { k: 'kill:moth', goal: 6, embers: 70, t: 'Chase off 6 Gloom Moths', area: 'caves' },
+  { k: 'kill:golem', goal: 10, embers: 120, t: 'Defeat 10 Rust Golems', area: 'mine' },
+  { k: 'kill:bat', goal: 10, embers: 90, t: 'Swat 10 Lamp-Eater Bats', area: 'mine' },
+  { k: 'kill:kobold', goal: 8, embers: 90, t: 'Rout 8 Frost Kobolds', area: 'mine' },
+  { k: 'kill:wraith', goal: 6, embers: 110, t: 'Banish 6 Gloom Wraiths', area: 'mine' },
+  { k: 'kill:sentinel', goal: 6, embers: 140, t: 'Topple 6 Aurora Sentinels', area: 'throne' },
+  { k: 'kill:wisp', goal: 8, embers: 130, t: 'Shatter 8 Shard Wisps', area: 'throne' },
+  { k: 'kill:knight', goal: 4, embers: 160, t: 'Defeat 4 Frost Knights', area: 'throne' },
+  { k: 'kill:shade', goal: 6, embers: 150, t: 'Dispel 6 Gloom Shades', area: 'throne' },
+];
+export const GLOOM = { hp: 1.6, dmg: 1.3, embers: 1.5 };   // Gloom+ (after the Queen)
 
 const int = (v, max = 1e9) => Math.max(0, Math.min(max, Math.floor(Number(v) || 0)));
 const TRACKS = Object.keys(UPGRADES);
 const MATS = ['glowcap', 'rustcog', 'shard', 'sigil'];
+const isCharm = (c) => c in CHARMS;
 export function newSave() { return normalizeSave(null); }
 export function normalizeSave(s) {
   s = s && typeof s === 'object' ? s : {};
@@ -67,13 +102,15 @@ export function normalizeSave(s) {
   const list = (a, ok = () => true) => (Array.isArray(a) ? [...new Set(a.filter(x => typeof x === 'string' && ok(x)))] : []);
   return {
     v: SAVE_VERSION, embers: int(s.embers), mats, up, hearth: int(s.hearth, HEARTH_TIERS.length),
-    charms: list(s.charms), equipped: list(s.equipped).slice(0, 3), tonics: int(s.tonics, 5), oil: int(s.oil, 9),
+    charms: list(s.charms, isCharm), equipped: list(s.equipped, isCharm).slice(0, 3), tonics: int(s.tonics, 5), oil: int(s.oil, 9),
     unlocked: list(s.unlocked).length ? list(s.unlocked) : ['village', 'caves'], posts: s.posts && typeof s.posts === 'object' ? { ...s.posts } : {},
     bosses: { mossmaw: int(s.bosses?.mossmaw), foreman: int(s.bosses?.foreman), queen: int(s.bosses?.queen) },
     quests, tracked: list(s.tracked, id => QUESTS.some(q => q.id === id)).slice(0, 3), bbClaimed: list(s.bbClaimed, id => BB_MILESTONES.some(m => m.id === id)),
     stats: { kills: int(s.stats?.kills), revives: int(s.stats?.revives), deaths: int(s.stats?.deaths), playMs: int(s.stats?.playMs) },
     title: typeof s.title === 'string' ? s.title.slice(0, 24) : '',
     chests: list(s.chests), veins: list(s.veins), kindredDmg: int(s.kindredDmg),
+    crystals: int(s.crystals), gloomPlus: !!s.gloomPlus, ending: !!s.ending,
+    bounties: Array.isArray(s.bounties) ? s.bounties.filter(b => b && BOUNTY_POOL[b.i]).slice(0, 3).map(b => ({ i: int(b.i, BOUNTY_POOL.length - 1), p: int(b.p, BOUNTY_POOL[b.i].goal), done: !!b.done, paid: !!b.paid })) : [],
     wisp: s.wisp && typeof s.wisp === 'object' && Number.isFinite(s.wisp.x) && Number.isFinite(s.wisp.z) ? { area: String(s.wisp.area || 'caves'), x: s.wisp.x, z: s.wisp.z, embers: int(s.wisp.embers) } : null,
   };
 }
@@ -90,6 +127,8 @@ export function mergeSaves(a, b) {
   for (const q of QUESTS) { const x = a.quests[q.id], y = b.quests[q.id]; if (x || y) m.quests[q.id] = { a: !!(x?.a || y?.a), p: Math.max(x?.p || 0, y?.p || 0), done: !!(x?.done || y?.done), turnedIn: !!(x?.turnedIn || y?.turnedIn) }; }
   m.posts = { ...b.posts, ...a.posts }; m.title = a.title || b.title;
   m.chests = [...new Set([...a.chests, ...b.chests])]; m.veins = [...new Set([...a.veins, ...b.veins])]; m.kindredDmg = Math.max(a.kindredDmg, b.kindredDmg); m.wisp = a.wisp || b.wisp;
+  m.equipped = (a.equipped.length ? a.equipped : b.equipped).filter(c => m.charms.includes(c)); m.crystals = Math.max(a.crystals, b.crystals); m.ending = a.ending || b.ending; m.gloomPlus = a.gloomPlus || b.gloomPlus;
+  m.bounties = a.bounties.length ? a.bounties : b.bounties;
   return m;
 }
 export const canAfford = (save, cost) => Object.entries(cost).every(([k, v]) => (k === 'embers' ? save.embers : save.mats[k] || 0) >= v);
@@ -108,13 +147,22 @@ export function questStatus(save, q) {
   if (r?.a) return { st: r.done ? 'ready' : 'active' };
   if (q.req && !save.quests[q.req]?.turnedIn) return { st: 'locked', why: `After “${QUESTS.find(x => x.id === q.req).title}”` };
   if (q.area && !BUILT_AREAS.includes(q.area)) return { st: 'locked', why: 'Opens in a later update' };
+  if (q.area === 'throne' && !throneOpen(save)) return { st: 'locked', why: 'Needs Hearth tier 3' };
   if (q.area && !save.unlocked.includes(q.area)) return { st: 'locked', why: 'Area still sealed' };
   return { st: 'available' };
 }
 export const tonicMax = (save) => TONIC.max + (save.hearth >= 1 ? 1 : 0);
-/** Effective stats from upgrade levels. */
+/** Effective stats from upgrade levels + equipped charms. */
 export function statsFor(save) {
-  const u = save.up;
+  const u = save.up, eq = (c) => save.equipped.includes(c) && save.charms.includes(c);
   return { ...UPGRADES.blade.stat(u.blade), ...UPGRADES.lantern.stat(u.lantern), ...UPGRADES.hearts.stat(u.hearts), ...UPGRADES.dash.stat(u.dash),
-    power: 1 + u.blade + u.lantern + u.hearts + u.dash };
+    power: 1 + u.blade + u.lantern + u.hearts + u.dash,
+    flareCost: u.lantern >= 5 ? 0.7 : 1, spinWave: u.blade >= 5, magnet: eq('magnet') ? 7 : 3.5, speed: eq('swiftstep') ? 1.1 : 1, steady: eq('steadywick'),
+    thorn: eq('thornlight'), kindredMul: eq('kindred') ? 1.25 : 1.15, secondWind: eq('secondwind') };
+}
+/** Bounty helpers: roll 3 distinct bounties from areas the player has unlocked. */
+export function rollBounties(save, rand = Math.random) {
+  const pool = BOUNTY_POOL.map((b, i) => ({ ...b, i })).filter(b => save.unlocked.includes(b.area)), out = [];
+  while (out.length < 3 && pool.length) out.push(pool.splice(Math.floor(rand() * pool.length), 1)[0].i);
+  return out.map(i => ({ i, p: 0, done: false, paid: false }));
 }
