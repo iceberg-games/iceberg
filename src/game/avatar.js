@@ -9,6 +9,7 @@ import { QOL_GM1_BUILDERS } from './cosmetics/qolGm1Wearables.js';
 import { getBodySlots, normalizeBodyType, loadBodyType, BONE_ANCHOR, CLOTHING_ANCHOR, DEFAULT_BODY_TYPE } from './bodyTypes.js';
 export { BODY_TYPES, BODY_TYPE_IDS, getBodySlots, loadBodyType, saveBodyType } from './bodyTypes.js';
 import { QOL_GAME_BUILDERS } from './cosmetics/qolGameWearables.js';
+import { FINAL_SHOWCASE_BUILDERS } from './cosmetics/finalShowcase.js'; // final showcase batch, lane 1 (fs_glacier_wings, fs_polar_cub_pal)
 import WIND_MAIN_OGG from '../assets/audio/tornado_hat_wind_loop.ogg?url';
 import WIND_MAIN_MP3 from '../assets/audio/tornado_hat_wind_loop.mp3?url';
 import WIND_HIGH_OGG from '../assets/audio/tornado_hat_wind_loop_high.ogg?url';
@@ -105,6 +106,7 @@ const BUILDERS = {
   fz_bling_chain(_rc, color) { return buildBlingChain(color); },
   penguin_pal(_rc, color) { return buildPenguinPal(color); },
   ...QOL_GM1_BUILDERS,
+  ...FINAL_SHOWCASE_BUILDERS, // lane 2 adds ...FINAL_SHOWCASE_LANE2_BUILDERS (fs_aurora_lantern_staff) on the next line
   cap() {
     const g = new THREE.Group(), m = std('#d83a3f');
     g.add(mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.2, 20, 1, false, 0, Math.PI * 2), m, 0, 0.72, 0));
@@ -2385,7 +2387,7 @@ export class Avatar {
 
   _detach(slot) {
     const o = this.attached[slot];
-    if (o) { o.parent?.remove(o); (o.userData.extras || []).forEach(x => x.parent?.remove(x)); }
+    if (o) { o.parent?.remove(o); (o.userData.extras || []).forEach(x => x.parent?.remove(x)); o.userData.dispose?.(); }   // dispose: opt-in per item (finalShowcase)
     delete this.attached[slot];
   }
 

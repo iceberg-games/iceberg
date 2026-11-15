@@ -420,3 +420,16 @@ for (const c of [
     colorPresets: [['Amethyst', '#9a7bff'], ['Glacier', '#5fd6ff'], ['Aurora', '#4fe0a0'], ['Sunstone', '#ffa64f']],
     desc: 'Crystal Spire (crystal-spire): a climbing frame carrying a cluster of glowing spire crystals with orbiting sparkle motes.' },
 ]) { const item = { kind: 'model', winter: true, customizable: true, ...c }; COSMETICS.push(item); COSMETIC_BY_ID[item.id] = item; }
+
+// ---- FINAL showcase batch (Nov 15): 3 premium showpieces total. Lane 1 (Iceberg Cosmetics) builds the two below in
+// src/game/cosmetics/finalShowcase.js; lane 2 (Iceberg Cosmetics 2) adds fs_aurora_lantern_staff (hand) in its own
+// file + entry. `showcase` = final-batch flag (premium tab, full-width card).
+const FS = { kind: 'model', winter: true, customizable: true, premium: true, showcase: true, rarity: 'legendary' };
+for (const c of [
+  { id: 'fs_glacier_wings', name: 'Glacier Wings', slot: 'back', price: 25000, icon: '🪽', defaultColor: '#4fc4ff',
+    colorPresets: [['Glacier Blue', '#4fc4ff'], ['Aurora Violet', '#a678ff'], ['Sunrise Gold', '#ffc35a'], ['Midnight Frost', '#3f63d8']],
+    desc: 'Showcase wings of cut glacier ice: four tiers of faceted crystal feathers with frost-lit veins that pulse, a slow breathing flap, and snowflakes that drift off the tips.' },
+  { id: 'fs_polar_cub_pal', name: 'Polar Cub Shoulder Pal', slot: 'neck', price: 20000, icon: '🐻‍❄️', defaultColor: '#b8283f',
+    colorPresets: [['Cranberry', '#b8283f'], ['Mint', '#5fcfa6'], ['Sky', '#5aaee8'], ['Honey', '#e8a93a']],
+    desc: 'A chunky, fluffy polar bear cub who rides your shoulder in a hand-knit scarf with a tiny ice-pick charm. Breathes, blinks, twitches an ear, looks around and waves hello.' },
+]) { const item = { ...FS, ...c }; COSMETICS.push(item); COSMETIC_BY_ID[item.id] = item; }
