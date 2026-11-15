@@ -2,11 +2,11 @@
 // with a procedural WebAudio fallback for every cue (incl. a gentle music-box BGM loop).
 const URLS = (() => { try { return import.meta.glob('./sfx/*.ogg', { eager: true, query: '?url', import: 'default' }); } catch { return {}; } })();
 export const CUES = ['bgm_pengu-plaza', 'sfx_emote_wave', 'sfx_emote_dance', 'sfx_emote_cheer', 'sfx_sit', 'sfx_skate_loop', 'sfx_skate_stop', 'sfx_cocoa', 'sfx_penguin_honk', 'sfx_camera_shutter', 'sfx_foot_crunch', 'sfx_bell_chime',
-  // BIG update (designs/pengu-plaza-big-cues.md) — all synthesized until files land in ./sfx
+  // BIG update (designs/pengu-plaza-big-cues.md) — Sound 2 add-on pack in ./sfx; synth fallback if a file is missing
   'amb_harbor', 'amb_grotto', 'amb_woods', 'amb_ridge', 'amb_village',
   'sfx_photo_new', 'sfx_photo_rare', 'sfx_photo_legendary', 'sfx_album_open', 'sfx_page_flip', 'sfx_reward', 'sfx_zoom', 'sfx_camera_mode', 'sfx_area_discover',
   'sfx_whale_breach', 'sfx_shooting_star', 'sfx_sled_lift', 'sfx_seal_bark', 'sfx_puffin', 'sfx_fox_yip', 'sfx_owl_hoot', 'sfx_crystal_chime'];
-const GAIN = { sfx_foot_crunch: 0.6, sfx_skate_loop: 0.45 };   // Sound Designer manifest gains (others 1.0)
+const GAIN = { sfx_foot_crunch: 0.6, sfx_skate_loop: 0.45, sfx_zoom: 0.7, sfx_sled_lift: 0.8, sfx_seal_bark: 0.8, sfx_puffin: 0.8, sfx_fox_yip: 0.8, sfx_owl_hoot: 0.8 };   // Sound Designer 2 manifest gains (others 1.0; amb 0.35, bgm 0.4)
 const AMB_GAIN = 0.35;
 const BGM_GAIN = 0.4;
 const JITTER = new Set(['sfx_foot_crunch', 'sfx_penguin_honk', 'sfx_emote_wave', 'sfx_seal_bark', 'sfx_puffin', 'sfx_fox_yip', 'sfx_crystal_chime', 'sfx_zoom']);
