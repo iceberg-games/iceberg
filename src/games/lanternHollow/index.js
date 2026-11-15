@@ -445,7 +445,7 @@ export default {
     function openJournal() {
       const act = QUESTS.map(q => ({ q, ...quests.status(q), r: save.quests[q.id] })).filter(e => e.st === 'active' || e.st === 'ready');
       const done = QUESTS.filter(q => save.quests[q.id]?.turnedIn).length;
-      const body = (act.length ? questCards(act).replace(/<button[^>]*data-act="turnin"[^>]*>Turn in<\/button>/g, '<span class="lh-chip ok">Return to giver</span>') : '<p class="lh-say">No active quests. Visit Elder Wick and the Quest Board in the village.</p>')
+      const body = (act.length ? questCards(act).replace(/<button[^>]*data-act="turnin"[^>]*>Turn in<\/button>/g, '<span class="lh-chip ok">Return to giver</span>') : `<p class="lh-say">${trackerHint().startsWith('✔') ? 'Every quest is done. The Hollow is bright again, Lightbringer. Bounties still refresh.' : 'No active quests. Visit Elder Wick and the Quest Board in the village.'}</p>`)
         + (save.bounties.some(b => !b.paid) ? `<h4 style="margin:12px 0 6px;color:#ffcf8a">Bounties</h4>` + save.bounties.filter(b => !b.paid).map(b => { const B = BOUNTY_POOL[b.i]; return `<div class="d" style="margin:3px 0">${b.done ? '🌟' : '📌'} ${esc(B.t)} · <b>${b.p}/${B.goal}</b> · ${B.embers} 🔥</div>`; }).join('') : '')
         + `<div class="meta" style="margin-top:10px">Completed ${done} / ${QUESTS.length} · Kills ${save.stats.kills} · Revives ${save.stats.revives} · Veins ${save.veins.length}/5 · Charms ${save.charms.length}/${Object.keys(CHARMS).length}${save.title ? ` · Title: ${esc(save.title)}` : ''}</div>`;
       ui.modal('📜', 'Quest Journal', `${act.length} active`, body, { kind: 'journal' });
