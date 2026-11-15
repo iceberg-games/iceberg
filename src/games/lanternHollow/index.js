@@ -222,10 +222,12 @@ export default {
     });
     const partyName = (id) => party.get(id)?.name || net.players().find(x => x.id === id)?.name || id;
     // everyone: shared state
+    // joiners interpolate only their own area's enemy snapshot (ids are per-area; other areas' snapshots must not evict ours)
+    function applySnap(a) { const s = snaps[a]; if (net.isHost() || a !== area || !s) return; const seen = new Set();
+      for (const r of unpackEnemies(s)) { seen.add(r.id); const cur = interp.get(r.id); if (cur) Object.assign(cur, { ...r, x: cur.x, z: cur.z, tx: r.x, tz: r.z }); else interp.set(r.id, { ...r, tx: r.x, tz: r.z }); }
+      for (const id of [...interp.keys()]) if (!seen.has(id)) interp.delete(id); }
     for (const a of Object.keys(DUNS)) {
-      net.onState(`en.${a}`, (s) => { snaps[a] = s; if (net.isHost()) return; const now = net.now(); const seen = new Set();
-        for (const r of unpackEnemies(s)) { seen.add(r.id); const cur = interp.get(r.id); if (cur) Object.assign(cur, { ...r, x: cur.x, z: cur.z, tx: r.x, tz: r.z }); else interp.set(r.id, { ...r, tx: r.x, tz: r.z }); }
-        for (const id of [...interp.keys()]) if (!seen.has(id)) interp.delete(id); void now; });
+      net.onState(`en.${a}`, (s) => { snaps[a] = s; applySnap(a); });
       net.onState(`boss.${a}`, (b) => { boss[a] = b; });
       net.onState(`dun.${a}`, (d) => applyDun(a, d));
     }
@@ -299,7 +301,7 @@ export default {
     function enterArea(a, pos, facing) {
       const fromVillage = area === 'village'; area = a; applyLook(a); player.teleport(pos, facing); player.vel.set(0, 0, 0);
       audio.setArea(a); audio.stinger('sfx_area_enter'); ui.setArea(AREAS[a].name); ui.banner(AREAS[a].name, AREA_SUB[a] + (save.gloomPlus && a !== 'village' ? ' · GLOOM+' : ''), 2600);
-      telegraphs.clear(); pending.clear(); pickups.clear(); views.clear(); interp.clear(); announce(true);
+      telegraphs.clear(); pending.clear(); pickups.clear(); views.clear(); interp.clear(); applySnap(a); announce(true);
       if (a === 'village') { if (carried) { save.embers += carried; ui.toast(`🔥 Banked <b>${carried}</b> embers`); carried = 0; } if (quests.refreshBounties()) ui.toast('📌 New bounties on the Quest Board', 2600); saveNow(); }
       else { runSW = false; const pw = stats().power; if (pw < AREAS[a].power) setTimeout(() => !disposed && ui.toast(`⚠️ Recommended Power ${AREAS[a].power}+ (you: ${pw}). Upgrade in the village!`, 4000), 2800); }
       if (isDun(a) && fromVillage && save.wisp?.area === a) ui.toast(`✨ Your Ember Wisp is still glowing somewhere in the ${AREAS[a].name}…`);
@@ -787,11 +789,11 @@ export default {
       player, collision, travel, openWaystone, openJournal, openMap, openGiver, openHearth, quests, CAVE, MINE, THRONE,
     };
     if (testMode) Object.assign(hooks, {
-      warpTo(x, z, facing = 0) { player.teleport(V(x, 0, z), facing); const a = areaAt(x, z); if (a && a !== area) { area = a; applyLook(a); audio.setArea(a); } },
+      warpTo(x, z, facing = 0) { player.teleport(V(x, 0, z), facing); const a = areaAt(x, z); if (a && a !== area) { area = a; applyLook(a); audio.setArea(a); views.clear(); interp.clear(); applySnap(a); } },
       give(o) { for (const [k, v] of Object.entries(o)) { if (k === 'embers') save.embers += v; else if (k in save.mats) save.mats[k] += v; else if (k === 'carried') carried += v; } markDirty(); },
       setSave(o) { save = normalizeSave({ ...save, ...o }); },
       damageAll(n = 999) { if (!net.isHost()) return; const sim = sims[area]; for (const e of [...(sim?.list || [])]) { if (e.st === ST.burrowed) e.st = ST.exposed; for (let k = 0; k < 20 && sim.list.includes(e); k++) sim.applyHit(e.id, n, { flare: 1 }); } },
-      damageBoss(n) { for (let k = 0; k < Math.ceil(n / 60); k++) sims[area]?.hitBoss(Math.min(60, n - k * 60)); }, burstSac(i, x, z) { sims[area]?.hitBoss(0, { sac: i, x, z }); },
+      damageBoss(n) { for (let k = 0; k < Math.ceil(n / 60); k++) sims[area]?.hitBoss(Math.min(60, n - k * 60)); }, burstSac(i, x, z) { return sims[area]?.hitBoss(0, { sac: i, x, z }); },
       god(on = true) { if (on && !combat._td) { combat._td = combat.takeDamage; combat.takeDamage = () => 0; } else if (!on && combat._td) { combat.takeDamage = combat._td; delete combat._td; } },
       openGate() { const s = sims[area]; if (s) { s.dun.gate = 0; s.dirtyDun(); } }, killAdds() { const s = sims[area]; if (s) for (const e of [...s.list]) if (e.boss) s.kill(e); },
       hurt(n) { combat.iframes = 0; return combat.takeDamage(n); }, press(code) { taps.add(code); },
@@ -799,7 +801,7 @@ export default {
         net.fakeEvent(f.id, 'at', { a: area, hp: o.down ? 0 : 6, mhp: 6, pw: 3, dn: !!o.down, r: 6, name: f.name }); return f.id; },
       allyDown(id, down = true) { const f = net.fakes?.find(x => x.id === id); if (f) { f.down = down; net.fakeEvent(id, 'at', { a: area, hp: down ? 0 : 6, mhp: 6, pw: 3, dn: down, r: 6, name: f.name }); } },
       allyRevivesMe(id) { const f = net.fakes?.find(x => x.id === id); if (!f) return; f.position = { x: player.pos.x + 1, y: 0, z: player.pos.z }; net.fakeEvent(id, 'revive', { t: me() }); },
-      sims, net,
+      sims, net, pickups,
     });
     if (testMode) window.__lh = hooks;
 
