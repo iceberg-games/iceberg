@@ -38,6 +38,7 @@ spawn, countdown, timer, leaderboard, random.
 - **Step 1:** coins are collectibles, not Birg Bucks; obby shorthand.
 - **Step 2:** multi-sentence / multi-trigger chaining + teleport-to-checkpoint.
 - **Step 3:** "on spawn" is start; "hide … then show again" is a timed show.
+- **Step 4a:** HELP / Ideas / Phrases hint copy refresh (cheat-sheet already had the new phrases).
 - 219/219 phrase tests passing (`scripts/nlscript-tests.mjs`).
 
 ## Step 1 — what changed
@@ -79,24 +80,29 @@ could increment it correctly.
   hide-for-3-seconds, which the runtime already restores. "Show again" /
   "visible again" are show actions (not a transparency-only change).
 
-## What's next (step 4)
-Toward "finished and tested" so this branch can be handed to Iceberg
-Publisher (we still do not publish or push):
+## Step 4a — HELP / examples copy
+The 📖 Phrases cheat-sheet already listed coins, on spawn, Then-chaining,
+hide-then-show, and send-to-last-checkpoint. Two spots were missing those
+in everyday UI:
 
-1. Studio UI smoke: type the new phrases in the script box and confirm
-   the preview / cheat sheet / suggestions look right (`editor.js`,
-   `templates.js`, HELP text). Update help copy only if a mention is
-   stale or missing.
-2. Known limitations to leave unless runtime grows new `act()` cases:
-   toggle/flicker light, give-gear, conveyors.
-3. If the smoke pass is clean, treat the offline translator work as
-   ready to hand off — no further inventing of features.
+- `HELP` now mentions "this is a coin", "on spawn, give 10 points", and a
+  Then-chaining example.
+- `EXAMPLES` (Ideas chips) appends those three plus "send them to the last
+  checkpoint" (all already in the cheat-sheet; 4 max).
+- Phrases panel hint in `src/ui/creator.js` also mentions starting the next
+  sentence with "Then…". No new cheat-sheet items; no runtime features.
+
+## What's next
+Studio UI smoke still runs separately. Known limitations to leave unless
+runtime grows new `act()` cases: toggle/flicker light, give-gear, conveyors.
+If smoke is clean, this branch is ready to hand to Iceberg Publisher (we
+still do not publish or push).
 
 ## Branch / worktree
 - Worktree: `/workspace/iceberg-game-maker/wt-studio-ai-scripting`
 - Branch: `feature/studio-ai-scripting` (local only; not tracking origin)
 - Base: `origin/main` `831c4c93c7994125886e5f06d04be0c5948d55cd`
-- Tip: `ef0f4c3779f7c4a882ffbf1093fecdc78cfaf79e` (step 3); earlier `2d91a9a` / `2ee7659` (step 2)
+- Tip: *(filled in after the step 4a commit)*
 
 Do not publish. Do not push to main. Hand the finished branch to Iceberg
 Publisher later, after the whole feature is tested.

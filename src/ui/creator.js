@@ -213,7 +213,7 @@ export class CreatorPanel {
       else { this.scriptSel = ed.addScript(inst.id, text); this.renderLeft(); this.renderProps(); }
     };
     return h('div.st-phrases',
-      h('p.st-hint', 'Click a phrase to add it to the selected part\'s script (or start a new script). Change the words, numbers and names freely — e.g. "teleport them to the part called Castle". Join ideas with "and" / "then".'),
+      h('p.st-hint', 'Click a phrase to add it to the selected part\'s script (or start a new script). Change the words, numbers and names freely — e.g. "teleport them to the part called Castle". Join ideas with "and" / "then", or start the next sentence with "Then…".'),
       CHEATSHEET.map(cat => h('div.st-phrase-cat', h('h4', cat.title), cat.items.map(x => h('button.st-phrase', { 'data-phrase': x, onclick: () => use(x) }, x)))));
   }
   /** in-studio text prompt (replaces window.prompt) → Promise<string|null> */
