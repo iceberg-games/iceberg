@@ -50,6 +50,8 @@ body.studio-active #hud, body.studio-active .help, body.studio-active #back-to-e
 .st-understood { background: #1f3a2c; border: 1px solid #2f9e6a; border-radius: 6px; padding: 6px 8px; } .st-understood ul { margin: 4px 0 0; padding-left: 18px; }
 .st-unknown { margin-top: 6px; background: #3b2f1a; border: 1px solid #c98a2a; border-radius: 6px; padding: 6px 8px; } .st-unknown p { margin: 4px 0 0; font-size: 11px; color: #e8d3a8; }
 .st-code { background: #15181c; padding: 6px; border-radius: 4px; font-size: 10px; max-height: 200px; overflow: auto; color: #9fe3ff; }
+.st-check-results { margin-top: 6px; background: #1a2a3b; border: 1px solid #3f8fd0; border-radius: 6px; padding: 6px 8px; } .st-check-results.ok { background: #1f3a2c; border-color: #2f9e6a; } .st-check-results ul { margin: 4px 0 0; padding-left: 18px; } .st-check-results li { margin: 4px 0; } .st-check-results li.error { color: #f3c1c3; } .st-check-results li.warning { color: #e8d3a8; } .st-check-sugg { font-size: 11px; color: #9fd3f5; margin-top: 2px; }
+#script-check-btn { margin-left: 4px; }
 .st-chips { display: flex; flex-wrap: wrap; gap: 4px; } .st-chip { background: #33383f; border: 1px solid #4a535e; color: #c9d6e2; border-radius: 12px; padding: 2px 8px; font: 11px inherit; font-family: inherit; cursor: pointer; } .st-chip:hover { border-color: #3fa2ea; }
 .st-check { display: block; margin: 3px 0; cursor: pointer; }
 .st-status { position: absolute; left: 0; right: 0; bottom: 0; height: 24px; background: #1d2026; border-top: 1px solid #3a414b; color: #8b98a6; font-size: 11px; padding: 4px 10px; white-space: nowrap; overflow: hidden; }
@@ -112,3 +114,6 @@ body.studio-active #hud, body.studio-active .help, body.studio-active #back-to-e
 .st-help-col h4 { margin: 4px 0; color: #9fd3f5; }
 .st-help-row { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; }
 .st-help-row kbd { flex: 0 0 auto; min-width: 70px; padding: 1px 6px; border: 1px solid #4f5a66; border-bottom-width: 2px; border-radius: 4px; background: #2d323a; color: #e4edf5; font: 11px ui-monospace, monospace; text-align: center; }
+
+.st-file-menu { position: absolute; right: 8px; top: 100%; z-index: 40; background: #1a2a3b; border: 1px solid #3f8fd0; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 220px; box-shadow: 0 8px 24px #0006; }
+.st-group.st-game { position: relative; }

@@ -10,6 +10,7 @@ import { GEAR_LIST, GEARS } from '../studio/gears.js';
 import { MUSIC_THEMES } from '../audio/music.js';
 import { EXAMPLES, HELP, CHEATSHEET } from '../studio/nlscript.js';
 import { getScriptTranslator } from '../studio/ai.js';
+import { checkScript } from '../studio/scriptCheck.js';
 import { drafts, publish, isPublished } from '../studio/store.js';
 import { upgradeDoc } from '../studio/templates.js';
 import { exportGameJSON, importGameJSON, downloadText } from '../core/share.js';
@@ -32,7 +33,7 @@ export class CreatorPanel {
     Object.assign(this, { root, engine, models, ui, onTest, onExit, onReload });
     this.el = h('div.studio.hidden#creator-panel');
     root.append(this.el);
-    this.leftTab = 'explorer'; this.scriptSel = null; this.showCode = false; this.collapsed = new Set(); this.anchor = null;
+    this.leftTab = 'explorer'; this.scriptSel = null; this.showCode = false; this.scriptCheckOpen = false; this.collapsed = new Set(); this.anchor = null;
     // Device mode 'mobile' uses the simple Mobile Studio (src/ui/mobileStudio.js) instead of this panel.
     bus.on('game:loaded', ({ game }) => { if (game.editing && !isMobile()) this.show(game); else this.hide(); });
     onDeviceChange(() => { const g = this.engine.game; if (g?.editing) (isMobile() ? this.hide() : this.show(g)); });
@@ -97,11 +98,43 @@ export class CreatorPanel {
 
   // ---------- persistence ----------
   docWithThumb() { const d = this.ed.serialize(); try { d.thumbnail = this.engine.snapshot(); } catch {} return d; }
-  save(silent = false) { const d = this.docWithThumb(); try { drafts.save(d); if (!silent) this.ui.toast(`Saved draft "${d.name}"`, '💾'); } catch { this.ui.toast('Could not save (browser storage full?)', '⚠️'); } return d; }
+  // Save stores the draft on this device and, when signed in, on the player's
+  // Iceberg account. It never downloads a file. Optional JSON export/import lives
+  // under ⋯ File (not in the Save flow).
+  save(silent = false) {
+    const d = this.docWithThumb();
+    try {
+      this.lastSave = Promise.resolve(drafts.save(d)).then((res) => {
+        if (!silent) {
+          if (res?.remote && res.ok) this.ui.toast(`Saved "${d.name}" to your account`, '💾');
+          else if (res?.remote && !res.ok) this.ui.toast(`Saved on this device; cloud save failed: ${res.reason || 'unknown error'}`, '⚠️');
+          else this.ui.toast(`Saved "${d.name}" on this device. Sign in to save to your account.`, '💾');
+        }
+        return d;
+      });
+      this.lastSave.catch(() => {});
+    } catch {
+      this.ui.toast('Could not save (browser storage full?)', '⚠️');
+      this.lastSave = Promise.reject(new Error('storage'));
+      this.lastSave.catch(() => {});
+    }
+    return d;
+  }
   publishGame() {
     const d = this.save(true);
-    return publish(d).then(({ remote, modelsLocalOnly }) => { if (modelsLocalOnly) setTimeout(() => this.ui.toast('Heads up: uploaded 3D models only show on your device; other players see a placeholder box', 'ℹ️'), 1500); bus.emit('games:changed'); this.ui.toast(remote ? `Published "${d.name}" for everyone!` : `Published "${d.name}" to your Games menu (sign in to share it)`, '🚀'); this.renderProps(); return d; },
+    return (this.lastSave || Promise.resolve(d)).then(() => publish(d)).then(({ remote, modelsLocalOnly }) => { if (modelsLocalOnly) setTimeout(() => this.ui.toast('Heads up: uploaded 3D models only show on your device; other players see a placeholder box', 'ℹ️'), 1500); bus.emit('games:changed'); this.ui.toast(remote ? `Published "${d.name}" for everyone!` : `Published "${d.name}" to your Games menu (sign in to share it)`, '🚀'); this.renderProps(); return d; },
       (err) => { bus.emit('games:changed'); this.ui.toast(`Publish failed: ${err.message}`, '⚠️'); this.renderProps(); throw err; });
+  }
+  toggleFileMenu() {
+    const cur = this.el.querySelector('#studio-file-menu');
+    if (cur) { cur.remove(); return; }
+    const importInput = h('input#import-game-file', { type: 'file', accept: '.json', style: { display: 'none' }, onchange: async (e) => { const f = e.target.files[0]; if (!f) return; try { const d = upgradeDoc(await importGameJSON(await f.text(), this.models)); drafts.save(d); this.ui.toast(`Imported "${d.name}"`, '📥'); this.onReload(d); } catch (err) { this.ui.toast(`Import failed: ${err.message}`, '⚠️'); } } });
+    const menu = h('div.st-file-menu#studio-file-menu',
+      h('p.st-hint', 'Save already stores this game on your Iceberg account. Export/import a file only if you need a backup.'),
+      h('button.st-mini#export-game', { onclick: () => { const d = this.save(true); downloadText(`${d.name.replace(/[^\w-]+/g, '_')}.iceberg.json`, exportGameJSON(d, this.models)); } }, '⤓ Export JSON'),
+      importInput, h('button.st-mini#import-game', { onclick: () => importInput.click() }, '⤒ Import JSON'));
+    const host = this.el.querySelector('#game-file-menu')?.parentElement || this.ribbon;
+    host.append(menu);
   }
 
   render() {
@@ -121,7 +154,6 @@ export class CreatorPanel {
     const clip = ed.clipboardInfo();
     const ins = (type, icon, label, over = {}) => h('button.st-tool', { 'data-insert': label.toLowerCase().replace(/\s+/g, '-'), onclick: () => ed.insert(type, over) }, h('span', icon), label);
     const snapSel = (key, opts, label) => h('label.st-snap', label, h('select', { 'data-snap': key, onchange: (e) => ed.setSnap(key, +e.target.value) }, opts.map(o => h('option', { value: o, selected: ed.snap[key] === o }, o === 0 ? 'Off' : (key === 'rot' ? `${o}°` : o)))));
-    const importInput = h('input', { type: 'file', accept: '.json', style: { display: 'none' }, onchange: async (e) => { const f = e.target.files[0]; if (!f) return; try { const d = upgradeDoc(await importGameJSON(await f.text(), this.models)); drafts.save(d); this.ui.toast(`Imported "${d.name}"`, '📥'); this.onReload(d); } catch (err) { this.ui.toast(`Import failed: ${err.message}`, '⚠️'); } } });
     clear(this.ribbon).append(
       h('div.st-brand', '🧊', h('b', 'Iceberg Studio')),
       h('div.st-group', h('div.st-gl', 'Tools'), h('div.st-row', tool('select', '🖱️', 'Select', 1), tool('move', '✥', 'Move', 2), tool('scale', '⤢', 'Scale', 3), tool('rotate', '⟳', 'Rotate', 4), tool('terrain', '🏔️', 'Terrain', 5)),
@@ -147,9 +179,8 @@ export class CreatorPanel {
         h('button.st-big#save-game', { onclick: () => this.save() }, '💾 Save'),
         h('button.st-big.pub#publish-game', { onclick: () => this.publishGame().catch(() => {}) }, '🚀 Publish')),
         h('div.st-row',
-          h('button.st-mini#export-game', { onclick: () => { const d = this.save(true); downloadText(`${d.name.replace(/[^\w-]+/g, '_')}.iceberg.json`, exportGameJSON(d, this.models)); } }, '⤓ Export'),
-          importInput, h('button.st-mini#import-game', { onclick: () => importInput.click() }, '⤒ Import'),
-          h('button.st-mini#exit-editor', { onclick: () => { this.save(true); this.ed.saveCamera(); this.onExit(); } }, '✕ Exit'))),
+          h('button.st-mini#exit-editor', { onclick: () => { this.save(true); this.ed.saveCamera(); this.onExit(); } }, '✕ Exit'),
+          h('button.st-mini#game-file-menu', { title: 'Optional JSON file export/import — Save does not download a file', onclick: () => this.toggleFileMenu() }, '⋯ File'))),
     );
   }
 
@@ -213,7 +244,7 @@ export class CreatorPanel {
       else { this.scriptSel = ed.addScript(inst.id, text); this.renderLeft(); this.renderProps(); }
     };
     return h('div.st-phrases',
-      h('p.st-hint', 'Click a phrase to add it to the selected part\'s script (or start a new script). Change the words, numbers and names freely — e.g. "teleport them to the part called Castle". Join ideas with "and" / "then".'),
+      h('p.st-hint', 'Click a phrase to add it to the selected part\'s script (or start a new script). Change the words, numbers and names freely — e.g. "teleport them to the part called Castle". Join ideas with "and" / "then", or start the next sentence with "Then…".'),
       CHEATSHEET.map(cat => h('div.st-phrase-cat', h('h4', cat.title), cat.items.map(x => h('button.st-phrase', { 'data-phrase': x, onclick: () => use(x) }, x)))));
   }
   /** in-studio text prompt (replaces window.prompt) → Promise<string|null> */
@@ -257,6 +288,9 @@ export class CreatorPanel {
         item('💡', 'Neon', () => ed.insert('part', { name: 'Neon', material: 'neon', color: '#4dd2ff', size: [4, 1, 1] })), item('🪟', 'Glass', () => ed.insert('part', { name: 'Glass', material: 'glass', color: '#d8f0ff', size: [4, 6, 0.4] })),
         item('🦘', 'Trampoline', () => { const id = ed.insert('part', { name: 'Trampoline', shape: 'cylinder', color: '#ff7ac8', size: [4, 0.6, 4] }); ed.addScript(id, 'When touched, bounce them really high'); }),
         item('🚪', 'Door', () => { const id = ed.insert('part', { name: 'Door', color: '#8a5a34', material: 'wood', size: [4, 7, 0.5] }); ed.addScript(id, 'When touched, open like a door for 3 seconds'); }),
+        item('💨', 'Sprint pad', () => { const id = ed.insert('part', { name: 'SprintPad', shape: 'cylinder', color: '#9be15d', material: 'neon', size: [4, 0.5, 4] }); ed.addScript(id, 'When touched, make them 2 times faster for 5 seconds'); }, { 'data-script': 'sprint-pad', title: 'Makes the player run faster for a few seconds' }),
+        item('🌫️', 'Vanish pad', () => { const id = ed.insert('part', { name: 'VanishPad', color: '#c9d1d9', material: 'glass', size: [6, 1, 6], transparency: 0.25 }); ed.addScript(id, 'This is a disappearing platform'); }, { 'data-script': 'vanish-pad', title: 'Disappears for 3 seconds when stepped on, then comes back' }),
+        item('💚', 'Health pack', () => { const id = ed.insert('part', { name: 'HealthPack', shape: 'sphere', color: '#2f9e6a', material: 'neon', size: [2, 2, 2] }); ed.addScript(id, 'This is a health pack'); }, { 'data-script': 'health-pack', title: 'Heals the player when touched' }),
         item('📍', 'Spawn', () => ed.insert('spawn')), item('🚩', 'Checkpoint', () => ed.insert('checkpoint')), item('🪙', 'Coin', () => ed.insert('coin'))),
       h('h4', '🤖 NPC AI templates'), h('p.st-hint', 'Drops a character with plain-words AI scripts. Edit the words to tune speed and range (e.g. "within 60 studs", "fast").'),
       h('div.st-grid#ai-templates',
@@ -373,7 +407,7 @@ export class CreatorPanel {
       this.field('Script name', h('input#script-name', { value: s.name || 'Script', maxLength: 30, onchange: (e) => ed.renameScript(inst.id, s.id, e.target.value) })),
       h('p.st-hint', 'Write what you want in plain words. No coding needed!'),
       ta,
-      h('div.st-row', h('button.st-big#script-apply', { onclick: () => { clearTimeout(timer); ed.updateScript(inst.id, s.id, ta.value); } }, '✔ Apply'), h('label.st-check', h('input#show-code', { type: 'checkbox', checked: this.showCode, onchange: (e) => { this.showCode = e.target.checked; this.renderScriptPreview(); } }), ' Show code (advanced)')),
+      h('div.st-row', h('button.st-big#script-apply', { onclick: () => { clearTimeout(timer); ed.updateScript(inst.id, s.id, ta.value); } }, '✔ Apply'), h('button.st-mini#script-check-btn', { onclick: () => { this.scriptCheckOpen = true; this.renderScriptPreview(); }, title: 'Check this script offline for problems' }, "❓ Something's wrong?"), h('label.st-check', h('input#show-code', { type: 'checkbox', checked: this.showCode, onchange: (e) => { this.showCode = e.target.checked; this.renderScriptPreview(); } }), ' Show code (advanced)')),
       this.preview,
       h('h4', 'Ideas (click to use)'), h('div.st-chips', EXAMPLES.map(x => h('button.st-chip', { onclick: () => { ta.value = ta.value ? `${ta.value.replace(/\s+$/, '')}. ${x}` : x; ed.updateScript(inst.id, s.id, ta.value); } }, x))),
       h('p.st-hint', `Translator: ${getScriptTranslator().name}`),
@@ -387,11 +421,21 @@ export class CreatorPanel {
     const names = ed.doc.instances.map(i => i.name).filter(Boolean);
     const r = getScriptTranslator().translateSync ? getScriptTranslator().translateSync(s.text || '', { names }) : { preview: [], unknown: [], suggestions: [] };
     const useSuggestion = (x) => { const t = (s.text || '').trim(); const base = r.unknown.length ? r.unknown.reduce((acc, u) => acc.replace(u, ''), t).replace(/(\s*(,|\.|\band\b|\bthen\b)\s*)+$/i, '').trim() : t; const nt = base ? `${base.replace(/[\s.]+$/, '')}. ${x}` : x; ed.updateScript(inst.id, s.id, nt); const ta = this.props.querySelector('#script-text'); if (ta) ta.value = nt; };
-    clear(this.preview).append(
+    const placeScripts = (ed.doc.instances || []).flatMap((inst0) => (inst0.scripts || []).filter((sc) => sc.id !== s.id).map((sc) => ({ program: sc.program, label: `${inst0.name}${sc.name && sc.name !== 'Script' ? ' / ' + sc.name : ''}` })));
+    const checkPanel = this.scriptCheckOpen ? this.scriptCheckPanel(checkScript({ text: s.text || '', program: r.program || s.program, unknown: r.unknown, suggestions: r.suggestions, names, placeScripts })) : null;
+    clear(this.preview).append(...[
       h('div.st-understood', h('b', '🤖 I understood:'), r.preview.length ? h('ul#script-preview', r.preview.map(l => h('li', l))) : h('p.st-hint', s.text ? 'Nothing yet.' : 'Type something above.')),
       r.unknown.length ? h('div.st-unknown#script-unknown', h('b', '🤔 I didn\'t understand: '), r.unknown.map(u => `"${u}"`).join(', '),
-        (r.suggestions || []).length ? h('div', h('p', 'Did you mean one of these? (click to use)'), h('div.st-chips#script-suggestions', r.suggestions.map(x => h('button.st-chip.sugg', { onclick: () => useSuggestion(x) }, x)))) : h('p', HELP)) : null,
-      this.showCode ? h('pre.st-code#script-code', JSON.stringify(s.program, null, 2)) : null);
+        (r.suggestions || []).length ? h('div', h('p', 'Did you mean one of these? (click to use)'), h('div.st-chips#script-suggestions', r.suggestions.map(x => h('button.st-chip.sugg', { onclick: () => useSuggestion(x) }, x)))) : h('p', HELP)) : undefined,
+      checkPanel,
+      this.showCode ? h('pre.st-code#script-code', JSON.stringify(s.program, null, 2)) : undefined,
+    ].filter(Boolean));
+  }
+  scriptCheckPanel(issues) {
+    if (!issues.length) return h('div.st-check-results.ok#script-check-results', h('b', "✅ Something's wrong?"), h('p', 'No problems found. This script looks ready to test.'));
+    const icon = { error: '❌', warning: '⚠️', info: 'ℹ️' };
+    return h('div.st-check-results#script-check-results', h('b', "❓ Something's wrong?"),
+      h('ul', issues.map((i) => h('li.' + i.severity, `${icon[i.severity] || ''} ${i.message}`, i.suggestion ? h('div.st-check-sugg', i.suggestion) : undefined))));
   }
   workspaceProps() {
     const ed = this.ed, doc = ed.doc;

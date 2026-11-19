@@ -259,7 +259,9 @@ await setField('#game-name', 'Studio Test World'); await setField('#mobile-toggl
 ok('workspace settings', await p.evaluate(() => { const d = window.iceberg.engine.game.doc; return d.name === 'Studio Test World' && d.mobile === true; }));
 
 // Save + Publish
+const saveDl = p.waitForEvent('download', { timeout: 1500 }).then(() => 'downloaded', () => 'none');
 await p.click('#save-game'); await p.waitForTimeout(200);
+ok('save does not download a file', (await saveDl) === 'none');
 const draft = await p.evaluate(() => JSON.parse(localStorage.getItem('iceberg:v1:studioDrafts') || '[]').some(d => d.name === 'Studio Test World'));
 ok('save draft', draft);
 // file:// build has no accounts => guest. Guests cannot publish (signed-in only); the draft must survive.
@@ -272,6 +274,7 @@ ok('guest publish: not listed, draft kept', await p.evaluate(() => !window.icebe
 await p.evaluate(() => { const d = JSON.parse(localStorage.getItem('iceberg:v1:studioDrafts')).find(d => d.name === 'Studio Test World'); window.iceberg.backend.saveCustomGame(d); });
 
 // Export
+await p.click('#game-file-menu');
 const [dl] = await Promise.all([p.waitForEvent('download'), p.click('#export-game')]);
 const exportPath = '/tmp/studio-export.iceberg.json'; await dl.saveAs(exportPath);
 const exported = JSON.parse((await import('fs')).readFileSync(exportPath, 'utf8'));
