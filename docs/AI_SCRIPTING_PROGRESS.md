@@ -28,20 +28,17 @@ spawn, countdown, timer, leaderboard, random.
 **Continuous motion:** spin, move (bob), path, chase, wander.
 
 **Notable remaining gaps:**
-- "on spawn, give 10 points" is treated as a touch + leftover unknown "on spawn",
-  not as a start-of-game rule.
-- "When touched, hide for 2 seconds and then show again" hides for 2 seconds
-  but leaves "show again" unknown (the hide already auto-shows after 2s, but
-  the leftover is noisy).
 - "toggle the light" / "flicker the light" are not understood (runtime light
-  is on/off only; a toggle would need a new `act()` case or a sequenced pair).
+  is on/off only; a real toggle would need a new `act()` case).
 - No script action for giving gear (`backpack.give` exists, but not in `act()`).
+- Conveyor / "walk the player" force is not a runtime action.
 
 ## Done
 - Fresh worktree + branch off `origin/main` (see below). This progress note.
 - **Step 1:** coins are collectibles, not Birg Bucks; obby shorthand.
 - **Step 2:** multi-sentence / multi-trigger chaining + teleport-to-checkpoint.
-- 200/200 phrase tests passing (`scripts/nlscript-tests.mjs`).
+- **Step 3:** "on spawn" is start; "hide … then show again" is a timed show.
+- 219/219 phrase tests passing (`scripts/nlscript-tests.mjs`).
 
 ## Step 1 — what changed
 Creators were accidentally awarding **Birg Bucks** (real, once-per-play
@@ -71,27 +68,35 @@ could increment it correctly.
   now teleport (`to: 'checkpoint' | 'randomCheckpoint'`). "Save their
   progress" / "this is a checkpoint" still save.
 
-## What's next (step 3)
-Highest-value small follow-up: **fix leftover common phrases that still
-parse wrong**, still only in `nlscript.js`, with new test cases.
+## Step 3 — what changed
+- "On spawn", "when they spawn", "when the player spawns", "on player spawn",
+  "when spawned", and "at spawn" are `start` triggers. "When they respawn"
+  stays `death`. Spawn *actions* ("every 3 seconds, spawn a ball", "when
+  clicked, spawn a copy") are unchanged. "Right when they spawn give them
+  5 coins" now awards coins, not a spawn-part action.
+- "Hide for 2 seconds and then show again" becomes hide → wait 2s → show
+  (no leftover unknown). "Hide and then show again" (no duration) is
+  hide-for-3-seconds, which the runtime already restores. "Show again" /
+  "visible again" are show actions (not a transparency-only change).
 
-1. "on spawn, give 10 points" / "when they spawn" should be a `start` (or
-   `death`/respawn if clearly "when they respawn") rule, not touch + an
-   unknown "on spawn" leftover. Do not steal "every 3 seconds, spawn a ball".
-2. "hide for 2 seconds and then show again" should not leave "show again"
-   unknown (either drop it when hide already has a duration, or emit an
-   explicit `show` after the wait).
-3. If those are quick, also improve a couple of light phrases ("toggle"
-   can be a clearly described limitation, or a short on/off sequence if
-   that's honest).
+## What's next (step 4)
+Toward "finished and tested" so this branch can be handed to Iceberg
+Publisher (we still do not publish or push):
 
-Do not add a give-gear script action until `runtime.js` `act()` supports it.
+1. Studio UI smoke: type the new phrases in the script box and confirm
+   the preview / cheat sheet / suggestions look right (`editor.js`,
+   `templates.js`, HELP text). Update help copy only if a mention is
+   stale or missing.
+2. Known limitations to leave unless runtime grows new `act()` cases:
+   toggle/flicker light, give-gear, conveyors.
+3. If the smoke pass is clean, treat the offline translator work as
+   ready to hand off — no further inventing of features.
 
 ## Branch / worktree
 - Worktree: `/workspace/iceberg-game-maker/wt-studio-ai-scripting`
 - Branch: `feature/studio-ai-scripting` (local only; not tracking origin)
 - Base: `origin/main` `831c4c93c7994125886e5f06d04be0c5948d55cd`
-- Tip: `2d91a9a0fc89b0232d62b7ee663f366035a94e54` (step 2); earlier `9424bc5` / `248922d` (step 1)
+- Tip: *(filled in after the step 3 commit)*
 
 Do not publish. Do not push to main. Hand the finished branch to Iceberg
 Publisher later, after the whole feature is tested.

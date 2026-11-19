@@ -161,6 +161,24 @@ const cases = [
   ['When touched, teleport to checkpoint', p => has(p, 'teleport', a => a.to === 'checkpoint') && !has(p, 'checkpoint')],
   ['When touched, save their progress', p => has(p, 'checkpoint') && !has(p, 'teleport')],
   ['this is a checkpoint', p => trig(p, 'touch') && has(p, 'checkpoint') && !has(p, 'teleport')],
+  // --- on spawn is start, not touch; hide then show again ---
+  ['on spawn, give 10 points', p => trig(p, 'start') && has(p, 'points', a => a.amount === 10) && !p.unknown.length],
+  ['On spawn give 10 points', p => trig(p, 'start') && has(p, 'points', a => a.amount === 10) && !p.unknown.length],
+  ['when they spawn, give 10 points', p => trig(p, 'start') && has(p, 'points', a => a.amount === 10) && !p.unknown.length],
+  ['when the player spawns, give 10 points', p => trig(p, 'start') && has(p, 'points', a => a.amount === 10)],
+  ['when a player spawns, say "Welcome!"', p => trig(p, 'start') && has(p, 'message', a => /welcome/i.test(a.text)) && !p.unknown.length],
+  ['at spawn, set the counter to 0', p => trig(p, 'start') && has(p, 'setVar', a => a.name === 'counter' && a.value === 0) && !p.unknown.length],
+  ['on player spawn, give 10 points', p => trig(p, 'start') && has(p, 'points', a => a.amount === 10) && !p.unknown.length],
+  ['when spawned, turn green', p => trig(p, 'start') && has(p, 'color', a => a.color === '#2f9e6a') && !p.unknown.length],
+  ['right when they spawn give them 5 coins', p => trig(p, 'start') && has(p, 'addVar', a => a.name === 'coins' && a.amount === 5) && !has(p, 'spawn') && !p.unknown.length],
+  ['when they respawn, give 1 point', p => trig(p, 'death') && has(p, 'points', a => a.amount === 1)],
+  ['Every 3 seconds, spawn a red ball', p => trig(p, 'every') && has(p, 'spawn')],
+  ['When clicked, spawn a copy of the part called Crate', p => trig(p, 'click') && has(p, 'spawn', a => a.what === 'clone')],
+  ['When touched, hide for 2 seconds and then show again', p => trig(p, 'touch') && has(p, 'hide') && has(p, 'wait', a => a.seconds === 2) && has(p, 'show') && !p.unknown.length && !acts(p).some(a => a.do === 'hide' && a.seconds)],
+  ['When touched, disappear for 2 seconds and then show again', p => has(p, 'hide') && has(p, 'show') && !p.unknown.length],
+  ['When touched, hide and then show again', p => trig(p, 'touch') && has(p, 'hide') && !p.unknown.length && (has(p, 'show') || acts(p).some(a => a.do === 'hide' && a.seconds > 0))],
+  ['when touched: vanish, then reappear after 2 seconds', p => has(p, 'hide') && has(p, 'show')],
+  ['make it visible again', p => has(p, 'show') && !p.unknown.length],
 ];
 
 // unknown phrases must produce suggestions, never a crash

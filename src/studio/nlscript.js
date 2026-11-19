@@ -232,11 +232,11 @@ const ACTIONS = [
     : [{ do: 'transparency', value: 1, seconds: secsIn(t, 1), target: findTarget(t) }, { do: 'wait', seconds: secsIn(t, 1) }, { do: 'hide', target: findTarget(t) }]),
   A('fall', /\b(fall|falls|falling|drop down|unanchor|unanchors|collapse|collapses|crumble|crumbles)\b/, (t) => ({ do: 'fall', seconds: /\b(come back|comes back|respawn|reappear|return)\b/.test(t) ? secsIn(t, 3) : 0, target: findTarget(t) })),
   A('hide', /\b(disappear|disappears|vanish|vanishes|go(?:es)? away|poof|hide|hides|break|breaks|shatter|shatters|destroy (?:it|itself|this)|delete (?:it|itself|this)|remove (?:it|itself|this)|despawn)\b/, (t) => {
-    const back = /\b(come back|comes back|reappear|reappears|return|returns|respawn)\b/.test(t);
+    const back = /\b(come back|comes back|reappear|reappears|return|returns|respawn|show again|become visible|visible again)\b/.test(t);
     const forM = t.match(re(`for\\s+${SEC}`));
     return { do: 'hide', seconds: forM ? num(forM[1], 3) : (back ? secsIn(t, 3) : null), target: findTarget(t) };
   }),
-  A('show', /\b(appear|appears|reappear|reappears|come back|comes back|show up|shows up|become visible|unhide|show (?:it|itself|this|@p\d+))\b/, (t) => ({ do: 'show', target: findTarget(t) })),
+  A('show', /\b(appear|appears|reappear|reappears|come back|comes back|show up|shows up|show again|become visible|visible again|unhide|show (?:it|itself|this|@p\d+))\b/, (t) => ({ do: 'show', target: findTarget(t) })),
   A('transparency', /\b(see[- ]through|transparent|transparency|ghostly|glassy|invisible|opaque|visible again)\b/, (t) => {
     let v = 0.6; const pc = t.match(re(`${N}%`)); const dec = t.match(re(`transparency (?:to |of )?${N}`));
     if (pc) v = +pc[1] / 100; else if (dec) v = +dec[1] > 1 ? +dec[1] / 100 : +dec[1]; else if (/\binvisible\b/.test(t)) v = 1; else if (/\b(opaque|visible again|not transparent)\b/.test(t)) v = 0;
@@ -353,7 +353,7 @@ const TRIGGERS = [
   { type: 'click', re: re(`\\b${WHEN}\\s+(?:${PL}\\s+)?(?:clicked|clicks?|tapped|taps?)\\b(?:\\s+on)?\\s*(?:${OBJ})?|\\b${WHEN}\\s+(?:${OBJ}\\s+)?(?:is\\s+|gets\\s+)?(?:clicked|tapped)(?:\\s+(?:on|by ${PL}))?|\\bon click\\b`) },
   { type: 'press', re: re(`\\b${WHEN}\\s+(?:${PL}\\s+)?(?:pressed|press(?:es)?|pushed|push(?:es)?|activated|activates?)\\b\\s*(?:${OBJ})?|\\b${WHEN}\\s+(?:${OBJ}\\s+)?(?:is\\s+|gets\\s+)?(?:pressed|pushed|activated)(?:\\s+by ${PL})?`) },
   { type: 'touch', re: re(`\\b${WHEN}\\s+(?:${PL}\\s+)?(?:touch(?:es|ed)?\\b|steps? on|stepped on|stands? on|stood on|walks? (?:on|over)|lands? on|hits?|bumps? into|runs? into|collides? with|jumps? on|comes? in contact with)\\s*(?:${OBJ})?|\\b${WHEN}\\s+(?:${OBJ}\\s+)?(?:is\\s+|gets\\s+)?(?:touched|stepped on|hit|bumped(?: into)?|landed on|stood on|walked on)(?:\\s+by ${PL})?|\\b(?:on touch|on contact|upon contact|touching (?:it|this))\\b`) },
-  { type: 'start', re: /\b(?:when (?:the )?(?:game|level|server|round|match|map) (?:starts|begins|loads|is loaded)|at the (?:start|beginning)(?: of the game)?|on start|right away|immediately|at start|when it starts|when it loads|as soon as the game starts|on load)\b/ },
+  { type: 'start', re: re(`\\b(?:when (?:the )?(?:game|level|server|round|match|map) (?:starts|begins|loads|is loaded)|at the (?:start|beginning)(?: of the game)?|on start|right away|immediately|at start|when it starts|when it loads|as soon as the game starts|on load|on (?:player |the player )?spawn|at spawn|(?:right )?when (?:${PL} )?spawns?|when spawned)\\b`) },
   { type: 'every', re: re(`\\b(?:once )?(?:every|each)\\s+(?:${SEC}|second|other second)\\b`), make: (m) => ({ seconds: m[1] ? +m[1] : (/other/.test(m[0]) ? 2 : 1) }) },
 ];
 const cut = (t, m) => (t.slice(0, m.index) + ' ' + t.slice(m.index + m[0].length)).replace(/^\s*,?\s*/, '').replace(/\s+/g, ' ').trim();
@@ -404,6 +404,22 @@ function stitchDoors(list) {
   for (const a of list) if (a.do === 'door') { if (a.close) { if (!a.target && lastDoor) a.target = lastDoor.target; if (lastDoor) lastDoor.seconds = 0; } else lastDoor = a; }
 }
 
+/** If hide is immediately followed by show, restore after the hide duration (default 3s). */
+function foldHideShow(acts) {
+  const out = [];
+  for (const a of acts) {
+    const prev = out[out.length - 1];
+    if (a.do === 'show' && prev?.do === 'hide') {
+      const secs = prev.seconds || 3;
+      prev.seconds = null;
+      out.push({ do: 'wait', seconds: secs }, a);
+      continue;
+    }
+    out.push(a);
+  }
+  return out;
+}
+
 // ---------- main entry ----------
 const TOUCHY = ['kill', 'damage', 'heal', 'bounce', 'teleport', 'checkpoint', 'points', 'bucks', 'win', 'door', 'speed', 'jump', 'gravity'];
 function protect(raw, names) {
@@ -426,7 +442,7 @@ function protect(raw, names) {
     .replace(/^(?:this is |make (?:this |it )?(?:a )?)?(?:a )?disappearing platforms?$/, 'when touched disappear for 3 seconds')
     .replace(/\bcount (?:how many times|the number of times|the times) (?:it'?s|it is|this is|someone|a player|the player|players) (touch(?:es|ed)?|click(?:s|ed)?|press(?:es|ed)?)\b/g, (m, v) => (v.startsWith('touch') ? 'when touched count touches' : v.startsWith('click') ? 'when clicked count clicks' : 'when pressed count clicks'))
     .replace(/\b(?:the |a )?(?:part|block|brick|door|pad|platform|button|light|lamp|thing|object|one|wall|floor|sign|portal|model|area|zone) (?:called|named) (@p\d+)/g, '$1').replace(/\b(?:called|named) (@p\d+)/g, '$1')
-    .replace(/\b(fall|falls|disappear|disappears|vanish|vanishes|hide|hides|break|breaks)\s+(?:and|then)\s+(come back|comes back|reappear|reappears|respawn|respawns|return|returns)\b/g, '$1 to $2');
+    .replace(/\b(fall|falls|disappear|disappears|vanish|vanishes|hide|hides|break|breaks)\s+(?:and then|and|then)\s+(come back|comes back|reappear|reappears|respawn|respawns|return|returns|show again|become visible(?: again)?|visible again)\b/g, '$1 to $2');
   t = t.replace(/\(?\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*\)?/g, (_, x, y, z) => ` pt${C.push([+x, +y, +z]) - 1} `);
   t = normalizeNumbers(t);
   t = t.replace(/\bx\s*=\s*(-?\d+(?:\.\d+)?)\s*,?\s*y\s*=\s*(-?\d+(?:\.\d+)?)\s*,?\s*z\s*=\s*(-?\d+(?:\.\d+)?)/g, (_, x, y, z) => `pt${C.push([+x, +y, +z]) - 1}`);
@@ -497,8 +513,8 @@ export function translate(text, ctx = {}) {
       return { acts, conts };
     };
     const { acts: actions, conts } = parseBody(body, triggered);
-    const elseActs = elseBody ? parseBody(elseBody, true).acts : [];
-    const list = repeat > 1 ? Array.from({ length: repeat }, () => actions).flat() : actions;
+    const elseActs = foldHideShow(elseBody ? parseBody(elseBody, true).acts : []);
+    const list = foldHideShow(repeat > 1 ? Array.from({ length: repeat }, () => actions).flat() : actions);
     if (continuing) {
       // "Then wait 2 seconds and turn blue" continues the previous rule, even if this chunk is wait-only
       if (list.length || elseActs.length) {
@@ -679,12 +695,12 @@ export function describe(program) {
 
 // ---------- examples, cheat sheet & suggestions ----------
 export const CHEATSHEET = [
-  { title: 'Touch & click', items: ['When a player touches this, kill them', 'When touched, give 10 points and play a ding sound', 'When clicked, turn green', 'When the button is pressed, open the door called Gate for 5 seconds', 'When a player enters this area, say "Welcome!"', 'When a player leaves this area, say "Bye!"', 'The first time someone touches this, give them 5 Birg Bucks', 'This is a killbrick', 'This is a speed pad', 'This is a coin', 'When touched, turn red. Then wait 2 seconds and turn blue.'] },
+  { title: 'Touch & click', items: ['When a player touches this, kill them', 'When touched, give 10 points and play a ding sound', 'When clicked, turn green', 'When the button is pressed, open the door called Gate for 5 seconds', 'When a player enters this area, say "Welcome!"', 'When a player leaves this area, say "Bye!"', 'The first time someone touches this, give them 5 Birg Bucks', 'This is a killbrick', 'This is a speed pad', 'This is a coin', 'When touched, turn red. Then wait 2 seconds and turn blue.', 'When touched, hide for 2 seconds and then show again'] },
   { title: 'Moving & spinning', items: ['Spin slowly forever', 'Spin 2 times a second like a wheel', 'Move up and down 5 studs every 2 seconds', 'Move between 0, 5, 0 and 20, 5, 0 every 4 seconds', 'Move to the part called Goal and back every 3 seconds', 'Act as an elevator going up 20 studs', 'When touched, move up 10 studs over 2 seconds, wait 2 seconds, then go back', 'When touched, wait 1 second then fall and come back after 3 seconds'] },
   { title: 'NPC AI (chase & wander)', items: ['Chase the player within 40 studs', 'Chase the player fast within 60 studs', 'Wander around within 15 studs', 'Slowly wander around within 25 studs pausing 3 seconds', 'When touched, take 20 damage'] },
   { title: 'Players', items: ['When touched, teleport them to the part called Finish', 'When touched, bounce them really high', 'When touched, make them 2 times faster for 5 seconds', 'When touched, make them jump higher for 10 seconds', 'When touched, give them low gravity', 'When touched, take 25 damage', 'When touched, heal them', 'This is a health pack', 'This is a disappearing platform', 'When touched, save their progress', 'When touched, send them to the last checkpoint', 'When touched, you win'] },
   { title: 'Looks & effects', items: ['Every 2 seconds, turn red or blue at random', 'When touched, slowly fade to purple over 3 seconds', 'When touched, fade out', 'Become 50% transparent', 'When clicked, turn the light on', 'When clicked, turn the light off', 'When touched, make sparkles and play a chime sound', 'When touched, explode and disappear for 3 seconds', 'Glow blue'] },
-  { title: 'Score, timers & variables', items: ['When the game starts, show the leaderboard', 'When touched, add 1 to the counter', 'When touched, if the player has 10 points, open the door called Gate, otherwise say "You need 10 points!"', 'When the score reaches 50, say "Halfway there!"', 'When the game starts, start a 60 second countdown', 'When the countdown ends, say "Time is up!"', 'When touched, give a random number of points between 1 and 10', 'When touched, give 5 coins'] },
+  { title: 'Score, timers & variables', items: ['When the game starts, show the leaderboard', 'When touched, add 1 to the counter', 'When touched, if the player has 10 points, open the door called Gate, otherwise say "You need 10 points!"', 'When the score reaches 50, say "Halfway there!"', 'When the game starts, start a 60 second countdown', 'When the countdown ends, say "Time is up!"', 'When touched, give a random number of points between 1 and 10', 'When touched, give 5 coins', 'On spawn, give 10 points'] },
   { title: 'Spawners & more', items: ['Every 3 seconds, drop a red ball', 'Every 5 seconds, spawn a deadly lava ball', 'When clicked, spawn a copy of the part called Crate', 'Every 2 seconds, disappear for 1 second', 'When touched, randomly either teleport them to the spawn or give them 5 points', 'Turn red, wait 1 second, turn blue, wait 1 second, repeat forever'] },
 ];
 export const EXAMPLES = CHEATSHEET.flatMap(c => c.items.slice(0, 2));
