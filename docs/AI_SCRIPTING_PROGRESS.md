@@ -27,22 +27,21 @@ spawn, countdown, timer, leaderboard, random.
 
 **Continuous motion:** spin, move (bob), path, chase, wander.
 
-**Notable gaps (runtime has it, translator is weak or wrong):**
-- Teleport to last / random checkpoint (`to: 'checkpoint' | 'randomCheckpoint'`
-  in `runtime.js` and already described by `sayAction`) is stolen by the
-  "save checkpoint" parser: "send them to the last checkpoint" currently
-  *saves* a checkpoint instead of teleporting.
-- A follow-up sentence starting with "Then…" becomes a new `start` rule
-  instead of continuing the previous one.
-- Two `when` clauses in one sentence ("when touched give 5 points and when
-  clicked turn green") collapse into a single trigger.
-- "plus" / "followed by" / "afterwards" are not treated as `and` / `then`.
+**Notable remaining gaps:**
+- "on spawn, give 10 points" is treated as a touch + leftover unknown "on spawn",
+  not as a start-of-game rule.
+- "When touched, hide for 2 seconds and then show again" hides for 2 seconds
+  but leaves "show again" unknown (the hide already auto-shows after 2s, but
+  the leftover is noisy).
+- "toggle the light" / "flicker the light" are not understood (runtime light
+  is on/off only; a toggle would need a new `act()` case or a sequenced pair).
 - No script action for giving gear (`backpack.give` exists, but not in `act()`).
 
 ## Done
 - Fresh worktree + branch off `origin/main` (see below). This progress note.
-- **Step 1 improvement:** coins and common obby shorthand (see next section).
-- 183/183 phrase tests passing (`scripts/nlscript-tests.mjs`).
+- **Step 1:** coins are collectibles, not Birg Bucks; obby shorthand.
+- **Step 2:** multi-sentence / multi-trigger chaining + teleport-to-checkpoint.
+- 200/200 phrase tests passing (`scripts/nlscript-tests.mjs`).
 
 ## Step 1 — what changed
 Creators were accidentally awarding **Birg Bucks** (real, once-per-play
@@ -59,26 +58,40 @@ could increment it correctly.
 - Obby shorthand: killbrick, speed pad, health pack / medkit, disappearing
   platform (hide for 3 seconds on touch).
 
-## What's next (step 2)
-Highest-value small follow-up: **multi-sentence / multi-trigger chaining.**
+## Step 2 — what changed
+- A follow-up sentence starting with "Then" / "And then" / "Afterwards" /
+  "After that" and with no trigger of its own is appended to the previous
+  rule (including wait-only tails). "Then when clicked, …" still starts a
+  new click rule. Door open + "Then close it after 4 seconds" stays open
+  until the close.
+- A sentence with two `when` clauses becomes two rules. "if" conditions
+  are not treated as a second trigger.
+- "plus" / "followed by" join clauses like `and` / `then`.
+- "Send them to the last checkpoint" / "teleport to a random checkpoint"
+  now teleport (`to: 'checkpoint' | 'randomCheckpoint'`). "Save their
+  progress" / "this is a checkpoint" still save.
 
-1. If a sentence starts with "Then" / "And then" / "Afterwards" / "After that"
-   and has no trigger of its own, append its actions to the previous rule
-   instead of creating a new `start` rule.
-   Example: "When touched, turn red. Then wait 2 seconds and turn blue."
-2. Split a sentence that contains two `when` clauses into two rules.
-   Example: "When touched give 5 points and when clicked turn green."
-3. Treat "plus" / "followed by" as `and` / `then` clause joiners.
+## What's next (step 3)
+Highest-value small follow-up: **fix leftover common phrases that still
+parse wrong**, still only in `nlscript.js`, with new test cases.
 
-Add cases to `scripts/nlscript-tests.mjs`. Keep the change local to
-`nlscript.js`. After that, fix teleport-to-checkpoint being stolen by the
-save-checkpoint parser.
+1. "on spawn, give 10 points" / "when they spawn" should be a `start` (or
+   `death`/respawn if clearly "when they respawn") rule, not touch + an
+   unknown "on spawn" leftover. Do not steal "every 3 seconds, spawn a ball".
+2. "hide for 2 seconds and then show again" should not leave "show again"
+   unknown (either drop it when hide already has a duration, or emit an
+   explicit `show` after the wait).
+3. If those are quick, also improve a couple of light phrases ("toggle"
+   can be a clearly described limitation, or a short on/off sequence if
+   that's honest).
+
+Do not add a give-gear script action until `runtime.js` `act()` supports it.
 
 ## Branch / worktree
 - Worktree: `/workspace/iceberg-game-maker/wt-studio-ai-scripting`
 - Branch: `feature/studio-ai-scripting` (local only; not tracking origin)
 - Base: `origin/main` `831c4c93c7994125886e5f06d04be0c5948d55cd`
-- Tip: `9424bc55675d79040905a4e7ae8a9f4153f606a5` (step 1)
+- Tip: *(filled in after the step 2 commit)*
 
 Do not publish. Do not push to main. Hand the finished branch to Iceberg
 Publisher later, after the whole feature is tested.

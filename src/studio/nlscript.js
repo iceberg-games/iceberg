@@ -142,7 +142,11 @@ const ACTIONS = [
   A('damage', /\b(damage|damages|hurt|hurts|harm|harms|injure|injures|deal -?\d+|do -?\d+|take -?\d+ (?:damage|health|hp)|lose -?\d+ (?:health|hp)|loses -?\d+ (?:health|hp)|sting|stings)\b/, (t) => ({ do: 'damage', amount: Math.abs(num((t.match(re(`${N}`)) || [])[1], 20)) })),
   A('kill', /\b(kill|kills|killed|slay|slays|eliminate|eliminates|die|dies|dead|deadly|instakill|instant death|oof|lava|reset (?:them|the player)|respawn (?:them|the player)|destroy (?:them|the player))\b/, () => ({ do: 'kill' })),
   A('win', /\b(win|wins|won|winner|victory|finish line|finish(?:es)? the (?:game|obby|level|race)|beat the (?:game|level)|complete the (?:game|level|obby)|end the game)\b/, (t) => ({ do: 'win', text: quoted(t) || 'You win! 🏆' })),
-  A('checkpoint', /\b(checkpoint|save (?:their |the )?progress|set (?:their |the )?spawn|new spawn ?point)\b/, () => ({ do: 'checkpoint' })),
+  A('checkpoint', /\b(checkpoint|save (?:their |the )?progress|set (?:their |the )?spawn|new spawn ?point)\b/, (t) => {
+    // "send them to the last checkpoint" / "teleport to a random checkpoint" are teleports, not saves
+    if (/\b(teleport|teleports|teleporter|warp|warps|transport|transports|portal|send (?:them|the player|him|her)|take (?:them|the player)|bring (?:them|the player)|move (?:them|the player|him|her))\b/.test(t)) return null;
+    return { do: 'checkpoint' };
+  }),
   A('teleport', /\b(teleport|teleports|teleporter|warp|warps|transport|transports|portal|send (?:them|the player|him|her) (?:to|back)|take (?:them|the player) to|move (?:them|the player|him|her) to|bring (?:them|the player) (?:to|back))\b/, (t) => {
     const c = t.match(/pt(\d+)/); if (c) return { do: 'teleport', to: C[+c[1]] };
     const name = findTarget(t); if (name) return { do: 'teleport', toPart: name };
@@ -374,7 +378,30 @@ function extractCondition(t) {
 }
 /** Split a sentence body into clauses joined by and/then/commas/semicolons. */
 function clauses(t) {
-  return t.split(/\s*(?:,\s*(?:and\s+)?then\b|,\s*and\b|\band then\b|\bafter that\b|\bthen\b|\band\b|,|;)\s*/).map(s => s.trim()).filter(Boolean);
+  return t.split(/\s*(?:,\s*(?:and\s+)?then\b|,\s*and\b|\band then\b|\bafter that\b|\bfollowed by\b|\bthen\b|\band\b|\bplus\b|,|;)\s*/).map(s => s.trim()).filter(Boolean);
+}
+
+/** Split a protected sentence that contains two or more "when …" trigger clauses. */
+function splitWhenClauses(t) {
+  const re = /(?:(?:\s+and)?\s+then|\s+and|,|;)\s+(?=(?:when(?:ever)?|as soon as|each time|every time|(?:the )?(?:first|next) time)\b)/g;
+  const parts = [];
+  let last = 0, m;
+  while ((m = re.exec(t))) {
+    const left = t.slice(last, m.index).trim();
+    if (left) parts.push(left);
+    last = m.index + m[0].length;
+  }
+  if (!last) return [t];
+  const tail = t.slice(last).trim();
+  if (tail) parts.push(tail);
+  return parts.length ? parts : [t];
+}
+
+const CONT_RE = /^(?:and\s+then|then|and\s+afterwards|afterwards|and\s+after that|after that)\s*,?\s*/;
+
+function stitchDoors(list) {
+  let lastDoor = null;
+  for (const a of list) if (a.do === 'door') { if (a.close) { if (!a.target && lastDoor) a.target = lastDoor.target; if (lastDoor) lastDoor.seconds = 0; } else lastDoor = a; }
 }
 
 // ---------- main entry ----------
@@ -407,6 +434,7 @@ function protect(raw, names) {
     .replace(/\b(between\s+\S+(?:\s+\S+)?)\s+and\s+/g, '$1 & ').replace(/\b(to\s+(?:the\s+)?(?:@p\d+|pt\d+))\s+and\s+back\b/g, '$1 & back').replace(/\bover and over(?: again)?\b/g, 'forever')
     .replace(/\b(?:between|from) (-?\d+(?:\.\d+)?) and (-?\d+(?:\.\d+)?)\b/g, 'between $1 & $2')
     .replace(/\b(?:the user|a user|the person|a person|somebody|someone|anyone|anybody|the character|your character|the avatar)\b/g, 'the player').replace(/\bplayer's\b/g, 'player')
+    .replace(/\bfollowed by\b/g, 'then').replace(/\bplus\b/g, 'and')
     .replace(/\s+/g, ' ').trim();
   return t;
 }
@@ -422,7 +450,10 @@ export function translate(text, ctx = {}) {
   const src = String(text || '').replace(/\r/g, '').slice(0, 4000);
   const sentences = src.split(/(?<=[.!?])\s+|\n+/).map(s => s.trim().replace(/[.!?]+$/, '')).filter(Boolean);
   for (const raw of sentences) {
-    const t = protect(raw, names);
+    const protectedText = protect(raw, names);
+    for (let t of splitWhenClauses(protectedText)) {
+    const startsCont = CONT_RE.test(t);
+    if (startsCont) t = t.replace(CONT_RE, '').trim();
     let { trigger: trig, rest } = extractTrigger(t);
     // "move up and down every 2 seconds": the 'every' is the motion's period, not a timer
     if (trig?.type === 'every' && clauses(rest).some(c => continuousOf(c)) && !clauses(rest).some(c => !continuousOf(c) && parseClause(c)?.length)) { trig = null; rest = t; }
@@ -431,7 +462,7 @@ export function translate(text, ctx = {}) {
     const om = body.match(/\s*,?\s*\b(?:otherwise|or else|else|if not)\b\s*,?\s*/);
     if (om) { elseBody = body.slice(om.index + om[0].length); body = body.slice(0, om.index); }
     const ONCE = /\b(only once|just once|one time only|only one time|the first time|first time only)\b/;
-    let once = ONCE.test(t) || (/^once\b/.test(raw.toLowerCase()) && !!trig && trig.type !== 'every');
+    let once = ONCE.test(t) || (/^once\b/.test(t) && !!trig && trig.type !== 'every');
     body = body.replace(new RegExp(ONCE.source, 'g'), ' ');
     let repeat = 1, loop = false;
     const rp = body.match(re(`\\b(?:repeat(?: this| that| it)?\\s+)?${N}\\s+times\\b(?!\\s*(?:as|higher|faster|a second|per|every|a minute))`));
@@ -439,7 +470,10 @@ export function translate(text, ctx = {}) {
     if (/\b(repeat forever|forever|keep (?:doing (?:it|this|that)|repeating)|on repeat|loop|repeat)\b/.test(body) && !SPIN_RE.test(body) && !/\b(move|moves|float|floats|bob|bobs|hover|hovers|slide|slides|patrol|patrols|between)\b/.test(body)) {
       loop = true; body = body.replace(/\b(repeat forever|forever|keep (?:doing (?:it|this|that)|repeating)|on repeat|loop|repeat)\b/g, ' ');
     }
-    const triggered = (!!trig && trig.type !== 'start') || !!cond;
+    const continuing = startsCont && !trig && program.rules.length > 0;
+    const triggered = continuing
+      ? program.rules[program.rules.length - 1].trigger.type !== 'start'
+      : ((!!trig && trig.type !== 'start') || !!cond);
     const parseBody = (b, trg) => {
       const acts = [], conts = [];
       for (let c of clauses(b)) {
@@ -464,22 +498,35 @@ export function translate(text, ctx = {}) {
     };
     const { acts: actions, conts } = parseBody(body, triggered);
     const elseActs = elseBody ? parseBody(elseBody, true).acts : [];
+    const list = repeat > 1 ? Array.from({ length: repeat }, () => actions).flat() : actions;
+    if (continuing) {
+      // "Then wait 2 seconds and turn blue" continues the previous rule, even if this chunk is wait-only
+      if (list.length || elseActs.length) {
+        const prev = program.rules[program.rules.length - 1];
+        prev.actions.push(...list);
+        if (elseActs.length) prev.else = [...(prev.else || []), ...elseActs];
+        if (loop) prev.loop = true;
+        stitchDoors(prev.actions);
+      }
+      if (conts.length) program.continuous.push(...conts);
+      if (!list.length && !conts.length && !elseActs.length && !unknown.length) unknown.push(origText(t) || raw);
+      continue;
+    }
     if (actions.some(a => a.do !== 'wait') || elseActs.length) {
-      const list = repeat > 1 ? Array.from({ length: repeat }, () => actions).flat() : actions;
       let tr = trig || { type: 'start' };
       if (!trig && /\bbutton\b/.test(t)) tr = { type: 'press' };
       else if (!trig && (list.some(a => TOUCHY.includes(a.do) || (a.do === 'addVar' && a.name === 'coins')) || /\b(teleporter|portal|elevator|lift)\b/.test(t))) tr = { type: 'touch' };
       // "this is a coin" / "collect this coin": pick up once, then the part stays gone
       if (list.some(a => a.do === 'addVar' && a.name === 'coins') && list.some(a => a.do === 'hide')) once = true;
       // "open X ... close it after 4 seconds": the open stays until the close; "it" = the last door
-      let lastDoor = null;
-      for (const a of list) if (a.do === 'door') { if (a.close) { if (!a.target && lastDoor) a.target = lastDoor.target; if (lastDoor) lastDoor.seconds = 0; } else lastDoor = a; }
+      stitchDoors(list);
       const rule = { trigger: tr, once, actions: list };
       if (loop) rule.loop = true; if (cond) rule.if = cond; if (elseActs.length) rule.else = elseActs;
       program.rules.push(rule);
     }
     if (conts.length) program.continuous.push(...conts);
-    if (!actions.length && !conts.length && !elseActs.length && !unknown.length) unknown.push(raw);
+    if (!actions.length && !conts.length && !elseActs.length && !unknown.length) unknown.push(origText(t) || raw);
+    } // end splitWhenClauses
   }
   const safe = validateProgram(program);
   return { program: safe, preview: describe(safe), unknown, suggestions: unknown.length ? suggest(unknown) : [] };
@@ -632,10 +679,10 @@ export function describe(program) {
 
 // ---------- examples, cheat sheet & suggestions ----------
 export const CHEATSHEET = [
-  { title: 'Touch & click', items: ['When a player touches this, kill them', 'When touched, give 10 points and play a ding sound', 'When clicked, turn green', 'When the button is pressed, open the door called Gate for 5 seconds', 'When a player enters this area, say "Welcome!"', 'When a player leaves this area, say "Bye!"', 'The first time someone touches this, give them 5 Birg Bucks', 'This is a killbrick', 'This is a speed pad', 'This is a coin'] },
+  { title: 'Touch & click', items: ['When a player touches this, kill them', 'When touched, give 10 points and play a ding sound', 'When clicked, turn green', 'When the button is pressed, open the door called Gate for 5 seconds', 'When a player enters this area, say "Welcome!"', 'When a player leaves this area, say "Bye!"', 'The first time someone touches this, give them 5 Birg Bucks', 'This is a killbrick', 'This is a speed pad', 'This is a coin', 'When touched, turn red. Then wait 2 seconds and turn blue.'] },
   { title: 'Moving & spinning', items: ['Spin slowly forever', 'Spin 2 times a second like a wheel', 'Move up and down 5 studs every 2 seconds', 'Move between 0, 5, 0 and 20, 5, 0 every 4 seconds', 'Move to the part called Goal and back every 3 seconds', 'Act as an elevator going up 20 studs', 'When touched, move up 10 studs over 2 seconds, wait 2 seconds, then go back', 'When touched, wait 1 second then fall and come back after 3 seconds'] },
   { title: 'NPC AI (chase & wander)', items: ['Chase the player within 40 studs', 'Chase the player fast within 60 studs', 'Wander around within 15 studs', 'Slowly wander around within 25 studs pausing 3 seconds', 'When touched, take 20 damage'] },
-  { title: 'Players', items: ['When touched, teleport them to the part called Finish', 'When touched, bounce them really high', 'When touched, make them 2 times faster for 5 seconds', 'When touched, make them jump higher for 10 seconds', 'When touched, give them low gravity', 'When touched, take 25 damage', 'When touched, heal them', 'This is a health pack', 'This is a disappearing platform', 'When touched, save their progress', 'When touched, you win'] },
+  { title: 'Players', items: ['When touched, teleport them to the part called Finish', 'When touched, bounce them really high', 'When touched, make them 2 times faster for 5 seconds', 'When touched, make them jump higher for 10 seconds', 'When touched, give them low gravity', 'When touched, take 25 damage', 'When touched, heal them', 'This is a health pack', 'This is a disappearing platform', 'When touched, save their progress', 'When touched, send them to the last checkpoint', 'When touched, you win'] },
   { title: 'Looks & effects', items: ['Every 2 seconds, turn red or blue at random', 'When touched, slowly fade to purple over 3 seconds', 'When touched, fade out', 'Become 50% transparent', 'When clicked, turn the light on', 'When clicked, turn the light off', 'When touched, make sparkles and play a chime sound', 'When touched, explode and disappear for 3 seconds', 'Glow blue'] },
   { title: 'Score, timers & variables', items: ['When the game starts, show the leaderboard', 'When touched, add 1 to the counter', 'When touched, if the player has 10 points, open the door called Gate, otherwise say "You need 10 points!"', 'When the score reaches 50, say "Halfway there!"', 'When the game starts, start a 60 second countdown', 'When the countdown ends, say "Time is up!"', 'When touched, give a random number of points between 1 and 10', 'When touched, give 5 coins'] },
   { title: 'Spawners & more', items: ['Every 3 seconds, drop a red ball', 'Every 5 seconds, spawn a deadly lava ball', 'When clicked, spawn a copy of the part called Crate', 'Every 2 seconds, disappear for 1 second', 'When touched, randomly either teleport them to the spawn or give them 5 points', 'Turn red, wait 1 second, turn blue, wait 1 second, repeat forever'] },

@@ -143,6 +143,24 @@ const cases = [
   ['this is a health pack', p => trig(p, 'touch') && has(p, 'heal')],
   ['medkit', p => trig(p, 'touch') && has(p, 'heal')],
   ['this is a disappearing platform', p => trig(p, 'touch') && has(p, 'hide', a => a.seconds === 3)],
+  // --- multi-sentence / multi-trigger chaining ---
+  ['When touched, turn red. Then wait 2 seconds and turn blue.', p => p.program.rules.length === 1 && trig(p, 'touch') && acts(p).map(a => a.do + (a.color || a.seconds || '')).join() === 'color#e2474b,wait2,color#3f8fd0'],
+  ['When touched, turn red. And then wait 2 seconds and turn blue.', p => p.program.rules.length === 1 && trig(p, 'touch') && has(p, 'wait', a => a.seconds === 2) && acts(p).filter(a => a.do === 'color').length === 2],
+  ['When touched, turn red. Afterwards play a ding.', p => p.program.rules.length === 1 && trig(p, 'touch') && has(p, 'color') && has(p, 'sound', a => a.sound === 'ding')],
+  ['When touched, turn red. After that, turn blue.', p => p.program.rules.length === 1 && trig(p, 'touch') && acts(p).filter(a => a.do === 'color').length === 2],
+  ['When touched, turn red. Then wait 2 seconds.', p => p.program.rules.length === 1 && trig(p, 'touch') && has(p, 'color') && has(p, 'wait', a => a.seconds === 2)],
+  ['When touched give 5 points and when clicked turn green', p => p.program.rules.length === 2 && p.program.rules.some(r => r.trigger.type === 'touch' && r.actions.some(a => a.do === 'points' && a.amount === 5)) && p.program.rules.some(r => r.trigger.type === 'click' && r.actions.some(a => a.do === 'color' && a.color === '#2f9e6a'))],
+  ['When a player enters this area, say "Welcome!", and when they leave, say "Bye"', p => p.program.rules.length === 2 && p.program.rules.some(r => r.trigger.type === 'enter' && r.actions.some(a => a.do === 'message' && /welcome/i.test(a.text))) && p.program.rules.some(r => r.trigger.type === 'leave' && r.actions.some(a => a.do === 'message' && /bye/i.test(a.text)))],
+  ['When touched, give 5 points plus play a ding', p => p.program.rules.length === 1 && has(p, 'points', a => a.amount === 5) && has(p, 'sound', a => a.sound === 'ding')],
+  ['When touched, give 5 points followed by a chime', p => has(p, 'points', a => a.amount === 5) && has(p, 'sound', a => a.sound === 'chime')],
+  // existing condition sentences must stay one rule (do not split on "if")
+  ['When touched, if the player has 10 points, open the door called Gate, otherwise say "You need 10 points!"', p => p.program.rules.length === 1 && R(p).if?.var === 'points'],
+  // --- teleport to checkpoint vs save checkpoint ---
+  ['When touched, send them to the last checkpoint', p => has(p, 'teleport', a => a.to === 'checkpoint') && !has(p, 'checkpoint')],
+  ['teleport them to a random checkpoint', p => has(p, 'teleport', a => a.to === 'randomCheckpoint') && !has(p, 'checkpoint')],
+  ['When touched, teleport to checkpoint', p => has(p, 'teleport', a => a.to === 'checkpoint') && !has(p, 'checkpoint')],
+  ['When touched, save their progress', p => has(p, 'checkpoint') && !has(p, 'teleport')],
+  ['this is a checkpoint', p => trig(p, 'touch') && has(p, 'checkpoint') && !has(p, 'teleport')],
 ];
 
 // unknown phrases must produce suggestions, never a crash
