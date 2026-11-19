@@ -127,6 +127,22 @@ const cases = [
   ['open the Gate when the button is pushed and close it after 4 seconds', p => has(p, 'door', a => a.target === 'Gate')],
   ['count how many times it\'s touched and show the leaderboard', p => trig(p, 'touch') && (has(p, 'addVar') || has(p, 'points')) && has(p, 'leaderboard')],
   ['If the timer runs out say Game over', p => trig(p, 'countdownEnd') && has(p, 'message', a => /game over/i.test(a.text))],
+  // --- coins vs Birg Bucks, score phrasing, obby shorthand ---
+  ['When touched, give 5 coins', p => trig(p, 'touch') && has(p, 'addVar', a => a.name === 'coins' && a.amount === 5) && !has(p, 'bucks')],
+  ['When touched, take 5 coins', p => has(p, 'addVar', a => a.name === 'coins' && a.amount === -5) && !has(p, 'bucks')],
+  ['This is a coin', p => trig(p, 'touch') && R(p).once && has(p, 'addVar', a => a.name === 'coins' && a.amount === 1) && has(p, 'sound', a => a.sound === 'coin') && has(p, 'hide') && !has(p, 'bucks')],
+  ['collect this coin', p => trig(p, 'touch') && R(p).once && has(p, 'addVar', a => a.name === 'coins') && has(p, 'hide')],
+  ['The first time someone touches this, give them 5 Birg Bucks', p => has(p, 'bucks', a => a.amount === 5)],
+  ['When a player gets 100 coins, you win', p => trig(p, 'reach') && R(p).trigger.var === 'coins' && has(p, 'win')],
+  ['when touched add 10 to their score', p => has(p, 'points', a => a.amount === 10)],
+  ['When touched, add 10 to the counter', p => has(p, 'addVar', a => a.name === 'counter' && a.amount === 10)],
+  ['this is a killbrick', p => trig(p, 'touch') && has(p, 'kill')],
+  ['killbrick', p => trig(p, 'touch') && has(p, 'kill')],
+  ['this is a speed pad', p => trig(p, 'touch') && has(p, 'speed', a => a.mult > 1)],
+  ['speed pad', p => trig(p, 'touch') && has(p, 'speed')],
+  ['this is a health pack', p => trig(p, 'touch') && has(p, 'heal')],
+  ['medkit', p => trig(p, 'touch') && has(p, 'heal')],
+  ['this is a disappearing platform', p => trig(p, 'touch') && has(p, 'hide', a => a.seconds === 3)],
 ];
 
 // unknown phrases must produce suggestions, never a crash

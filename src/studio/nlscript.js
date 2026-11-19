@@ -138,7 +138,7 @@ const ACTIONS = [
     const count = Math.min(10, Math.max(1, num((t.match(re(`${N}\\s+(?:\\w+\\s+){0,2}(?:balls?|blocks?|cubes?|bricks?|parts?|coins?|copies|clones|rocks?|boulders?|spheres?|meteors?|bombs?)`)) || [])[1], 1)));
     return { do: 'spawn', what, count, color: findColor(t), kill: /\b(lava|deadly|killer|kill|bomb|bombs|meteor|meteors|dangerous|hot)\b/.test(t), target: what === 'clone' ? findTarget(t) : null };
   }),
-  A('heal', /\b(heal|heals|restore (?:their |the player'?s? )?health|give (?:them |the player )?(?:\d+ )?(?:health|hp|life))\b/, (t) => ({ do: 'heal', amount: num((t.match(re(`${N}\\s*(?:health|hp)?`)) || [])[1], 100) })),
+  A('heal', /\b(heal|heals|restore (?:their |the player'?s? )?health|give (?:them |the player )?(?:\d+ )?(?:health|hp|life)|health ?pack|health ?kit|med ?kit|medkit)\b/, (t) => ({ do: 'heal', amount: num((t.match(re(`${N}\\s*(?:health|hp)?`)) || [])[1], 100) })),
   A('damage', /\b(damage|damages|hurt|hurts|harm|harms|injure|injures|deal -?\d+|do -?\d+|take -?\d+ (?:damage|health|hp)|lose -?\d+ (?:health|hp)|loses -?\d+ (?:health|hp)|sting|stings)\b/, (t) => ({ do: 'damage', amount: Math.abs(num((t.match(re(`${N}`)) || [])[1], 20)) })),
   A('kill', /\b(kill|kills|killed|slay|slays|eliminate|eliminates|die|dies|dead|deadly|instakill|instant death|oof|lava|reset (?:them|the player)|respawn (?:them|the player)|destroy (?:them|the player))\b/, () => ({ do: 'kill' })),
   A('win', /\b(win|wins|won|winner|victory|finish line|finish(?:es)? the (?:game|obby|level|race)|beat the (?:game|level)|complete the (?:game|level|obby)|end the game)\b/, (t) => ({ do: 'win', text: quoted(t) || 'You win! 🏆' })),
@@ -162,7 +162,7 @@ const ACTIONS = [
     const x = t.match(re(`${N} times (?:higher|as high)`)); if (x) mult = +x[1];
     return { do: 'jump', mult: Math.max(0, Math.min(4, mult)), seconds: /\b(forever|permanently|for good)\b/.test(t) ? 0 : secsIn(t, 10) };
   }),
-  A('speed', /\b(faster|speed (?:them |the player )?up|speed boost|run fast|go fast|move fast|slow (?:them |the player |him |her )?down|slower|sprint|walk ?speed|set (?:their |the )?speed|times as fast|freeze (?:them|the player)|freezes (?:them|the player)|can'?t move|stop (?:them|the player) (?:from )?moving)\b/, (t) => {
+  A('speed', /\b(faster|speed (?:them |the player )?up|speed boost|speed pads?|speed booster|booster pads?|run fast|go fast|move fast|slow (?:them |the player |him |her )?down|slower|sprint|walk ?speed|set (?:their |the )?speed|times as fast|freeze (?:them|the player)|freezes (?:them|the player)|can'?t move|stop (?:them|the player) (?:from )?moving)\b/, (t) => {
     let mult = /\b(slow|slower)\b/.test(t) ? 0.5 : (/(really|super|very) fast/.test(t) ? 2.5 : 1.8);
     if (/\b(freeze|freezes|can'?t move|stop (?:them|the player))\b/.test(t)) mult = 0;
     const s = t.match(re(`speed to ${N}`)); if (s) mult = +s[1] / 16;
@@ -175,7 +175,7 @@ const ACTIONS = [
     const m = t.match(re(`\\b(?:set|change)\\s+(?:the |their |a )?(\\w+)\\s+(?:to|back to)\\s+${N}`)); if (m) return { do: 'setVar', name: varName(m[1]), value: +m[2] };
     const r = t.match(/\breset (?:the |their )?(\w+)/); return { do: 'setVar', name: varName(r[1]), value: varName(r[1]) === 'health' ? 100 : 0 };
   }),
-  A('addVar', /\b(?:add|adds|increase|increases|increment|raise|subtract|decrease|decreases|decrement|reduce|take away|count|counts)\b.*\b(?:counter|count|variable|tally|touches|clicks|kills|laps|wins|\w+ by -?\d+|to (?:the |a )?[a-z]+$|from (?:the |a )?[a-z]+$)/, (t) => {
+  A('addVar', /\b(?:add|adds|increase|increases|increment|raise|subtract|decrease|decreases|decrement|reduce|take away|count|counts)\b.*\b(?:counter|count|variable|tally|touches|clicks|kills|laps|wins|\w+ by -?\d+|to (?:the |their |his |her |a )?[a-z]+$|from (?:the |their |his |her |a )?[a-z]+$)/, (t) => {
     if (/\bpoints?\b|\bscore\b/.test(t)) return pointsAction(t);
     const neg = /\b(subtract|decrease|decreases|decrement|lower|reduce|take away|remove)\b/.test(t);
     let m = t.match(re(`\\b(?:add|adds|subtract|take away|remove)\\s+${N}\\s+(?:to|from)\\s+(?:the |their |a )?(\\w+)`));
@@ -186,8 +186,26 @@ const ACTIONS = [
     m = t.match(/\b(?:add|adds)\s+(?:to )?(?:the |a )?(\w+)/); return m ? { do: 'addVar', name: varName(m[1]), amount: 1 } : null;
   }),
   A('points', /\b(points?|score)\b/, (t) => (/\b(show|say|display|tell)\b/.test(t) && !/\b(give|add|award)\b/.test(t) ? null : pointsAction(t))),
-  A('bucks', /\b(birg bucks|bucks|bb|money|cash|coins?)\b/, (t) => {
-    const amt = t.match(re(`${N}\\s+(?:birg bucks|bucks|bb|money|cash|coins?)`));
+  // In-game coins (a variable), not Birg Bucks. "This is a coin" is a one-time collectible.
+  A('coins', /\bcoins?\b/, (t) => {
+    if (/\bbirg bucks\b/.test(t)) return null;
+    const neg = /\b(lose|loses|takes?(?: away)?|subtract|remove|minus|deduct|lower|decrease|charge)\b/.test(t) || /-\d/.test(t);
+    const m = t.match(re(`${N}\\s+coins?`)) || t.match(re(`coins?\\s+(?:by\\s+)?${N}`));
+    const amount = (neg ? -1 : 1) * Math.abs(num(m?.[1], 1));
+    const collectible = /^(?:this is |make (?:this |it )?(?:a )?)?(?:a |an )?(?:collectible )?coins?$/.test(t.trim())
+      || /\bcollect(?: this| the| a| an)? coins?\b/.test(t)
+      || /\b(?:pick up|pickup) (?:this |the |a )?(?:collectible )?coins?\b/.test(t);
+    if (collectible && amount > 0) {
+      return [
+        { do: 'addVar', name: 'coins', amount },
+        { do: 'sound', sound: 'coin' },
+        { do: 'hide', seconds: null, target: findTarget(t) },
+      ];
+    }
+    return { do: 'addVar', name: 'coins', amount };
+  }),
+  A('bucks', /\b(birg bucks|bucks|bb|money|cash)\b/, (t) => {
+    const amt = t.match(re(`${N}\\s+(?:birg bucks|bucks|bb|money|cash)`));
     return { do: 'bucks', amount: Math.min(50, Math.max(1, num(amt?.[1], 5))) };
   }),
   A('particles', new RegExp(`\\b(${[...PARTICLES, ...Object.keys(PARTICLE_SYN)].join('|')}|burst|bursts)\\b`), (t) => {
@@ -239,6 +257,8 @@ function pointsAction(t) {
   const rng = t.match(re(`(?:between|from) ${N} (?:and|&|to) ${N}`));
   if (rng) return { do: 'points', min: Math.min(+rng[1], +rng[2]), max: Math.max(+rng[1], +rng[2]), amount: 0 };
   if (/\bdouble\b/.test(t)) return { do: 'multVar', name: 'points', factor: 2 };
+  const addTo = t.match(re(`(?:add|adds|give|gives|award|awards|grant|grants)\\s+${N}\\s+to\\s+(?:the |their |his |her |a )?(?:points?|score)`));
+  if (addTo) return { do: 'points', amount: (neg ? -1 : 1) * Math.abs(+addTo[1]) };
   const m = t.match(re(`[+]?${N}\\s+(?:extra |more |bonus )?(?:points?|score)`)) || t.match(re(`(?:points?|score)\\s+(?:by\\s+)?${N}`));
   return { do: 'points', amount: (neg ? -1 : 1) * Math.abs(num(m?.[1], 1)) };
 }
@@ -374,6 +394,9 @@ function protect(raw, names) {
   }
   t = t.replace(/\b(called|named)\s+([A-Za-z][\w-]*)/g, (m, w, name) => `${w} @p${P.push(name) - 1}`);
   t = t.toLowerCase()
+    .replace(/\bkillbricks?\b/g, 'kill brick').replace(/\bjumppads?\b/g, 'jump pad')
+    .replace(/\bspeedpads?\b/g, 'speed pad').replace(/\bhealthpacks?\b/g, 'health pack').replace(/\bmedkits?\b/g, 'health pack')
+    .replace(/^(?:this is |make (?:this |it )?(?:a )?)?(?:a )?disappearing platforms?$/, 'when touched disappear for 3 seconds')
     .replace(/\bcount (?:how many times|the number of times|the times) (?:it'?s|it is|this is|someone|a player|the player|players) (touch(?:es|ed)?|click(?:s|ed)?|press(?:es|ed)?)\b/g, (m, v) => (v.startsWith('touch') ? 'when touched count touches' : v.startsWith('click') ? 'when clicked count clicks' : 'when pressed count clicks'))
     .replace(/\b(?:the |a )?(?:part|block|brick|door|pad|platform|button|light|lamp|thing|object|one|wall|floor|sign|portal|model|area|zone) (?:called|named) (@p\d+)/g, '$1').replace(/\b(?:called|named) (@p\d+)/g, '$1')
     .replace(/\b(fall|falls|disappear|disappears|vanish|vanishes|hide|hides|break|breaks)\s+(?:and|then)\s+(come back|comes back|reappear|reappears|respawn|respawns|return|returns)\b/g, '$1 to $2');
@@ -408,7 +431,7 @@ export function translate(text, ctx = {}) {
     const om = body.match(/\s*,?\s*\b(?:otherwise|or else|else|if not)\b\s*,?\s*/);
     if (om) { elseBody = body.slice(om.index + om[0].length); body = body.slice(0, om.index); }
     const ONCE = /\b(only once|just once|one time only|only one time|the first time|first time only)\b/;
-    const once = ONCE.test(t) || (/^once\b/.test(raw.toLowerCase()) && !!trig && trig.type !== 'every');
+    let once = ONCE.test(t) || (/^once\b/.test(raw.toLowerCase()) && !!trig && trig.type !== 'every');
     body = body.replace(new RegExp(ONCE.source, 'g'), ' ');
     let repeat = 1, loop = false;
     const rp = body.match(re(`\\b(?:repeat(?: this| that| it)?\\s+)?${N}\\s+times\\b(?!\\s*(?:as|higher|faster|a second|per|every|a minute))`));
@@ -445,7 +468,9 @@ export function translate(text, ctx = {}) {
       const list = repeat > 1 ? Array.from({ length: repeat }, () => actions).flat() : actions;
       let tr = trig || { type: 'start' };
       if (!trig && /\bbutton\b/.test(t)) tr = { type: 'press' };
-      else if (!trig && (list.some(a => TOUCHY.includes(a.do)) || /\b(teleporter|portal|elevator|lift)\b/.test(t))) tr = { type: 'touch' };
+      else if (!trig && (list.some(a => TOUCHY.includes(a.do) || (a.do === 'addVar' && a.name === 'coins')) || /\b(teleporter|portal|elevator|lift)\b/.test(t))) tr = { type: 'touch' };
+      // "this is a coin" / "collect this coin": pick up once, then the part stays gone
+      if (list.some(a => a.do === 'addVar' && a.name === 'coins') && list.some(a => a.do === 'hide')) once = true;
       // "open X ... close it after 4 seconds": the open stays until the close; "it" = the last door
       let lastDoor = null;
       for (const a of list) if (a.do === 'door') { if (a.close) { if (!a.target && lastDoor) a.target = lastDoor.target; if (lastDoor) lastDoor.seconds = 0; } else lastDoor = a; }
@@ -538,7 +563,9 @@ function sayAction(a) {
     case 'points': return a.max ? `give the player a random ${a.min}–${a.max} points` : a.amount < 0 ? `take ${-a.amount} point${a.amount === -1 ? '' : 's'} away` : `give the player ${a.amount} point${a.amount === 1 ? '' : 's'}`;
     case 'bucks': return `give the player ${a.amount} Birg Bucks (once per play)`;
     case 'setVar': return `set ${a.name} to ${a.value}`;
-    case 'addVar': return a.amount < 0 ? `subtract ${-a.amount} from ${a.name}` : `add ${a.amount} to ${a.name}`;
+    case 'addVar': return a.name === 'coins'
+      ? (a.amount < 0 ? `take ${-a.amount} coin${a.amount === -1 ? '' : 's'} away` : `give the player ${a.amount} coin${a.amount === 1 ? '' : 's'}`)
+      : (a.amount < 0 ? `subtract ${-a.amount} from ${a.name}` : `add ${a.amount} to ${a.name}`);
     case 'multVar': return `multiply ${a.name} by ${a.factor}`;
     case 'message': return `show the message "${a.text}"`;
     case 'sound': return `play a "${a.sound}" sound`;
@@ -605,19 +632,19 @@ export function describe(program) {
 
 // ---------- examples, cheat sheet & suggestions ----------
 export const CHEATSHEET = [
-  { title: 'Touch & click', items: ['When a player touches this, kill them', 'When touched, give 10 points and play a ding sound', 'When clicked, turn green', 'When the button is pressed, open the door called Gate for 5 seconds', 'When a player enters this area, say "Welcome!"', 'When a player leaves this area, say "Bye!"', 'The first time someone touches this, give them 5 Birg Bucks'] },
+  { title: 'Touch & click', items: ['When a player touches this, kill them', 'When touched, give 10 points and play a ding sound', 'When clicked, turn green', 'When the button is pressed, open the door called Gate for 5 seconds', 'When a player enters this area, say "Welcome!"', 'When a player leaves this area, say "Bye!"', 'The first time someone touches this, give them 5 Birg Bucks', 'This is a killbrick', 'This is a speed pad', 'This is a coin'] },
   { title: 'Moving & spinning', items: ['Spin slowly forever', 'Spin 2 times a second like a wheel', 'Move up and down 5 studs every 2 seconds', 'Move between 0, 5, 0 and 20, 5, 0 every 4 seconds', 'Move to the part called Goal and back every 3 seconds', 'Act as an elevator going up 20 studs', 'When touched, move up 10 studs over 2 seconds, wait 2 seconds, then go back', 'When touched, wait 1 second then fall and come back after 3 seconds'] },
   { title: 'NPC AI (chase & wander)', items: ['Chase the player within 40 studs', 'Chase the player fast within 60 studs', 'Wander around within 15 studs', 'Slowly wander around within 25 studs pausing 3 seconds', 'When touched, take 20 damage'] },
-  { title: 'Players', items: ['When touched, teleport them to the part called Finish', 'When touched, bounce them really high', 'When touched, make them 2 times faster for 5 seconds', 'When touched, make them jump higher for 10 seconds', 'When touched, give them low gravity', 'When touched, take 25 damage', 'When touched, heal them', 'When touched, save their progress', 'When touched, you win'] },
+  { title: 'Players', items: ['When touched, teleport them to the part called Finish', 'When touched, bounce them really high', 'When touched, make them 2 times faster for 5 seconds', 'When touched, make them jump higher for 10 seconds', 'When touched, give them low gravity', 'When touched, take 25 damage', 'When touched, heal them', 'This is a health pack', 'This is a disappearing platform', 'When touched, save their progress', 'When touched, you win'] },
   { title: 'Looks & effects', items: ['Every 2 seconds, turn red or blue at random', 'When touched, slowly fade to purple over 3 seconds', 'When touched, fade out', 'Become 50% transparent', 'When clicked, turn the light on', 'When clicked, turn the light off', 'When touched, make sparkles and play a chime sound', 'When touched, explode and disappear for 3 seconds', 'Glow blue'] },
-  { title: 'Score, timers & variables', items: ['When the game starts, show the leaderboard', 'When touched, add 1 to the counter', 'When touched, if the player has 10 points, open the door called Gate, otherwise say "You need 10 points!"', 'When the score reaches 50, say "Halfway there!"', 'When the game starts, start a 60 second countdown', 'When the countdown ends, say "Time is up!"', 'When touched, give a random number of points between 1 and 10'] },
+  { title: 'Score, timers & variables', items: ['When the game starts, show the leaderboard', 'When touched, add 1 to the counter', 'When touched, if the player has 10 points, open the door called Gate, otherwise say "You need 10 points!"', 'When the score reaches 50, say "Halfway there!"', 'When the game starts, start a 60 second countdown', 'When the countdown ends, say "Time is up!"', 'When touched, give a random number of points between 1 and 10', 'When touched, give 5 coins'] },
   { title: 'Spawners & more', items: ['Every 3 seconds, drop a red ball', 'Every 5 seconds, spawn a deadly lava ball', 'When clicked, spawn a copy of the part called Crate', 'Every 2 seconds, disappear for 1 second', 'When touched, randomly either teleport them to the spawn or give them 5 points', 'Turn red, wait 1 second, turn blue, wait 1 second, repeat forever'] },
 ];
 export const EXAMPLES = CHEATSHEET.flatMap(c => c.items.slice(0, 2));
 export const HELP = 'Try short sentences like: "when touched, kill them", "spin slowly", "move up and down 4 studs", "every 3 seconds turn blue", "when clicked open the door called Gate", "when touched give 5 points and say Nice!". Open 📖 Phrases for more.';
 
 const STOP = new Set(['the', 'a', 'an', 'to', 'it', 'this', 'them', 'and', 'then', 'of', 'for', 'is', 'be', 'make', 'when', 'player', 'players', 'they', 'with', 'on', 'in', 'that', 'my', 'me', 'you', 'i', 'want', 'should', 'will', 'can']);
-const KEYWORDS = { explod: 'When touched, explode and disappear for 3 seconds', fly: 'When touched, bounce them really high', jump: 'When touched, make them jump higher for 10 seconds', fast: 'When touched, make them 2 times faster for 5 seconds', quick: 'When touched, make them 2 times faster for 5 seconds', slow: 'When touched, make them slower for 5 seconds', open: 'When touched, open like a door for 3 seconds', door: 'When the button is pressed, open the door called Gate for 5 seconds', gate: 'When the button is pressed, open the door called Gate for 5 seconds', score: 'When touched, give 10 points', money: 'When touched, give them 5 Birg Bucks', rich: 'When touched, give them 5 Birg Bucks', die: 'When a player touches this, kill them', dead: 'When a player touches this, kill them', hurt: 'When touched, take 25 damage', health: 'When touched, heal them', heal: 'When touched, heal them', light: 'When clicked, turn the light on', lamp: 'When clicked, turn the light on', fire: 'When touched, make fire', burn: 'When touched, make fire', music: 'When touched, play a chime sound', sound: 'When touched, play a ding sound', noise: 'When touched, play a ding sound', timer: 'When the game starts, start a 60 second countdown', clock: 'When the game starts, start a 60 second countdown', time: 'When the game starts, start a 60 second countdown', spawn: 'Every 3 seconds, drop a red ball', clone: 'When clicked, spawn a copy of the part called Crate', copy: 'When clicked, spawn a copy of the part called Crate', move: 'Move up and down 5 studs every 2 seconds', platform: 'Move between 0, 5, 0 and 20, 5, 0 every 4 seconds', elevator: 'Act as an elevator going up 20 studs', lift: 'Act as an elevator going up 20 studs', teleport: 'When touched, teleport them to the part called Finish', portal: 'When touched, teleport them to the part called Finish', color: 'When clicked, turn green', colour: 'When clicked, turn green', invisible: 'Become 50% transparent', ghost: 'Become 50% transparent', win: 'When touched, you win', button: 'When the button is pressed, open the door called Gate for 5 seconds', count: 'When touched, add 1 to the counter', leaderboard: 'When the game starts, show the leaderboard', random: 'Every 2 seconds, turn red or blue at random', kill: 'When a player touches this, kill them', freez: 'When touched, make them freeze for 2 seconds', fall: 'When touched, wait 1 second then fall and come back after 3 seconds', sparkl: 'When touched, make sparkles and play a chime sound', spin: 'Spin slowly forever', turn: 'Spin slowly forever', grow: 'When touched, slowly fade to purple over 3 seconds', shrink: 'When touched, fade out', bounc: 'When touched, bounce them really high' };
+const KEYWORDS = { explod: 'When touched, explode and disappear for 3 seconds', fly: 'When touched, bounce them really high', jump: 'When touched, make them jump higher for 10 seconds', fast: 'When touched, make them 2 times faster for 5 seconds', quick: 'When touched, make them 2 times faster for 5 seconds', slow: 'When touched, make them slower for 5 seconds', open: 'When touched, open like a door for 3 seconds', door: 'When the button is pressed, open the door called Gate for 5 seconds', gate: 'When the button is pressed, open the door called Gate for 5 seconds', score: 'When touched, give 10 points', coin: 'This is a coin', money: 'When touched, give them 5 Birg Bucks', rich: 'When touched, give them 5 Birg Bucks', pad: 'This is a speed pad', medkit: 'This is a health pack', killbrick: 'This is a killbrick', die: 'When a player touches this, kill them', dead: 'When a player touches this, kill them', hurt: 'When touched, take 25 damage', health: 'When touched, heal them', heal: 'When touched, heal them', light: 'When clicked, turn the light on', lamp: 'When clicked, turn the light on', fire: 'When touched, make fire', burn: 'When touched, make fire', music: 'When touched, play a chime sound', sound: 'When touched, play a ding sound', noise: 'When touched, play a ding sound', timer: 'When the game starts, start a 60 second countdown', clock: 'When the game starts, start a 60 second countdown', time: 'When the game starts, start a 60 second countdown', spawn: 'Every 3 seconds, drop a red ball', clone: 'When clicked, spawn a copy of the part called Crate', copy: 'When clicked, spawn a copy of the part called Crate', move: 'Move up and down 5 studs every 2 seconds', platform: 'Move between 0, 5, 0 and 20, 5, 0 every 4 seconds', elevator: 'Act as an elevator going up 20 studs', lift: 'Act as an elevator going up 20 studs', teleport: 'When touched, teleport them to the part called Finish', portal: 'When touched, teleport them to the part called Finish', color: 'When clicked, turn green', colour: 'When clicked, turn green', invisible: 'Become 50% transparent', ghost: 'Become 50% transparent', win: 'When touched, you win', button: 'When the button is pressed, open the door called Gate for 5 seconds', count: 'When touched, add 1 to the counter', leaderboard: 'When the game starts, show the leaderboard', random: 'Every 2 seconds, turn red or blue at random', kill: 'When a player touches this, kill them', freez: 'When touched, make them freeze for 2 seconds', fall: 'When touched, wait 1 second then fall and come back after 3 seconds', sparkl: 'When touched, make sparkles and play a chime sound', spin: 'Spin slowly forever', turn: 'Spin slowly forever', grow: 'When touched, slowly fade to purple over 3 seconds', shrink: 'When touched, fade out', bounc: 'When touched, bounce them really high' };
 const stem = (w) => w.replace(/(ing|ed|es|s)$/, '');
 const toks = (s) => s.toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w && !STOP.has(w)).map(stem);
 /** Closest phrasings the translator understands, for text it didn't. */
