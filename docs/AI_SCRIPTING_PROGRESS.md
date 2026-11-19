@@ -39,6 +39,7 @@ spawn, countdown, timer, leaderboard, random.
 - **Step 2:** multi-sentence / multi-trigger chaining + teleport-to-checkpoint.
 - **Step 3:** "on spawn" is start; "hide … then show again" is a timed show.
 - **Step 4a:** HELP / Ideas / Phrases hint copy refresh (cheat-sheet already had the new phrases).
+- **Step 5:** Toolbox script presets: Sprint pad, Vanish pad, Health pack.
 - 219/219 phrase tests passing (`scripts/nlscript-tests.mjs`).
 
 ## Step 1 — what changed
@@ -92,17 +93,41 @@ in everyday UI:
 - Phrases panel hint in `src/ui/creator.js` also mentions starting the next
   sentence with "Then…". No new cheat-sheet items; no runtime features.
 
+## Step 5 — script presets
+Added three one-click Toolbox → Parts presets, same pattern as Trampoline
+and Door (insert a part + attach a plain-words script):
+
+- **Sprint pad** (`data-script=sprint-pad`): neon disc; "When touched, make
+  them 2 times faster for 5 seconds".
+- **Vanish pad** (`data-script=vanish-pad`): glass platform; "This is a
+  disappearing platform" (hides 3 seconds on touch, then returns).
+- **Health pack** (`data-script=health-pack`): green sphere; "This is a
+  health pack".
+
+Skipped killbrick / checkpoint / coin — those already exist as Lava (kill),
+Checkpoint, and Coin toolbox items. Phrases already tested in
+`scripts/nlscript-tests.mjs`; suite still 219/219.
+
 ## What's next
-Studio UI smoke still runs separately. Known limitations to leave unless
-runtime grows new `act()` cases: toggle/flicker light, give-gear, conveyors.
-If smoke is clean, this branch is ready to hand to Iceberg Publisher (we
-still do not publish or push).
+- **Step 6:** "Something's wrong?" offline checker. Suggested place: a
+  button in the script editor, under the "I understood / I didn't
+  understand" preview (next to Apply). Offline only: walk the current
+  script (and optionally the whole place) and list issues. Start with:
+  unknown leftover phrases, empty program when text isn't empty, actions
+  that name a part that isn't in the game (teleport/door targets), and a
+  soft warning if a script awards Birg Bucks more than once. No network,
+  no paid AI.
+- **Step 7:** model importer animation regression test, then final smoke
+  + hand off to Iceberg Publisher (we still do not publish or push).
+
+Known limitations to leave unless runtime grows new `act()` cases:
+toggle/flicker light, give-gear, conveyors.
 
 ## Branch / worktree
 - Worktree: `/workspace/iceberg-game-maker/wt-studio-ai-scripting`
 - Branch: `feature/studio-ai-scripting` (local only; not tracking origin)
 - Base: `origin/main` `831c4c93c7994125886e5f06d04be0c5948d55cd`
-- Tip: `b2c106a2f90ec6389c5d8ab5e73a8bb228bf752b` (step 4a); earlier `ef0f4c3` / `1a66880` (step 3)
+- Tip: *(filled in after the step 5 commit)*
 
 Do not publish. Do not push to main. Hand the finished branch to Iceberg
 Publisher later, after the whole feature is tested.
