@@ -91,7 +91,7 @@ Do not add a give-gear script action until `runtime.js` `act()` supports it.
 - Worktree: `/workspace/iceberg-game-maker/wt-studio-ai-scripting`
 - Branch: `feature/studio-ai-scripting` (local only; not tracking origin)
 - Base: `origin/main` `831c4c93c7994125886e5f06d04be0c5948d55cd`
-- Tip: *(filled in after the step 2 commit)*
+- Tip: `2d91a9a0fc89b0232d62b7ee663f366035a94e54` (step 2); earlier `9424bc5` / `248922d` (step 1)
 
 Do not publish. Do not push to main. Hand the finished branch to Iceberg
 Publisher later, after the whole feature is tested.
