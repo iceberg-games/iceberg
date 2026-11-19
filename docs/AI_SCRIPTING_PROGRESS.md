@@ -96,7 +96,7 @@ Publisher (we still do not publish or push):
 - Worktree: `/workspace/iceberg-game-maker/wt-studio-ai-scripting`
 - Branch: `feature/studio-ai-scripting` (local only; not tracking origin)
 - Base: `origin/main` `831c4c93c7994125886e5f06d04be0c5948d55cd`
-- Tip: *(filled in after the step 3 commit)*
+- Tip: `ef0f4c3779f7c4a882ffbf1093fecdc78cfaf79e` (step 3); earlier `2d91a9a` / `2ee7659` (step 2)
 
 Do not publish. Do not push to main. Hand the finished branch to Iceberg
 Publisher later, after the whole feature is tested.
