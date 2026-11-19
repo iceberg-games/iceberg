@@ -40,7 +40,8 @@ spawn, countdown, timer, leaderboard, random.
 - **Step 3:** "on spawn" is start; "hide … then show again" is a timed show.
 - **Step 4a:** HELP / Ideas / Phrases hint copy refresh (cheat-sheet already had the new phrases).
 - **Step 5:** Toolbox script presets: Sprint pad, Vanish pad, Health pack.
-- 219/219 phrase tests passing (`scripts/nlscript-tests.mjs`).
+- **Step 6:** "Something's wrong?" offline script checker shipped.
+- Phrase tests 219/219; script-check tests 10/10 (`scripts/script-check-tests.mjs`).
 
 ## Step 1 — what changed
 Creators were accidentally awarding **Birg Bucks** (real, once-per-play
@@ -108,26 +109,44 @@ Skipped killbrick / checkpoint / coin — those already exist as Lava (kill),
 Checkpoint, and Coin toolbox items. Phrases already tested in
 `scripts/nlscript-tests.mjs`; suite still 219/219.
 
-## What's next
-- **Step 6:** "Something's wrong?" offline checker. Suggested place: a
-  button in the script editor, under the "I understood / I didn't
-  understand" preview (next to Apply). Offline only: walk the current
-  script (and optionally the whole place) and list issues. Start with:
-  unknown leftover phrases, empty program when text isn't empty, actions
-  that name a part that isn't in the game (teleport/door targets), and a
-  soft warning if a script awards Birg Bucks more than once. No network,
-  no paid AI.
-- **Step 7:** model importer animation regression test, then final smoke
-  + hand off to Iceberg Publisher (we still do not publish or push).
+## Step 6 — "Something's wrong?" offline checker
+Shipped. Button **❓ Something's wrong?** sits in the script editor next to
+Apply (`#script-check-btn`). Results appear under the I understood /
+didn't understand preview (`#script-check-results`). Module:
+`src/studio/scriptCheck.js` (no network).
 
-Known limitations to leave unless runtime grows new `act()` cases:
+Checks:
+- leftover unknown phrases (warning + suggestion)
+- non-empty text that produced no program (error)
+- teleport / door / move / path / trigger part names that aren't in the
+  place (error, lists existing names)
+- more than one Birg Bucks award in this script (warning)
+- another script in the place also awards Birg Bucks (warning)
+
+## What's next
+Priority (Colin): three Studio publish/save/session bugs on this same
+branch — not step 7 yet, and not the smoke findings below unless that
+work lands in the same files.
+
+Noted from desktop smoke (http://127.0.0.1:5215/), not fixed in step 6:
+1. "This is a killbrick" previews as checkpoint death and does not tick
+   the part's Kill brick checkbox — creators expect a real killbrick.
+2. Stray literal "null" under the script preview and in the top toolbar.
+   Preview append now filters null/undefined so that site should be gone;
+   the ribbon still does `append(..., ed.tool === 'terrain' ? ... : null)`
+   in `renderRibbon()` (line ~131), which is the likely toolbar culprit.
+
+Later, after those bugs: step 7 model-importer animation regression,
+then final smoke + Publisher handoff (we still do not publish or push).
+
+Known translator limitations unless runtime grows new `act()` cases:
 toggle/flicker light, give-gear, conveyors.
 
 ## Branch / worktree
 - Worktree: `/workspace/iceberg-game-maker/wt-studio-ai-scripting`
 - Branch: `feature/studio-ai-scripting` (local only; not tracking origin)
 - Base: `origin/main` `831c4c93c7994125886e5f06d04be0c5948d55cd`
-- Tip: `b96117fc5722288c62e109dbe7d3a974df38bc3a` (step 5); earlier `b2c106a` / `5610671` (step 4a)
+- Tip: *(filled in after the step 6 commit)*
 
 Do not publish. Do not push to main. Hand the finished branch to Iceberg
 Publisher later, after the whole feature is tested.
