@@ -78,7 +78,7 @@ save-checkpoint parser.
 - Worktree: `/workspace/iceberg-game-maker/wt-studio-ai-scripting`
 - Branch: `feature/studio-ai-scripting` (local only; not tracking origin)
 - Base: `origin/main` `831c4c93c7994125886e5f06d04be0c5948d55cd`
-- Tip: *(filled in after the first commit)*
+- Tip: `9424bc55675d79040905a4e7ae8a9f4153f606a5` (step 1)
 
 Do not publish. Do not push to main. Hand the finished branch to Iceberg
 Publisher later, after the whole feature is tested.
