@@ -127,7 +127,7 @@ toggle/flicker light, give-gear, conveyors.
 - Worktree: `/workspace/iceberg-game-maker/wt-studio-ai-scripting`
 - Branch: `feature/studio-ai-scripting` (local only; not tracking origin)
 - Base: `origin/main` `831c4c93c7994125886e5f06d04be0c5948d55cd`
-- Tip: *(filled in after the step 5 commit)*
+- Tip: `b96117fc5722288c62e109dbe7d3a974df38bc3a` (step 5); earlier `b2c106a` / `5610671` (step 4a)
 
 Do not publish. Do not push to main. Hand the finished branch to Iceberg
 Publisher later, after the whole feature is tested.
