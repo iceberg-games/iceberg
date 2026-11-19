@@ -114,3 +114,6 @@ body.studio-active #hud, body.studio-active .help, body.studio-active #back-to-e
 .st-help-col h4 { margin: 4px 0; color: #9fd3f5; }
 .st-help-row { display: flex; gap: 8px; align-items: baseline; padding: 2px 0; }
 .st-help-row kbd { flex: 0 0 auto; min-width: 70px; padding: 1px 6px; border: 1px solid #4f5a66; border-bottom-width: 2px; border-radius: 4px; background: #2d323a; color: #e4edf5; font: 11px ui-monospace, monospace; text-align: center; }
+
+.st-file-menu { position: absolute; right: 8px; top: 100%; z-index: 40; background: #1a2a3b; border: 1px solid #3f8fd0; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 220px; box-shadow: 0 8px 24px #0006; }
+.st-group.st-game { position: relative; }

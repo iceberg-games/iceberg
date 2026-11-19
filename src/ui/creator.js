@@ -98,11 +98,43 @@ export class CreatorPanel {
 
   // ---------- persistence ----------
   docWithThumb() { const d = this.ed.serialize(); try { d.thumbnail = this.engine.snapshot(); } catch {} return d; }
-  save(silent = false) { const d = this.docWithThumb(); try { drafts.save(d); if (!silent) this.ui.toast(`Saved draft "${d.name}"`, '💾'); } catch { this.ui.toast('Could not save (browser storage full?)', '⚠️'); } return d; }
+  // Save stores the draft on this device and, when signed in, on the player's
+  // Iceberg account. It never downloads a file. Optional JSON export/import lives
+  // under ⋯ File (not in the Save flow).
+  save(silent = false) {
+    const d = this.docWithThumb();
+    try {
+      this.lastSave = Promise.resolve(drafts.save(d)).then((res) => {
+        if (!silent) {
+          if (res?.remote && res.ok) this.ui.toast(`Saved "${d.name}" to your account`, '💾');
+          else if (res?.remote && !res.ok) this.ui.toast(`Saved on this device; cloud save failed: ${res.reason || 'unknown error'}`, '⚠️');
+          else this.ui.toast(`Saved "${d.name}" on this device. Sign in to save to your account.`, '💾');
+        }
+        return d;
+      });
+      this.lastSave.catch(() => {});
+    } catch {
+      this.ui.toast('Could not save (browser storage full?)', '⚠️');
+      this.lastSave = Promise.reject(new Error('storage'));
+      this.lastSave.catch(() => {});
+    }
+    return d;
+  }
   publishGame() {
     const d = this.save(true);
-    return publish(d).then(({ remote, modelsLocalOnly }) => { if (modelsLocalOnly) setTimeout(() => this.ui.toast('Heads up: uploaded 3D models only show on your device; other players see a placeholder box', 'ℹ️'), 1500); bus.emit('games:changed'); this.ui.toast(remote ? `Published "${d.name}" for everyone!` : `Published "${d.name}" to your Games menu (sign in to share it)`, '🚀'); this.renderProps(); return d; },
+    return (this.lastSave || Promise.resolve(d)).then(() => publish(d)).then(({ remote, modelsLocalOnly }) => { if (modelsLocalOnly) setTimeout(() => this.ui.toast('Heads up: uploaded 3D models only show on your device; other players see a placeholder box', 'ℹ️'), 1500); bus.emit('games:changed'); this.ui.toast(remote ? `Published "${d.name}" for everyone!` : `Published "${d.name}" to your Games menu (sign in to share it)`, '🚀'); this.renderProps(); return d; },
       (err) => { bus.emit('games:changed'); this.ui.toast(`Publish failed: ${err.message}`, '⚠️'); this.renderProps(); throw err; });
+  }
+  toggleFileMenu() {
+    const cur = this.el.querySelector('#studio-file-menu');
+    if (cur) { cur.remove(); return; }
+    const importInput = h('input#import-game-file', { type: 'file', accept: '.json', style: { display: 'none' }, onchange: async (e) => { const f = e.target.files[0]; if (!f) return; try { const d = upgradeDoc(await importGameJSON(await f.text(), this.models)); drafts.save(d); this.ui.toast(`Imported "${d.name}"`, '📥'); this.onReload(d); } catch (err) { this.ui.toast(`Import failed: ${err.message}`, '⚠️'); } } });
+    const menu = h('div.st-file-menu#studio-file-menu',
+      h('p.st-hint', 'Save already stores this game on your Iceberg account. Export/import a file only if you need a backup.'),
+      h('button.st-mini#export-game', { onclick: () => { const d = this.save(true); downloadText(`${d.name.replace(/[^\w-]+/g, '_')}.iceberg.json`, exportGameJSON(d, this.models)); } }, '⤓ Export JSON'),
+      importInput, h('button.st-mini#import-game', { onclick: () => importInput.click() }, '⤒ Import JSON'));
+    const host = this.el.querySelector('#game-file-menu')?.parentElement || this.ribbon;
+    host.append(menu);
   }
 
   render() {
@@ -122,7 +154,6 @@ export class CreatorPanel {
     const clip = ed.clipboardInfo();
     const ins = (type, icon, label, over = {}) => h('button.st-tool', { 'data-insert': label.toLowerCase().replace(/\s+/g, '-'), onclick: () => ed.insert(type, over) }, h('span', icon), label);
     const snapSel = (key, opts, label) => h('label.st-snap', label, h('select', { 'data-snap': key, onchange: (e) => ed.setSnap(key, +e.target.value) }, opts.map(o => h('option', { value: o, selected: ed.snap[key] === o }, o === 0 ? 'Off' : (key === 'rot' ? `${o}°` : o)))));
-    const importInput = h('input', { type: 'file', accept: '.json', style: { display: 'none' }, onchange: async (e) => { const f = e.target.files[0]; if (!f) return; try { const d = upgradeDoc(await importGameJSON(await f.text(), this.models)); drafts.save(d); this.ui.toast(`Imported "${d.name}"`, '📥'); this.onReload(d); } catch (err) { this.ui.toast(`Import failed: ${err.message}`, '⚠️'); } } });
     clear(this.ribbon).append(
       h('div.st-brand', '🧊', h('b', 'Iceberg Studio')),
       h('div.st-group', h('div.st-gl', 'Tools'), h('div.st-row', tool('select', '🖱️', 'Select', 1), tool('move', '✥', 'Move', 2), tool('scale', '⤢', 'Scale', 3), tool('rotate', '⟳', 'Rotate', 4), tool('terrain', '🏔️', 'Terrain', 5)),
@@ -148,9 +179,8 @@ export class CreatorPanel {
         h('button.st-big#save-game', { onclick: () => this.save() }, '💾 Save'),
         h('button.st-big.pub#publish-game', { onclick: () => this.publishGame().catch(() => {}) }, '🚀 Publish')),
         h('div.st-row',
-          h('button.st-mini#export-game', { onclick: () => { const d = this.save(true); downloadText(`${d.name.replace(/[^\w-]+/g, '_')}.iceberg.json`, exportGameJSON(d, this.models)); } }, '⤓ Export'),
-          importInput, h('button.st-mini#import-game', { onclick: () => importInput.click() }, '⤒ Import'),
-          h('button.st-mini#exit-editor', { onclick: () => { this.save(true); this.ed.saveCamera(); this.onExit(); } }, '✕ Exit'))),
+          h('button.st-mini#exit-editor', { onclick: () => { this.save(true); this.ed.saveCamera(); this.onExit(); } }, '✕ Exit'),
+          h('button.st-mini#game-file-menu', { title: 'Optional JSON file export/import — Save does not download a file', onclick: () => this.toggleFileMenu() }, '⋯ File'))),
     );
   }
 

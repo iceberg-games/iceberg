@@ -234,7 +234,7 @@ export class MobileStudio {
   // synchronously (tests/onTest) and exposes the promise as this.lastSave / this.lastPublish.
   save(silent = false) {
     const d = this.docWithThumb();
-    this.lastSave = Promise.resolve().then(() => drafts.save(d)).then(() => { if (!silent) this.ui.toast(`Saved "${d.name}"`, '💾'); return d; },
+    this.lastSave = Promise.resolve().then(() => drafts.save(d)).then((res) => { if (!silent) this.ui.toast(res?.remote && res.ok ? `Saved "${d.name}" to your account` : res?.remote && !res.ok ? `Saved on this device; cloud save failed: ${res.reason || 'unknown error'}` : `Saved "${d.name}" on this device. Sign in to save to your account.`, '💾'); return d; },
       (e) => { this.ui.toast(`Could not save: ${e?.message || 'storage full?'}`, '⚠️'); throw e; });
     this.lastSave.catch(() => {});
     return d;

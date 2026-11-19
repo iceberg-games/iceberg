@@ -123,10 +123,18 @@ Checks:
 - more than one Birg Bucks award in this script (warning)
 - another script in the place also awards Birg Bucks (warning)
 
+## Studio bugs
+- **Save → account (shipped):** 💾 Save and Ctrl+S write the draft to the
+  player's Iceberg account (`drafts.save` → `save_custom_draft` when signed
+  in). They never download a file. Toast says "Saved … to your account"
+  (or on this device if signed out). Optional JSON export/import is under
+  **⋯ File** on the Exit row, not next to Save. Mobile Studio Save uses
+  the same account path. Tests: `scripts/studio-save-tests.mjs`.
+
 ## What's next
-Priority (Colin): three Studio publish/save/session bugs on this same
-branch — not step 7 yet, and not the smoke findings below unless that
-work lands in the same files.
+Publish-list (Mobile Studio / Your Games / portal Home — PC Community
+already works on live) and remaining items are still open. Session/login
+work was dropped. Not step 7 yet unless asked.
 
 Noted from desktop smoke (http://127.0.0.1:5215/), not fixed in step 6:
 1. "This is a killbrick" previews as checkpoint death and does not tick
