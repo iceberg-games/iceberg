@@ -92,8 +92,9 @@ async function suds(browser) {
   const skills = ['Pad Cart', 'Pad Helper', 'Pad Cards'];
   const buyUntil = async (pad, check) => { for (let k = 0; k < 4; k++) { await setVar(p, 'cash', 1e6); await goTo(p, pad); await sim(p, 1.2); if (check(await vars(p))) return true; } return false; };
   let sk = 1; for (const pad of skills) { sk++; await buyUntil(pad, (v) => v.skill >= sk); }
+  let lvl = 1;
   for (const pad of chain) {
-    await setVar(p, 'cash', 1e6); await goTo(p, pad); await sim(p, 1.3);
+    lvl++; await buyUntil(pad, (v) => v.level >= lvl);
     if (pad === 'Pad Dryer 2') { await view(p, { yaw: Math.PI, pitch: 0.35, dist: 15 }); await p.waitForTimeout(500); await shot(p, `${OUT}/${slug}-5-store-full.png`); }
     if (pad === 'Pad Expand') { await p.waitForTimeout(600); await view(p, { yaw: Math.PI, pitch: 0.55, dist: 18 }); await p.waitForTimeout(500); await shot(p, `${OUT}/${slug}-6-wall-down.png`); }
   }
@@ -101,7 +102,7 @@ async function suds(browser) {
   ok(`${slug}: full machine chain bought (level 11), skills maxed (4), wing open`, v4.level === 11 && v4.skill === 4 && !(await visible(p, 'Partition A')) && await visible(p, 'Coffee Bar Bar Top'), JSON.stringify(v4));
   await view(p, { pos: [30, 0.6, -2], yaw: Math.PI, pitch: 0.4, dist: 15 }); await p.waitForTimeout(900);
   await shot(p, `${OUT}/${slug}-7-dry-cleaning-wing.png`);
-  await setVar(p, 'cash', 100000); await goTo(p, 'Pad Grand'); await sim(p, 2.5);
+  await buyUntil('Pad Grand', (v) => v.level >= 12); await sim(p, 1.5);
   await view(p, { pos: [0, 0.6, -6], yaw: 0, pitch: 0.22, dist: 24, facing: 0 }); await p.waitForTimeout(1500);
   await shot(p, `${OUT}/${slug}-8-grand-reopening-win.png`);
   const t = await toasts(p);

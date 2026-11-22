@@ -11,7 +11,7 @@
       "file": "suds-and-duds-laundromat.json",
       "thumbnail": "suds-and-duds-laundromat.png",
       "instances": 536,
-      "bytes": 175883
+      "bytes": 190965
     },
     {
       "slug": "midnight-at-maple-mall",
@@ -23,7 +23,7 @@
       "file": "midnight-at-maple-mall.json",
       "thumbnail": "midnight-at-maple-mall.png",
       "instances": 720,
-      "bytes": 210207
+      "bytes": 223337
     }
   ]
 }
