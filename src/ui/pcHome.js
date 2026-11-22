@@ -7,6 +7,7 @@ import { fmt, CURRENCY } from '../core/currency.js';
 import { groups } from '../core/groups.js';
 import { getRemote } from '../net/session.js';
 import { accountSettingsCard, securitySettingsCard } from './accountSettings.js';
+import { bus } from '../core/events.js';
 import './pcHome.css';
 
 const NAV = [
@@ -136,7 +137,9 @@ export function renderPcHome(menu, { custom, community }) {
   const root = h('div.pc-home#pc-home');
   const side = h('aside.pc-side#pc-side',
     h('div.pc-brand', h('button.pc-collapse#pc-collapse', { title: 'Collapse menu', onclick: () => root.classList.toggle('collapsed') }, '✕'), h('span.pc-logo', '🧊'), h('b.pc-name', 'Iceberg')),
-    ...NAV.map(navBtn), h('div.pc-spacer'), h('div.pc-sep'), navBtn(['studio', '🛠️', 'Studio']), navBtn(['create', '➕', 'Create']), navBtn(['download', '⬇️', 'Download']));
+    ...NAV.map(navBtn), h('div.pc-spacer'), h('div.pc-sep'), navBtn(['studio', '🛠️', 'Studio']), navBtn(['create', '➕', 'Create']),
+      h('button.pc-nav.ugc-entry#ugc-open-btn', { title: 'Make your own accessory (PC only)', onclick: () => bus.emit('ugc:open') }, h('span.pc-ico', '🎩'), h('span.pc-lbl', 'Accessory')),
+      navBtn(['download', '⬇️', 'Download']));
   const setActive = () => side.querySelectorAll('.pc-nav').forEach(b => b.classList.toggle('on', b.dataset.nav === state.view));
   root.append(side, main); renderMain(); setActive();
 
