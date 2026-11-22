@@ -9,7 +9,9 @@ const PAD = 1.16;
 export function avatarSnapshot(avatar, renderer, { w = 200, h = 280 } = {}) {
   if (!avatar?.root || !renderer) return null;
   const root = avatar.root, parent = root.parent;
-  const savedRoot = { p: root.position.clone(), q: root.quaternion.clone(), s: root.scale.clone() };
+  // Save/restore the Euler, NOT the quaternion: rebuilding the Euler from a quaternion turns yaw > 90° into (π, π-yaw, π),
+  // after which the walk code (which only writes rotation.y) mirrors the avatar's heading and it walks "sideways".
+  const savedRoot = { p: root.position.clone(), r: root.rotation.clone(), s: root.scale.clone() };
   const bones = Object.values(avatar.bones || {});
   const savedBones = bones.map(b => b.rotation.clone());
   const prevRT = renderer.getRenderTarget();
@@ -75,7 +77,7 @@ export function avatarSnapshot(avatar, renderer, { w = 200, h = 280 } = {}) {
       root.parent?.remove(root);
       parent?.add(root);
       root.position.copy(savedRoot.p);
-      root.quaternion.copy(savedRoot.q);
+      root.rotation.copy(savedRoot.r);
       root.scale.copy(savedRoot.s);
       bones.forEach((b, i) => b.rotation.copy(savedBones[i]));
       root.updateMatrixWorld(true);

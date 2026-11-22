@@ -106,7 +106,11 @@ export class PlayerController {
 
     // avatar
     this.avatar.root.position.copy(p);
-    const cur = this.avatar.root.rotation.y;
+    const rot = this.avatar.root.rotation;
+    if (Math.abs(rot.x) > 1e-4 || Math.abs(rot.z) > 1e-4) {   // safety: a flipped Euler (π, y, π) mirrors the heading; keep the true yaw only
+      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(this.avatar.root.quaternion); rot.set(0, Math.atan2(fwd.x, fwd.z), 0);
+    }
+    const cur = rot.y;
     let diff = this.facing - cur; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
     this.avatar.root.rotation.y = cur + diff * Math.min(1, dt * 12);
     this.avatar.animate(dt, { speed: len > 0 ? 1 : 0, air: !this.onGround && !this.mods.carpet, flying: this.flying });
