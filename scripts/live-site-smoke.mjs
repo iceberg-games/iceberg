@@ -20,6 +20,7 @@ try {
   await p.fill('#form-signup input[name=username]', 'zz_test_publisher_1');
   await p.fill('#form-signup input[name=password]', 'zz-site-' + Date.now());
   await p.fill('#form-signup input[name=display]', 'ZZ Test');
+  await p.fill('#form-signup input[name=dob]', '1998-03-12');
   await p.click('#form-signup button[type=submit]');
   await p.waitForSelector('#p-user', { timeout: 20000 });
   check('sign up with username via portal UI (real Supabase Auth)', /zz_test_publisher_1/.test(await p.textContent('#p-user')));

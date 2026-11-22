@@ -819,6 +819,56 @@ await t('custom games: publish, public list, owner-only, soft delete', async () 
 });
 
 
+
+await t('editor accounts: date of birth, deactivate (reversible), delete, sessions', async () => {
+  const U = await createUser(db, { username: 'zz_acct_dob', displayName: 'Dobbie' });
+  const prof0 = await rpc(db, U, 'get_my_profile', {});
+  assert.equal(prof0.dateOfBirth, null);
+  assert.equal(prof0.deactivated, false);
+  const bad = await rpc(db, U, 'set_date_of_birth', { p_dob: '1899-01-01' });
+  assert.equal(bad.ok, false);
+  const saved = await rpc(db, U, 'set_date_of_birth', { p_dob: '2001-04-15' });
+  assert.equal(saved.ok, true);
+  assert.equal(String(saved.dateOfBirth).slice(0, 10), '2001-04-15');
+  assert.equal(String((await rpc(db, U, 'get_my_profile', {})).dateOfBirth).slice(0, 10), '2001-04-15');
+
+  const D = await createUser(db, { username: 'zz_acct_hide' });
+  assert.equal((await rpc(db, D, 'deactivate_account', {})).ok, true);
+  const hidden = await su(db, `select deactivated_at is not null as off from public.profiles where id = $1`, [D]);
+  assert.equal(hidden[0].off, true);
+  // signing in again (get_my_profile) clears deactivation
+  const back = await rpc(db, D, 'get_my_profile', {});
+  assert.equal(back.deactivated, false);
+  const cleared = await su(db, `select deactivated_at from public.profiles where id = $1`, [D]);
+  assert.equal(cleared[0].deactivated_at, null);
+
+  const a = await rpc(db, U, 'register_account_session', { p_client_id: 'device-aaaa-1111', p_user_agent: 'Mozilla/5.0 Chrome', p_device_label: 'Chrome on Linux' });
+  assert.equal(a.ok, true);
+  const b = await rpc(db, U, 'register_account_session', { p_client_id: 'device-bbbb-2222', p_user_agent: 'Mozilla/5.0 Firefox', p_device_label: 'Firefox on Windows' });
+  assert.equal(b.ok, true);
+  let listed = await rpc(db, U, 'list_account_sessions', {});
+  assert.equal(listed.length, 2);
+  const hb = await rpc(db, U, 'heartbeat_account_session', { p_client_id: 'device-aaaa-1111' });
+  assert.equal(hb.ok, true);
+  const others = await rpc(db, U, 'revoke_other_account_sessions', { p_client_id: 'device-aaaa-1111' });
+  assert.equal(others.ok, true);
+  assert.equal(others.revoked, 1);
+  listed = await rpc(db, U, 'list_account_sessions', {});
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].clientId, 'device-aaaa-1111');
+  const gone = await rpc(db, U, 'heartbeat_account_session', { p_client_id: 'device-bbbb-2222' });
+  assert.equal(gone.ok, false);
+  assert.equal(gone.reason, 'revoked');
+  const anonDenied = await denied(rpc(db, null, 'list_account_sessions', {}));
+  assert.ok(anonDenied);
+
+  const X = await createUser(db, { username: 'zz_acct_del' });
+  assert.equal((await rpc(db, X, 'delete_account', {})).ok, true);
+  assert.equal((await su(db, `select count(*)::int n from public.profiles where id = $1`, [X]))[0].n, 0);
+  assert.equal((await su(db, `select count(*)::int n from auth.users where id = $1`, [X]))[0].n, 0);
+});
+
+
 await db.close();
 for (const r of results) console.log(r[0], r[1], r[2] ? '\n     ' + r[2] : '');
 const failed = results.filter(r => r[0] === 'FAIL').length;

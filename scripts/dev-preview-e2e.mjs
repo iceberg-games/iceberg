@@ -65,6 +65,7 @@ async function signUpMain(p, username) {
   await p.goto(BASE); await p.click('#p-signin-open');
   await p.fill('#form-signup input[name=username]', username);
   await p.fill('#form-signup input[name=password]', 'devpreview-' + username);
+  await p.fill('#form-signup input[name=dob]', '1990-01-01');
   await p.click('#form-signup button[type=submit]');
   await p.waitForSelector('#p-user', { timeout: 15000 });
 }
