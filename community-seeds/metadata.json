@@ -1,0 +1,17 @@
+{
+  "creator": "gooberr478",
+  "games": [
+    {
+      "slug": "suds-and-duds-laundromat",
+      "gameId": "g_suds_and_duds",
+      "name": "Suds & Duds Laundromat",
+      "description": "Run the corner laundromat! Click the sorting table to wash loads, then step on glowing pads to buy washers, dryers, a vending machine and more. Knock down the wall to expand into the Dry-Cleaning Wing and light up the Grand Reopening sign. A cozy tycoon by gooberr478.",
+      "tagline": "Tycoon · Clicker",
+      "creator": "gooberr478",
+      "file": "suds-and-duds-laundromat.json",
+      "thumbnail": "suds-and-duds-laundromat.png",
+      "instances": 526,
+      "bytes": 172670
+    }
+  ]
+}
