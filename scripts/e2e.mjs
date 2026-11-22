@@ -340,7 +340,12 @@ if (want('site')) {
     check('featured: Play opens the game in a new tab', fbTab.url() === BASE + 'play/?game=birg-hq', fbTab.url());
     await fbTab.close();
     const rm = await b.newContext({ reducedMotion: 'reduce' }); const rp = await rm.newPage();
-    await rp.goto(BASE); await rp.waitForSelector('#featured-banner .fb-slide');
+    await rp.goto(BASE);
+    await rp.waitForSelector('#form-signin');
+    await rp.fill('#form-signin input[name=username]', 'frosty_fox');
+    await rp.fill('#form-signin input[name=password]', 'snowball123');
+    await rp.click('#form-signin button[type=submit]');
+    await rp.waitForSelector('#featured-banner .fb-slide', { timeout: 20000 });
     check('featured: no auto-rotation with prefers-reduced-motion', await rp.evaluate(() => window.icebergPortal.banner.rotating === false && document.querySelector('#featured-banner').dataset.reducedMotion === 'true'));
     await rm.close();
     // make the ranking deterministic: BIRG HQ gets 2 visits, Frost Fields gets a live player
