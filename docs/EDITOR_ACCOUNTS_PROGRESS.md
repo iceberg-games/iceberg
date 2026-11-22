@@ -1,6 +1,6 @@
 # Editor Update — accounts first drop (`feature/editor-accounts`)
 
-Branch off `c01dd29`. Do not publish. Do not push to `main`. Do not apply migrations to production from here.
+Branch off `c01dd29`. Tip SHA is recorded at the bottom after the last commit. Do not publish. Do not push to `main`. Do not apply migrations to production from here.
 
 ## Scope (this drop)
 
@@ -47,6 +47,7 @@ Screenshots: `designs/editor-accounts/`.
 - `node tools/test-session.mjs` — passed
 - `node tools/db/test-db.mjs` — 44/45. The new accounts RPC test passed. The one failure is an existing event-catalog fixture mismatch (`sr_powder_scarf` present on the server but not in the expected list) and is unrelated to this drop.
 - `node scripts/editor-accounts-shots.mjs` — 14/14 passed
+- `node scripts/e2e.mjs site` — 62/62 passed (required gate, DOB sign-up, guest-progress migration still works from planted local data, play session, offline guest build unchanged)
 
 ## Screenshots
 
