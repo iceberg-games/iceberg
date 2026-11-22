@@ -44,6 +44,8 @@ const GUI_KIND_RE = /\b(coin counter|score counter|health bar|timer bar|timer|hu
 const GUI_VERB_RE = /\b(add|make|create|place|put|show|build)\b/;
 
 const BUILD_KINDS = [
+  { kind: 'town', re: /\b(towns?|cit(?:y|ies)|villages?|hamlets?|neighbou?rhoods?|suburbs?|settlements?|streets?|downtown|houses\b)/ },
+  { kind: 'fountain', re: /\b(fountains?|water feature)\b/ },
   { kind: 'obby', re: /\b(obby|obstacle course|jump course)\b/ },
   { kind: 'building', re: /\b(building|apartments?)\b/ },
   { kind: 'maze', re: /\bmazes?\b/ },
@@ -81,6 +83,65 @@ function sizeWord(t) {
   return 1;
 }
 
+const SCRIPT_CUE = /\b(when|whenever|once|every|this is|on spawn|on click|touched|clicked|pressed|spin|rotate|teleport|kill|heal|hurt|damage|bounce|lava|hide|show|open|close|door|give|award|win|leaderboard|countdown|faster|slower|jump|gravity|glow|light|particles|sound|message|say |tell |announce)\b/;
+
+const BUILD_VERBS = 'build|make|create|generate|design|construct|draw|add|place|spawn|craft|set up|setup|throw up|whip up';
+const FILLER_RES = [
+  /^(?:hey|hi|hello|ok|okay|yo|so|um|uh|well)\b[ ,!.]*/,
+  /^(?:please|pls|plz)\b[ ,]*/,
+  /^(?:can|could|would|will) (?:you|u|ya)(?: please)?(?: just)?(?: go ahead and)?\s+/,
+  /^(?:i|we)(?:'d| would| want| wanna| need| would like| 'd like|'d love| love)(?: to)?(?: you to)?\s*/,
+  /^i (?:want|need|wanna|would like|'d like) (?:you )?to\s+/,
+  /^(?:let'?s|lets)\s+/,
+  /^(?:go ahead and|just)\s+/,
+];
+/** Strip polite/filler words so "can you please make me a little house" reads like "make a house". */
+export function polish(text) {
+  let t = ` ${text} `;
+  t = t.replace(/[!?.,;:]+/g, ' ').replace(/\s+/g, ' ').trim();
+  for (let pass = 0; pass < 3; pass++) {
+    const before = t;
+    for (const re of FILLER_RES) t = t.replace(re, '').trim();
+    if (t === before) break;
+  }
+  t = t.replace(/^(?:give|get) (?:me|us)\b/, 'make');
+  t = t
+    .replace(/\b(?:please|pls|plz|thanks|thank you|for me|right now|real quick|quickly|asap|now)\b/g, ' ')
+    .replace(/\b(make|build|create|generate|design|construct|draw|give|get|craft|add|place|put|spawn|drop) (?:me|us|my)\b/g, '$1')
+    .replace(/\b(a little|a small little|a tiny little|a bit of|a few|some|a nice|a cool|a simple|a basic|a quick|a pretty|a neat|just a|the)\b/g, (m) => (/^(a little|a small little|a tiny little)$/.test(m) ? 'a small' : /^a few|some$/.test(m) ? 'a few' : 'a'))
+    .replace(/\ba (?=[aeiou])/g, 'a ')
+    .replace(/\s+/g, ' ').trim();
+  return t;
+}
+
+// Closest template for things the builder does not have, so a build request never dead-ends.
+const CLOSEST = [
+  ['town', /\b(city|cities|village|hamlet|neighbou?rhood|suburb|settlement|community|kingdom|district|streets?|downtown|campus|resort|world|map)\b/],
+  ['building', /\b(skyscraper|hotel|office|mall|factory|apartment|condo|hospital|school|museum|library|warehouse|casino|tall building)\b/],
+  ['house', /\b(castle|fort|fortress|base|mansion|palace|igloo|barn|garage|church|room|lodge|treehouse|clubhouse|hideout|bunker|temple|villa|farm|shed)\b/],
+  ['tower', /\b(lighthouse|rocket|pillar|column|watchtower|monument|statue|obelisk|chimney|pyramid)\b/],
+  ['car', /\b(boat|ship|truck|bus|train|plane|jet|vehicle|bike|bicycle|tank|sled|sleigh|taxi|van|ufo|robot)\b/],
+  ['tree', /\b(forest|bush|flower|garden|plant|park|woods|jungle|cactus|bush)\b/],
+  ['fountain', /\b(pool|pond|lake|waterfall|water|well|swimming)\b/],
+  ['obby', /\b(parkour|course|race|racetrack|challenge|obstacle|level|game|minigame|speedrun)\b/],
+  ['arena', /\b(playground|field|ring|pit|colosseum|court|cage|battle|boss|dungeon|room)\b/],
+  ['maze', /\b(labyrinth|puzzle|corridor)\b/],
+  ['bridge', /\b(path|walkway|dock|pier|boardwalk|crossing|road|runway)\b/],
+  ['shop', /\b(store|restaurant|cafe|bakery|market|stand|vendor|diner|bar|cart)\b/],
+  ['platform', /\b(island|floor|stage|ground|pad|raft)\b/],
+  ['stairs', /\b(ramp|slide|escalator|steps)\b/],
+  ['wall', /\b(barrier|barricade|border|divider)\b/],
+];
+const NOUN_STOP = new Set(['a', 'an', 'the', 'my', 'me', 'us', 'some', 'something', 'anything', 'thing', 'one', 'new', 'few', 'big', 'small', 'large', 'huge', 'tiny', 'little', 'cool', 'nice']);
+function requestedNoun(tb) {
+  const words = tb.replace(new RegExp(`^(?:${BUILD_VERBS})\\s+`), '').split(/\s+/).filter((w) => w && !NOUN_STOP.has(w) && !/^\d+$/.test(w));
+  return words.slice(0, 3).join(' ');
+}
+export function closestTemplate(tb) {
+  for (const [tpl, re] of CLOSEST) if (re.test(tb)) return tpl;
+  return /\b(something|anything|stuff|thing|surprise)\b/.test(tb) ? 'town' : 'house';
+}
+
 function parseBuild(t) {
   const hit = BUILD_KINDS.find((k) => k.re.test(t));
   if (!hit) return null;
@@ -96,9 +157,10 @@ function parseBuild(t) {
   const stories = numberIn(t, /\b(\d+)\s*[ -]?(?:story|stories|storey|storeys|floor|floors)\b/);
   const line = /\b(in a line|in a row|lined up|a line of)\b/.test(t);
   const mat = materialIn(t);
+  const tpl = hit.kind === 'house' && stories != null && stories > 1 ? 'building' : hit.kind;
   return {
     kind: 'build',
-    template: hit.kind,
+    template: tpl,
     color: color?.hex || null,
     colorName: color?.name || null,
     material: mat,
@@ -106,7 +168,7 @@ function parseBuild(t) {
     height: height != null ? Math.max(1, Math.min(80, height)) : null,
     length: length != null ? Math.max(1, Math.min(120, length)) : null,
     width: width != null ? Math.max(1, Math.min(40, width)) : null,
-    stories: stories != null ? Math.max(1, Math.min(8, Math.round(stories))) : (hit.kind === 'building' ? 3 : null),
+    stories: stories != null ? Math.max(1, Math.min(8, Math.round(stories))) : (tpl === 'building' ? 3 : null),
     scale: sizeWord(t),
     line,
     around: /\baround\b/.test(t),
@@ -216,6 +278,17 @@ function isSetting(t) {
   return SETTING_RE.test(t) && /\b(toggle|enable|turn on|switch to|use|set|go|camera)\b/.test(t);
 }
 
+const TEMPLATE_WORD = { town: 'a little town', house: 'a house', building: 'a building', tower: 'a tower', car: 'a car', tree: 'a tree', fountain: 'a fountain', obby: 'an obby', arena: 'an arena', maze: 'a maze', bridge: 'a bridge', shop: 'a shop', platform: 'a platform', stairs: 'stairs', wall: 'a wall' };
+function fallbackNote(noun, template) {
+  const what = noun ? `I don't have a "${noun}" yet, so` : 'I wasn\'t sure exactly what you meant, so';
+  return `${what} I built the closest thing I know — ${TEMPLATE_WORD[template] || template}. Say "make it bigger", "make it blue" or "undo that" to adjust.`;
+}
+function withNote(intent, tb) {
+  if (intent.template === 'town' && /\b(cit(?:y|ies))\b/.test(tb)) { intent.city = true; intent.note = 'A city is a town with taller buildings — here you go.'; }
+  else if (intent.template === 'town' && /\bhouses\b/.test(tb)) intent.note = 'A few houses together make a little town — here you go.';
+  return intent;
+}
+
 /**
  * @param {string} text
  * @param {{ names?: string[] }} [ctx]
@@ -244,19 +317,31 @@ export function classifyIntent(text, ctx = {}) {
   if (looksGui) return { ...parseGui(t), text: raw };
 
   const scriptOnPart = SCRIPT_ON_PART_RE.test(t);
-  const looksBuild = BUILD_VERB_RE.test(t) && BUILD_KINDS.some((k) => k.re.test(t)) && !scriptOnPart;
-  if (looksBuild) return { ...parseBuild(t), text: raw };
+  const tb = polish(t);
+  const kindHit = BUILD_KINDS.some((k) => k.re.test(tb));
+  const startsBuild = new RegExp(`^(?:${BUILD_VERBS})\\b`).test(tb);
+  const wantsPhrase = /^(?:an? |some |\d+ )?[a-z -]{2,40}$/.test(tb) && tb.split(' ').length <= 5 && !SCRIPT_CUE.test(tb);
+  const looksBuild = (BUILD_VERB_RE.test(tb) || ((startsBuild || wantsPhrase) && !SCRIPT_CUE.test(tb))) && kindHit && !scriptOnPart;
+  if (looksBuild) return withNote({ ...parseBuild(tb), text: raw }, tb);
 
   const translated = translate(raw, { names: ctx.names || [] });
   const hasProgram = (translated.program?.rules || []).length + (translated.program?.continuous || []).length > 0;
   // The translator is greedy (e.g. "write a poem" becomes a start-message). The chat
   // must not pretend: only treat it as a script when the wording looks like one.
-  const SCRIPT_CUE = /\b(when|whenever|once|every|this is|on spawn|on click|touched|clicked|pressed|spin|rotate|teleport|kill|heal|hurt|damage|bounce|checkpoint|lava|hide|show|open|close|door|give|award|win|leaderboard|countdown|faster|slower|jump|gravity|glow|light|particles|sound|message|say |tell |announce)\b/;
   if (hasProgram && (scriptOnPart || SCRIPT_CUE.test(t))) {
     return { kind: 'script', text: raw, target: parseScriptTarget(t, ctx.names), translation: translated };
   }
 
   if (looksGui) return { ...parseGui(t), text: raw };
+
+  // A build request we have no template for: use the closest one (never a dead end).
+  const generic = startsBuild && !scriptOnPart && !/\b(script|code|poem|story|song|essay|joke)\b/.test(tb);
+  const wantMatch = /^(?:i (?:want|need|wanna|would like|'d like)|can you|could you|would you)\b/.test(t) && /\b(make|build|create|have|get|see|a|an|some)\b/.test(t) && !/\b(script|code|poem|story|song|essay|joke|help|fix|kill|teleport)\b/.test(t);
+  if (generic || (wantMatch && !SCRIPT_CUE.test(tb))) {
+    const forced = { template: closestTemplate(tb) };
+    const base = parseBuild(forced.template + ' ' + tb) || {};
+    return { ...base, kind: 'build', template: forced.template, text: raw, fallbackOf: requestedNoun(tb) || null, note: fallbackNote(requestedNoun(tb), forced.template) };
+  }
 
   const suggestions = [
     ...new Set([

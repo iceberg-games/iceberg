@@ -299,6 +299,78 @@ const cases = [
     const r = await sendChat('undo that', ed);
     return r.applied && mid > n && ed.doc.instances.length === n && !ed.doc.instances.some((i) => /Tree/.test(i.name));
   }],
+
+  // ---- fix/ai-chat-live: polite phrasing, town template, closest-template fallback ----
+  ['polite and filler house phrases all build a house', () => {
+    return ['make me a house', 'build me a house', 'i want a house', 'can you make me a house', 'could you please build me a house',
+      'Make me a house.', 'please make a house', 'i would like a house', 'give me a house', 'a house', 'house', 'make me a little house', 'make me some house']
+      .every((p) => { const i = C(p); return i.kind === 'build' && i.template === 'house'; });
+  }],
+  ['"little" and "some" never block a build', () => {
+    return C('make me a little village').template === 'town' && C('can you make some trees').template === 'tree' && C('i want a little tower').template === 'tower';
+  }],
+  ['town phrases all classify as a town', () => {
+    return ['make me a town', 'can you make a town', 'make a city', 'make me a little village', 'build me a town please', 'i want a town', 'make a neighborhood']
+      .every((p) => { const i = C(p); return i.kind === 'build' && i.template === 'town'; });
+  }],
+  ['city phrase builds a city variant', () => C('make a city').city === true && planBuild(C('make a city')).summary === 'a little city'],
+  ['town plan has houses, roads, a shop, trees, lamps and a fountain', () => {
+    const names = planBuild(C('make me a town')).instances.map((i) => i.name).join(' ');
+    return /House1_/.test(names) && /House4_/.test(names) && /Road_/.test(names) && /Shop_/.test(names) && /Tree1_/.test(names) && /Lamp1_/.test(names) && /Fountain_/.test(names);
+  }],
+  ['town pieces do not overlap each other (roads are flat ground)', () => {
+    const parts = planBuild(C('make me a town')).instances;
+    const groups = new Map();
+    for (const p of parts) { const k = p.name.split('_')[0]; if (k === 'Road') continue; (groups.get(k) || groups.set(k, []).get(k)).push(p); }
+    const keys = [...groups.keys()];
+    for (let a = 0; a < keys.length; a++) for (let b = a + 1; b < keys.length; b++) {
+      if (aabbsOverlap(aabbOf(groups.get(keys[a])), aabbOf(groups.get(keys[b])), 0.01)) { console.log('  overlap', keys[a], keys[b]); return false; }
+    }
+    return keys.length >= 12;
+  }],
+  ['city pieces do not overlap either', () => {
+    const parts = planBuild(C('make a city')).instances;
+    const groups = new Map();
+    for (const p of parts) { const k = p.name.split('_')[0]; if (k === 'Road') continue; (groups.get(k) || groups.set(k, []).get(k)).push(p); }
+    const keys = [...groups.keys()];
+    for (let a = 0; a < keys.length; a++) for (let b = a + 1; b < keys.length; b++) {
+      if (aabbsOverlap(aabbOf(groups.get(keys[a])), aabbOf(groups.get(keys[b])), 0.01)) return false;
+    }
+    return true;
+  }],
+  ['a town does not overlap an existing house', () => {
+    const house = planBuild(C('build a small house'), { origin: [0, 0, 0] });
+    const town = planBuild(C('make me a town'), { existing: house.instances, selection: [], lookPoint: [0, 0, 0] });
+    return !aabbsOverlap(aabbOf(house.instances), aabbOf(town.instances), 0.4);
+  }],
+  ['make me a town applies as one undo with a group', async () => {
+    const ed = mockEditor([inst('spawn')]);
+    const r = await sendChat('make me a town', ed);
+    return r.applied && ed.doc.instances.length > 60 && /town/i.test(r.text);
+  }],
+  ['unknown build nouns fall back to the closest template with a friendly note', () => {
+    const boat = C('make me a boat'), castle = C('i want a castle'), sky = C('make me a skyscraper'), pool = C('make me a swimming pool');
+    return boat.template === 'car' && boat.note && castle.template === 'house' && sky.template === 'building' && pool.template === 'fountain';
+  }],
+  ['a build request we cannot name still builds something', async () => {
+    const ed = mockEditor([inst('spawn')]);
+    const r = await sendChat('make me a spaceship', ed);
+    return r.applied && /closest/i.test(r.text) && !/can'?t|cannot|didn'?t understand/i.test(r.text);
+  }],
+  ['no polite build request ever says can\'t or didn\'t understand', async () => {
+    for (const p of ['make me a town', 'make me a house', 'build me a house', 'can you make a town', 'make a city', 'make me a little village', 'i want a house', 'make me a pizza', 'i want a rocket']) {
+      const ed = mockEditor([inst('spawn')]);
+      const r = await sendChat(p, ed);
+      if (!r.applied || /can'?t|cannot|didn'?t understand/i.test(r.text)) { console.log('  bad:', p, r.text); return false; }
+    }
+    return true;
+  }],
+  ['script phrases are not hijacked by the build fallback', () => {
+    return C('give 10 coins when touched').kind === 'script' && C('make the red part kill players').kind === 'script'
+      && C('write a poem about penguins').kind === 'unknown' && C('tell me a joke').kind === 'unknown';
+  }],
+  ['house with 3 stories becomes a building', () => C('make me a house with 3 stories').template === 'building'],
+  ['add a fountain builds a fountain', () => C('add a fountain').template === 'fountain' && planBuild(C('add a fountain')).instances.length >= 4],
   ['isSafeImageSrc allows http(s) and data images, rejects javascript', () => {
     return isSafeImageSrc('https://example.com/icon.png')
       && isSafeImageSrc('http://example.com/a.jpg')
