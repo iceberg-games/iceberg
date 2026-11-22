@@ -15,53 +15,38 @@ import WIND_MAIN_OGG from '../assets/audio/tornado_hat_wind_loop.ogg?url';
 import WIND_MAIN_MP3 from '../assets/audio/tornado_hat_wind_loop.mp3?url';
 import WIND_HIGH_OGG from '../assets/audio/tornado_hat_wind_loop_high.ogg?url';
 
-const DEFAULT = { skin: '#f5cd30', torso: '#4aa8e8', legs: '#2d4a80' };   // Iceberg default: classic skin, ice-blue top, navy pants
+const DEFAULT = { skin: '#f6f0c4', torso: '#8a3ff0', legs: '#3e42d8' };   // Vortex-ref default: cream skin, violet torso, indigo legs
 
-// ---------- expressive face (default look) ----------
-// 128px canvas decal on a curved plane hugging the rounded head front (transparent background,
-// so face features keep their own colours instead of being tinted by skin).
-// Mouth frames for talking: 0 = smile, 1 = half open, 2 = open. (cx, cy) = centre of the smile line.
-const FACE_INK = '#1f2433';
-function drawMouth(g, frame, cx = 64, cy = 84, s = 1) {
+// ---------- default face (minimal, matches the ref smile) ----------
+// 128px canvas decal on a nearly-flat plane in front of the head (transparent background).
+// Two small dark oval dots + a thin curved smile. No nose, blush, brows, irises or highlights.
+// Mouth frames: 0 = smile, 1 = slightly open, 2 = a little more open. (cx, cy) = centre of the smile.
+const FACE_INK = '#1a1a1a';
+function drawMouth(g, frame, cx = 64, cy = 86, s = 1) {
   g.save(); g.translate(cx, cy); g.scale(s, s);
-  g.lineCap = 'round'; g.lineJoin = 'round';
+  g.strokeStyle = FACE_INK; g.fillStyle = FACE_INK; g.lineCap = 'round'; g.lineJoin = 'round';
   if (frame === 0) {
-    g.strokeStyle = FACE_INK; g.lineWidth = 5.5;
-    g.beginPath(); g.moveTo(-15, -4); g.quadraticCurveTo(0, 13, 15, -4); g.stroke();
+    g.lineWidth = 5;
+    g.beginPath(); g.moveTo(-18, -5); g.quadraticCurveTo(0, 16, 18, -5); g.stroke();
     g.restore(); return;
   }
-  const h = frame === 1 ? 9 : 16;
-  g.fillStyle = '#3a1822';
-  g.beginPath(); g.moveTo(-15, -3); g.quadraticCurveTo(0, -1, 15, -3); g.quadraticCurveTo(13, h + 3, 0, h + 4); g.quadraticCurveTo(-13, h + 3, -15, -3); g.closePath(); g.fill();
-  g.fillStyle = '#fff'; g.fillRect(-9, -2.5, 18, 3.2);                       // teeth
-  g.fillStyle = '#ff7a8c'; g.beginPath(); g.ellipse(0, h + 0.5, 8, h * 0.32, 0, 0, Math.PI * 2); g.fill();   // tongue
-  g.strokeStyle = FACE_INK; g.lineWidth = 3; g.beginPath(); g.moveTo(-15, -3); g.quadraticCurveTo(13, h + 3, 0, h + 4); g.stroke();
-  g.beginPath(); g.moveTo(15, -3); g.quadraticCurveTo(-13, h + 3, 0, h + 4); g.stroke();
+  // Smile opens slightly (curved almond following the smile, no teeth/tongue/centre mark)
+  const lift = frame === 1 ? 6 : 11;
+  g.beginPath();
+  g.moveTo(-18, -5);
+  g.quadraticCurveTo(0, 16, 18, -5);          // lower lip (same smile)
+  g.quadraticCurveTo(0, 16 - lift, -18, -5);  // upper lip
+  g.closePath(); g.fill();
   g.restore();
 }
 function drawEye(g, cx, cy, blink) {
-  if (blink) {   // happy closed eye ^
-    g.strokeStyle = FACE_INK; g.lineWidth = 5; g.lineCap = 'round';
-    g.beginPath(); g.moveTo(cx - 10, cy + 3); g.quadraticCurveTo(cx, cy - 7, cx + 10, cy + 3); g.stroke(); return;
-  }
-  g.fillStyle = FACE_INK; g.beginPath(); g.ellipse(cx, cy, 11, 15.5, 0, 0, Math.PI * 2); g.fill();
-  g.save(); g.beginPath(); g.ellipse(cx, cy, 11, 15.5, 0, 0, Math.PI * 2); g.clip();
-  const gr = g.createLinearGradient(0, cy - 2, 0, cy + 14); gr.addColorStop(0, 'rgba(79,170,232,0)'); gr.addColorStop(1, 'rgba(110,200,255,0.95)');
-  g.fillStyle = gr; g.fillRect(cx - 11, cy - 2, 22, 18); g.restore();          // icy iris glow
-  g.fillStyle = '#fff';
-  g.beginPath(); g.arc(cx + 3.8, cy - 6, 4.6, 0, Math.PI * 2); g.fill();   // big highlight
-  g.beginPath(); g.arc(cx - 3.5, cy + 6, 1.9, 0, Math.PI * 2); g.fill();     // small sparkle
+  g.fillStyle = FACE_INK; g.strokeStyle = FACE_INK; g.lineCap = 'round';
+  if (blink) { g.lineWidth = 3.4; g.beginPath(); g.moveTo(cx - 4.5, cy); g.lineTo(cx + 4.5, cy); g.stroke(); return; }
+  g.beginPath(); g.ellipse(cx, cy, 4, 6.4, 0, 0, Math.PI * 2); g.fill();
 }
 function drawFace(g, frame = 0, blink = false) {
   g.clearRect(0, 0, 128, 128);
-  for (const x of [28, 100]) {   // blush
-    const b = g.createRadialGradient(x, 78, 1, x, 78, 13); b.addColorStop(0, 'rgba(255,120,145,0.6)'); b.addColorStop(1, 'rgba(255,120,145,0)');
-    g.fillStyle = b; g.fillRect(x - 14, 64, 28, 28);
-  }
-  g.strokeStyle = '#3b2a22'; g.lineWidth = 4.5; g.lineCap = 'round';      // eyebrows
-  g.beginPath(); g.moveTo(33, 33); g.quadraticCurveTo(43, 26, 53, 31); g.stroke();
-  g.beginPath(); g.moveTo(75, 31); g.quadraticCurveTo(85, 26, 95, 33); g.stroke();
-  drawEye(g, 43, 54, blink); drawEye(g, 85, 54, blink);
+  drawEye(g, 52, 50, blink); drawEye(g, 76, 50, blink);
   drawMouth(g, frame);
 }
 function faceTexture() {
@@ -74,34 +59,30 @@ function faceTexture() {
 }
 
 // ---------- soft blocky body (default look) ----------
-// Rounded-box parts with a small inset so joints read as slight gaps. Geometry is authored at the
-// real part size then normalised to a unit box, so mesh.scale keeps meaning "part dimensions"
-// (cosmetics/games read bodyMeshes[*].scale) while rounding stays round. Shared across avatars.
-export const SOFT_BODY = { gap: 0.04, segments: 2, radius: { head: 0.26, torso: 0.14, limb: 0.12 } };
+// Slight bevel only (classic blocks, not puffy). Hairline inset so joints don't z-fight but
+// still read as flush. Geometry is authored at the real part size then normalised to a unit
+// box, so mesh.scale keeps meaning "part dimensions". Shared across avatars.
+// Radii are world units (not fractions).
+export const SOFT_BODY = { gap: 0.002, segments: 2, radius: { head: 0.135, torso: 0.028, limb: 0.02 } };
 const _softGeo = new Map();
-function softPartGeo(w, h, d, r) {
-  const key = `${w.toFixed(3)}|${h.toFixed(3)}|${d.toFixed(3)}|${r.toFixed(3)}`;
+function softPartGeo(w, h, d, r, gap = SOFT_BODY.gap) {
+  const key = `${w.toFixed(3)}|${h.toFixed(3)}|${d.toFixed(3)}|${r.toFixed(3)}|${gap.toFixed(3)}`;
   let g = _softGeo.get(key);
   if (!g) {
-    const G = SOFT_BODY.gap, vw = Math.max(0.05, w - G), vh = Math.max(0.05, h - G), vd = Math.max(0.05, d - G);
+    const G = gap, vw = Math.max(0.05, w - G), vh = Math.max(0.05, h - G), vd = Math.max(0.05, d - G);
     g = new RoundedBoxGeometry(vw, vh, vd, SOFT_BODY.segments, Math.min(r, vw / 2, vh / 2, vd / 2) * 0.98);
     g.scale(1 / w, 1 / h, 1 / d); g.userData.shared = true; _softGeo.set(key, g);
   }
   return g;
 }
-/** Curved face decal that hugs the rounded head front (unit head space). */
+/** Nearly-flat face decal just in front of the (slightly bevelled) head front, unit head space. */
 const _faceGeo = new Map();
 function faceDecalGeo(hs) {
   const key = hs.toFixed(3); let g = _faceGeo.get(key); if (g) return g;
-  const vs = Math.max(0.05, hs - SOFT_BODY.gap), r = Math.min(SOFT_BODY.radius.head * hs, vs / 2) * 0.98;
-  const e = vs / 2 / hs, rho = r / hs, c = e - rho;
-  g = new THREE.PlaneGeometry(0.9, 0.9, 14, 14);
-  const pa = g.attributes.position;
-  for (let i = 0; i < pa.count; i++) {
-    const x = pa.getX(i), y = pa.getY(i), dx = Math.max(Math.abs(x) - c, 0), dy = Math.max(Math.abs(y) - c, 0), q = rho * rho - dx * dx - dy * dy;
-    pa.setZ(i, (q > 0 ? c + Math.sqrt(q) : c) + 0.006);
-  }
-  g.computeVertexNormals(); g.userData.shared = true; _faceGeo.set(key, g);
+  const z = 0.5 * (hs - SOFT_BODY.gap) / hs + 0.012 / hs;
+  g = new THREE.PlaneGeometry(0.92, 0.92);
+  g.translate(0, 0, z);
+  g.userData.shared = true; _faceGeo.set(key, g);
   return g;
 }
 
@@ -2153,8 +2134,9 @@ export class Avatar {
   constructor() {
     this.root = new THREE.Group();
     this.root.name = 'avatar';
-    this.mats = { skin: std(DEFAULT.skin), torso: std(DEFAULT.torso), arms: std(DEFAULT.skin), legs: std(DEFAULT.legs) };
-    const faceMat = new THREE.MeshStandardMaterial({ map: faceTexture(), transparent: true, alphaTest: 0.02, depthWrite: false, roughness: 0.55, polygonOffset: true, polygonOffsetFactor: -2 }); // per-avatar face canvas decal
+    const matte = { roughness: 0.98, metalness: 0, envMapIntensity: 0 };
+    this.mats = { skin: std(DEFAULT.skin, matte), torso: std(DEFAULT.torso, matte), arms: std(DEFAULT.skin, matte), legs: std(DEFAULT.legs, matte) };
+    const faceMat = new THREE.MeshStandardMaterial({ map: faceTexture(), transparent: true, alphaTest: 0.02, depthWrite: false, roughness: 0.98, metalness: 0, envMapIntensity: 0, polygonOffset: true, polygonOffsetFactor: -2 }); // per-avatar face canvas decal
     this.faceMat = faceMat;
     // talking state (driven by animate(); no timers)
     // aurora shimmer skin (shared uniforms across skin materials of this avatar)
@@ -2201,11 +2183,11 @@ export class Avatar {
     this.bodyType = t; this.bodySlots = S;
     for (const [name, [x, y, z]] of Object.entries(S.bones)) this.bones[name].position.set(x, y, z);
     const [aw, al, ad] = S.limbs.arm, [lw, ll, ld] = S.limbs.leg;
-    const R = SOFT_BODY.radius, armG = softPartGeo(aw, al, ad, R.limb), legG = softPartGeo(lw, ll, ld, R.limb);
+    const R = SOFT_BODY.radius, armG = softPartGeo(aw, al, ad, R.limb), legG = softPartGeo(lw, ll, ld, R.limb, -0.01);
     for (const n of ['armL', 'armR']) { const m = this.bodyMeshes[n]; m.geometry = armG; m.scale.set(aw, al, ad); m.position.set(0, -al / 2, 0); }
     for (const n of ['legL', 'legR']) { const m = this.bodyMeshes[n]; m.geometry = legG; m.scale.set(lw, ll, ld); m.position.set(0, -ll / 2, 0); }
     this.bodyMeshes.torso.geometry = softPartGeo(...S.torso, R.torso); this.bodyMeshes.torso.scale.set(...S.torso);
-    const hs = S.head; this.bodyMeshes.head.geometry = softPartGeo(hs, hs, hs, R.head * hs); this.bodyMeshes.head.scale.setScalar(hs); this.bodyMeshes.head.position.set(0, hs / 2, 0);
+    const hs = S.head; this.bodyMeshes.head.geometry = softPartGeo(hs, hs, hs, R.head); this.bodyMeshes.head.scale.setScalar(hs); this.bodyMeshes.head.position.set(0, hs / 2, 0);
     this.faceMesh.geometry = faceDecalGeo(hs);
     this._applyBodyMesh(S);
     for (const [bone, slot] of Object.entries(BONE_ANCHOR)) {
