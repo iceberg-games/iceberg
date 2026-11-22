@@ -53,7 +53,6 @@ export class CreatorPanel {
     if (what === 'animtime' || what === 'bonepose') { this.renderAnimator(true); return; }
     if (what === 'script') { this.renderScriptPreview(); this.renderLeft(); return; }
     this.renderRibbon(); this.renderLeft(); this.renderProps(); this.renderAnimator();
-    attachStudioChat(this.el, () => this);
   }
   _onKey(e) {
     const ed = this.ed; if (!ed) return;
@@ -148,6 +147,7 @@ export class CreatorPanel {
       h('div.st-status', h('button.st-mini#hotkey-help-btn', { onclick: () => this.toggleHelp() }, '⌨️ Shortcuts (?)'), ' Right-drag look · WASD+Q/E fly · Shift/Ctrl+click add · drag empty = box select · 1–5 tools · G grid · Ctrl+C/X/V copy/cut/paste · Ctrl+D dup · Ctrl+G group · Ctrl+R rotate 90° · F focus · Ctrl+S save'),
     );
     this.renderRibbon(); this.renderLeft(); this.renderProps(); this.renderAnimator();
+    attachStudioChat(this.el, () => this);
   }
 
   renderRibbon() {
