@@ -67,7 +67,13 @@ if (want('db')) {
 }
 
 const { chromium } = await import('playwright');
-const launch = () => chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+// The site root redirects PCs to the one home (play/). These tests exercise the portal page itself, so every context opts into it.
+const launch = async () => {
+  const br = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+  const nc = br.newContext.bind(br);
+  br.newContext = async (o) => { const c = await nc(o); await c.addInitScript(() => { try { localStorage.setItem('iceberg:v1:portal', '1'); } catch { /* ignore */ } }); return c; };
+  return br;
+};
 const watch = (page, errs) => {
   page.on('pageerror', e => errs.push('pageerror: ' + e.message));
   page.on('console', m => { if (m.type() === 'error' && !/favicon|Failed to load resource: the server responded with a status of 40[14]/.test(m.text())) errs.push(m.text()); });
