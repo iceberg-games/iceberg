@@ -130,7 +130,7 @@ export function renderPcHome(menu, { custom, community }) {
     groups: () => { state.view = 'groups'; menu.pcView = 'groups'; renderMain(); setActive(); }, settings: () => { state.view = 'settings'; menu.pcView = 'settings'; renderMain(); setActive(); },
     studio: () => menu.openStudio(), create: () => menu.showCreateDialog(), download: () => menu.showInstall(),
   };
-  const navBtn = ([id, ico, label, soon]) => h('button.pc-nav#nav-' + id, { 'data-nav': id, disabled: !!soon, title: soon ? 'Coming soon' : label, onclick: () => act[id]?.() },
+  const navBtn = ([id, ico, label, soon]) => h('button.pc-nav#' + (id === 'create' ? 'create-btn' : 'nav-' + id), { 'data-nav': id, disabled: !!soon, title: soon ? 'Coming soon' : label, onclick: () => act[id]?.() },
     h('span.pc-ico', ico), h('span.pc-lbl', label), soon ? h('span.pc-soon', 'soon') : null);
   const root = h('div.pc-home#pc-home');
   const side = h('aside.pc-side#pc-side',
