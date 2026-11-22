@@ -3,7 +3,7 @@
 import { classifyIntent, EXAMPLE_PHRASES } from '../src/studio/chatIntent.js';
 import { planBuild, applyBuild, aabbOf, aabbsOverlap, nextFreeOrigin, originBeside } from '../src/studio/builder.js';
 import { handleChat, applyChat, sendChat } from '../src/studio/chat.js';
-import { buttonProgram, planGui, makeGuiElement } from '../src/studio/gui.js';
+import { buttonProgram, planGui, makeGuiElement, isSafeImageSrc, collectProjectImages, rememberTexture } from '../src/studio/gui.js';
 import { translate } from '../src/studio/nlscript.js';
 import { inst } from '../src/studio/builder.js';
 
@@ -298,6 +298,41 @@ const cases = [
     const mid = ed.doc.instances.length;
     const r = await sendChat('undo that', ed);
     return r.applied && mid > n && ed.doc.instances.length === n && !ed.doc.instances.some((i) => /Tree/.test(i.name));
+  }],
+  ['isSafeImageSrc allows http(s) and data images, rejects javascript', () => {
+    return isSafeImageSrc('https://example.com/icon.png')
+      && isSafeImageSrc('http://example.com/a.jpg')
+      && isSafeImageSrc('data:image/png;base64,aaa')
+      && isSafeImageSrc('blob:https://example.com/1')
+      && !isSafeImageSrc('javascript:alert(1)')
+      && !isSafeImageSrc('/relative.png')
+      && !isSafeImageSrc('file:///etc/passwd');
+  }],
+  ['collectProjectImages lists thumbnail, textures, GUI srcs, and extras', () => {
+    const doc = {
+      thumbnail: 'https://example.com/thumb.png',
+      textures: [{ name: 'Wood', src: 'https://example.com/wood.png' }],
+      gui: [
+        { type: 'image', name: 'Logo', src: 'https://example.com/logo.png' },
+        { type: 'image', name: 'Logo copy', src: 'https://example.com/logo.png' },
+        { type: 'button', src: 'https://example.com/ignored.png' },
+      ],
+    };
+    const list = collectProjectImages(doc, [{ thumbnail: 'https://example.com/draft.png', name: 'Other game' }]);
+    const srcs = list.map((i) => i.src);
+    return srcs.length === 4
+      && srcs.includes('https://example.com/thumb.png')
+      && srcs.includes('https://example.com/wood.png')
+      && srcs.includes('https://example.com/logo.png')
+      && srcs.includes('https://example.com/draft.png')
+      && !srcs.includes('https://example.com/ignored.png');
+  }],
+  ['rememberTexture stores a safe URL once', () => {
+    const doc = {};
+    const ok = rememberTexture(doc, 'https://example.com/a.png', 'A');
+    rememberTexture(doc, 'https://example.com/a.png', 'A again');
+    const bad = rememberTexture(doc, 'javascript:alert(1)', 'Nope');
+    return ok && !bad && doc.textures.length === 1 && doc.textures[0].src === 'https://example.com/a.png';
   }],
 ];
 

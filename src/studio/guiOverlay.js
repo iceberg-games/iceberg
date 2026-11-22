@@ -1,7 +1,8 @@
 // 2D GUI editor overlay for PC Studio: drag, resize, and anchor screen elements.
 import { h, clear } from '../ui/dom.js';
 import { bus } from '../core/events.js';
-import { GUI_TYPES, GUI_ANCHORS, makeGuiElement, applyAnchorStyle, dragDelta, labelFor, buttonProgram } from './gui.js';
+import { GUI_TYPES, GUI_ANCHORS, makeGuiElement, applyAnchorStyle, dragDelta, labelFor, buttonProgram, collectProjectImages, isSafeImageSrc, rememberTexture } from './gui.js';
+import { drafts } from './store.js';
 
 function css(node, style) { Object.assign(node.style, style); return node; }
 
@@ -37,7 +38,7 @@ function paintEl(node, el, vars = {}) {
     node.append(fill, cap);
   } else if (el.type === 'image') {
     node.textContent = el.src ? '' : '🖼';
-    if (el.src) css(node, { backgroundImage: `url(${CSS.escape ? el.src : el.src})`, backgroundSize: 'cover', backgroundPosition: 'center' });
+    if (el.src) css(node, { backgroundImage: cssImageUrl(el.src), backgroundSize: 'cover', backgroundPosition: 'center' });
   } else {
     node.textContent = labelFor(el, vars) || (el.type === 'frame' ? '' : el.name);
   }
@@ -47,6 +48,37 @@ function barPct(el, vars) {
   const max = el.max || 100;
   const v = el.bind === 'health' ? (vars.health ?? 100) : (vars[el.bind] ?? 0);
   return Math.max(0, Math.min(1, v / max));
+}
+
+
+function cssImageUrl(src) {
+  return 'url("' + String(src).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '")';
+}
+
+function imagePicker(ed, el) {
+  const url = h('input#studio-gui-image-url', { type: 'text', placeholder: 'Paste an image URL', value: el.src || '', title: 'https://… or a data image URL' });
+  const applyUrl = () => {
+    const src = String(url.value || '').trim();
+    if (src && !isSafeImageSrc(src)) { url.setCustomValidity('Use an http(s), data image, or blob URL'); url.reportValidity(); return; }
+    url.setCustomValidity('');
+    ed.updateGui(el.id, { src });
+    if (src) rememberTexture(ed.doc, src, el.name || 'Image');
+  };
+  url.addEventListener('change', applyUrl);
+  url.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); applyUrl(); } });
+  let extras = [];
+  try { extras = drafts.list().map((d) => ({ src: d.thumbnail, name: d.name || 'Saved game' })); } catch { extras = []; }
+  const images = collectProjectImages(ed.doc, extras);
+  const grid = h('div.st-gui-thumbs#studio-gui-image-picker',
+    images.length
+      ? images.map((im) => h('button.st-gui-thumb' + (el.src === im.src ? '.on' : ''), {
+          type: 'button',
+          title: im.label,
+          style: { backgroundImage: cssImageUrl(im.src) },
+          onclick: () => { ed.updateGui(el.id, { src: im.src }); rememberTexture(ed.doc, im.src, im.label); },
+        }))
+      : h('p.st-hint', 'No project images yet — paste a URL below.'));
+  return h('div.st-gui-image', h('p.st-hint', 'Choose a project image or paste a URL'), grid, h('label.st-gui-row', h('span', 'URL'), url));
 }
 
 function inspector(ed, el) {
@@ -66,6 +98,7 @@ function inspector(ed, el) {
     el.type === 'bar' || el.type === 'label' ? row('Bind', h('select', { onchange: (e) => set('bind', e.target.value || null) },
       [['', 'none'], ['health', 'health'], ['coins', 'coins'], ['points', 'points'], ['timer', 'timer']].map(([v, l]) => h('option', { value: v, selected: (el.bind || '') === v }, l)))) : null,
     el.type === 'button' ? h('div', h('p.st-hint', 'Button action (plain words)'), script) : null,
+    el.type === 'image' ? imagePicker(ed, el) : null,
   );
 }
 

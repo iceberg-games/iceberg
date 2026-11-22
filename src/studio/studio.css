@@ -151,6 +151,11 @@ body.studio-active #hud, body.studio-active .help, body.studio-active #back-to-e
 .st-gui-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin: 4px 0; font-size: 12px; }
 .st-gui-row input, .st-gui-row select { width: 120px; }
 .st-gui-inspect textarea { width: 100%; margin-top: 4px; }
+.st-gui-thumbs { display: flex; flex-wrap: wrap; gap: 6px; max-height: 112px; overflow: auto; margin: 4px 0 6px; }
+.st-gui-thumb { width: 48px; height: 48px; padding: 0; border-radius: 6px; border: 2px solid #3a414b; background: #11161c center/cover no-repeat; cursor: pointer; }
+.st-gui-thumb.on { border-color: #f5c542; }
+.st-gui-image .st-gui-row { flex-direction: column; align-items: stretch; }
+.st-gui-image .st-gui-row input { width: 100%; }
 .rt-gui { position: absolute; inset: 0 0 110px 0; pointer-events: none !important; z-index: 13; }
 .rt-gui-el { pointer-events: none; }
 .rt-gui-el.rt-gui-button { pointer-events: auto; border: 0; }

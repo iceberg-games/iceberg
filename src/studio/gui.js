@@ -200,3 +200,38 @@ export function mountPlayGui(host, doc, hooks) {
   refresh();
   return { root, refresh };
 }
+
+
+/** Allow http(s), data:image, and blob URLs only — never javascript: or relative paths that could run code. */
+export function isSafeImageSrc(src) {
+  const s = String(src || '').trim();
+  if (!s || s.length > 2_000_000) return false;
+  return /^(https?:\/\/|data:image\/[a-z0-9.+-]+;|blob:)/i.test(s);
+}
+
+/** Unique images already on this project: its thumbnail, remembered textures, and GUI image srcs. */
+export function collectProjectImages(doc, extras = []) {
+  const out = [];
+  const seen = new Set();
+  const add = (src, label) => {
+    const s = String(src || '').trim();
+    if (!isSafeImageSrc(s) || seen.has(s)) return;
+    seen.add(s);
+    out.push({ src: s, label: label || 'Image' });
+  };
+  if (doc?.thumbnail) add(doc.thumbnail, 'Game thumbnail');
+  for (const t of doc?.textures || []) add(t?.src || t, t?.name || 'Texture');
+  for (const el of doc?.gui || []) if (el && el.type === 'image' && el.src) add(el.src, el.name || 'GUI image');
+  for (const e of extras || []) add(e?.src || e?.thumbnail, e?.name || e?.label || 'Image');
+  return out;
+}
+
+/** Remember a pasted or picked URL on the project so the picker can offer it again. */
+export function rememberTexture(doc, src, name = 'Image') {
+  if (!doc || !isSafeImageSrc(src)) return false;
+  const s = String(src).trim();
+  doc.textures = doc.textures || [];
+  if (doc.textures.some((t) => (t?.src || t) === s)) return true;
+  doc.textures.push({ name: name || 'Image', src: s });
+  return true;
+}

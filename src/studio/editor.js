@@ -75,12 +75,12 @@ export async function createEditor(ctx, doc) {
   };
   // selectedId = the primary (last clicked) selection, kept for single-selection callers
   Object.defineProperty(ed, 'selectedId', { get: () => ed.selection[ed.selection.length - 1] || null, set: (id) => { ed.selection = id ? [id] : []; } });
-  doc.gui = doc.gui || []; st.snap = ed.snap; st.brush = ed.brush; buildGrid();
+  doc.gui = doc.gui || []; doc.textures = doc.textures || []; st.snap = ed.snap; st.brush = ed.brush; buildGrid();
   const changed = (what = 'doc') => bus.emit('studio:changed', what);
   const instById = (id) => doc.instances.find(i => i.id === id);
-  const snapshot = () => JSON.stringify({ instances: doc.instances, animations: doc.animations, terrain: doc.terrain || null, gui: doc.gui || [], firstPerson: !!doc.firstPerson });
+  const snapshot = () => JSON.stringify({ instances: doc.instances, animations: doc.animations, terrain: doc.terrain || null, gui: doc.gui || [], firstPerson: !!doc.firstPerson, textures: doc.textures || [] });
   ed.checkpoint = () => { st.undo.push(snapshot()); if (st.undo.length > 150) st.undo.shift(); st.redo = []; doc.updatedAt = Date.now(); };
-  const restore = (s) => { const o = JSON.parse(s); doc.instances = o.instances; doc.animations = o.animations || []; doc.terrain = o.terrain || undefined; if ('gui' in o) doc.gui = o.gui; if ('firstPerson' in o) doc.firstPerson = o.firstPerson; world.rebuildAll(doc.instances); world.setTerrain(doc.terrain); ed.selection = ed.selection.filter(instById); attach(); changed(); bus.emit('studio:changed', 'gui'); };
+  const restore = (s) => { const o = JSON.parse(s); doc.instances = o.instances; doc.animations = o.animations || []; doc.terrain = o.terrain || undefined; if ('gui' in o) doc.gui = o.gui; if ('firstPerson' in o) doc.firstPerson = o.firstPerson; if ('textures' in o) doc.textures = o.textures; world.rebuildAll(doc.instances); world.setTerrain(doc.terrain); ed.selection = ed.selection.filter(instById); attach(); changed(); bus.emit('studio:changed', 'gui'); };
   ed.undo = () => { if (!st.undo.length) return false; st.redo.push(snapshot()); restore(st.undo.pop()); return true; };
   ed.redo = () => { if (!st.redo.length) return false; st.undo.push(snapshot()); restore(st.redo.pop()); return true; };
   ed.canUndo = () => st.undo.length > 0; ed.canRedo = () => st.redo.length > 0;
