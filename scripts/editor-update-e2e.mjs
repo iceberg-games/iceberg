@@ -59,7 +59,7 @@ try {
   const cdp = await pw.newCDPSession(pp); await cdp.send('Page.enable');
   const inst = await cdp.send('Page.getInstallabilityErrors').catch(e => ({ installabilityErrors: [{ errorId: 'cdp-failed:' + e.message }] }));
   ok('Chrome installability check: no errors', inst.installabilityErrors.length === 0, JSON.stringify(inst.installabilityErrors));
-  const sw = await pp.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); return !!r; }); ok('service worker registered (existing sw.js, network-first navigation)', sw);
+  const sw = await pp.waitForFunction(async () => !!(await navigator.serviceWorker.getRegistration()), null, { timeout: 15000 }).then(() => true, () => false); ok('service worker registered (existing sw.js, network-first navigation)', sw);
   await pa.screenshot({ path: SHOTS + '/pc-home-signed-in.png' });
   ok('no page errors', [...A.errs, ...B.errs].length === 0, [...A.errs, ...B.errs].join(' | '));
 } catch (e) { ok('script ran without exceptions', false, e.message); }
