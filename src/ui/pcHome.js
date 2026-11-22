@@ -19,7 +19,7 @@ const initial = (s) => (String(s || '?').trim()[0] || '?').toUpperCase();
 function avatarFigure(menu) {
   const box = h('div.pc-avatar#pc-avatar');
   const draw = () => {
-    const url = avatarSnapshot(menu.avatar);
+    const url = avatarSnapshot(menu.avatar, menu.renderer);
     clear(box);
     if (url) box.append(h('img', { src: url, alt: 'Your avatar', draggable: false }));
     else { const m = menu.avatar?.mats || {}; const c = (k, d) => (m[k]?.color ? '#' + m[k].color.getHexString() : d); const b = (cls, col) => h('i.' + cls, { style: { background: col } });

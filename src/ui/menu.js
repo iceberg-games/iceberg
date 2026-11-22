@@ -17,8 +17,8 @@ import { listServerGames, unpublish, newGameId, mergeOwn, drafts, updateGameMeta
 import { getRemote } from '../net/session.js';
 
 export class Menu {
-  constructor(root, { economy, models, ui, avatar, onPlay, onEdit, onStart, onFriends }) {
-    Object.assign(this, { root, economy, models, ui, avatar, onPlay, onEdit, onStart, onFriends });
+  constructor(root, { economy, models, ui, avatar, renderer, onPlay, onEdit, onStart, onFriends }) {
+    Object.assign(this, { root, economy, models, ui, avatar, renderer, onPlay, onEdit, onStart, onFriends });
     this.el = h('div#menu.screen');
     root.append(this.el);
     bus.on('coins:changed', () => { const b = this.el.querySelector('.bucks-amount'); if (b) b.textContent = fmt(this.economy.coins); });

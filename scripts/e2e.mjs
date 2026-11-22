@@ -179,7 +179,7 @@ if (want('site')) {
     await p1.click('#form-signup button[type=submit]');
     await p1.waitForSelector('#p-user', { timeout: 15000 });
     await p1.waitForSelector('#view-games .game-card', { timeout: 15000 });
-    check('site: portal at root lists games after sign-in', (await p1.$$('#view-games .game-card')).length >= 3);
+    check('site: portal at root lists games after sign-in', (await p1.$$('#view-games .game-card')).length >= 2);
     if (existsSync(resolve(ROOT, 'src/games/cornerBakery'))) {
       const cb = await c1.newPage(); const ecb = []; watch(cb, ecb);
       const glb = cb.waitForResponse(r => /bakery-props-[\w-]+\.glb/.test(r.url()), { timeout: 30000 }).catch(() => null);

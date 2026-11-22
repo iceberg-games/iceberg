@@ -114,7 +114,7 @@ async function boot() {
   bus.on('economy:capped', (e) => { if (e.source !== 'build') ui.toast('Daily Birg Bucks limit reached for that. Come back tomorrow!', '⏰'); });
   addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') economy.resync().catch(() => {}); });
   const menu = new Menu(app, {
-    economy, models, ui, avatar, onPlay: play, onEdit: edit, onFriends: () => friends?.open(),
+    economy, models, ui, avatar, renderer: engine.renderer, onPlay: play, onEdit: edit, onFriends: () => friends?.open(),
     onStart: () => {
       music.unlock(); music.play('winter');
       const got = economy.claimDailyBonus();
