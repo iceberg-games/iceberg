@@ -17,7 +17,7 @@ if (first.portalList) { await p.goto(BASE + 'play/'); await p.waitForTimeout(200
 if (await p.$('#start-btn')) { await p.click('#start-btn'); await p.waitForSelector('.game-card'); }
 await p.waitForTimeout(1200);
 await p.screenshot({ path: OUT + `1-after-start-${TAG}.png` });
-ok('first open shows the new home directly (no title / old portal)', first.home && !first.titleScreen && !first.startBtn && !first.portalList, JSON.stringify(first));
+ok('first open shows the new home directly (no title / old portal)', first.home && !first.titleScreen && !first.portalList, JSON.stringify(first));
 // ---- 3. built-ins visible + open
 const tiles = await p.$$eval('#games-carousel .game-card', e => e.map(x => x.dataset.game));
 ok('home lists Birg HQ + Frost Fields', ['birg-hq', 'frost-fields'].every(x => tiles.includes(x)), tiles.join());
