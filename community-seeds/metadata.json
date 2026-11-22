@@ -10,8 +10,20 @@
       "creator": "gooberr478",
       "file": "suds-and-duds-laundromat.json",
       "thumbnail": "suds-and-duds-laundromat.png",
-      "instances": 526,
-      "bytes": 172670
+      "instances": 536,
+      "bytes": 175883
+    },
+    {
+      "slug": "midnight-at-maple-mall",
+      "gameId": "g_midnight_at_maple_mall",
+      "name": "Midnight at Maple Mall",
+      "description": "You fell asleep in the beanbag aisle and the mall locked up for the night! Explore the Toy Kingdom, Pet Paradise, Arcade, Cinema and Food Court, find 6 security keycards, hunt 20 lost coins and 3 secret golden ducks, then unlock the Loading Dock and escape before morning. An after-hours adventure by gooberr478.",
+      "tagline": "Adventure · Scavenger hunt",
+      "creator": "gooberr478",
+      "file": "midnight-at-maple-mall.json",
+      "thumbnail": "midnight-at-maple-mall.png",
+      "instances": 704,
+      "bytes": 206074
     }
   ]
 }

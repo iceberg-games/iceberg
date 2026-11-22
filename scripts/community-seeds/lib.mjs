@@ -81,7 +81,7 @@ export function createDoc({ id, name, description, sky = 'day', ground = 'basepl
       const inst = clone({ ...BASE, type, id: `i_${id.slice(2, 10)}_${(seq++).toString(36)}`, ...(PER[type] || {}), ...over });
       if (parent && !over.parent) inst.parent = parent;
       if (!over.id) delete over.id;
-      instances.push(inst); const k = inst.name.toLowerCase(); byName.set(k, (byName.get(k) || 0) + 1);
+      instances.push(inst); if (type !== 'group') { const k = inst.name.toLowerCase(); byName.set(k, (byName.get(k) || 0) + 1); }
       return inst;
     },
     /** center position + full size, like the Studio gizmo uses */
@@ -97,9 +97,9 @@ export function createDoc({ id, name, description, sky = 'day', ground = 'basepl
     zone(name, pos, size, scripts) { return d.add('part', { name, shape: 'box', pos, size, color: '#ffffff', transparency: 1, collide: false, scripts }); },
     coin(pos, value = 1, name = 'Coin') { return d.add('coin', { pos, value, name }); },
     group(name, fn) { const g = d.add('group', { name }); const prev = parent; parent = g.id; const start = instances.length; fn(g); parent = prev; const kids = instances.slice(start).filter(i => i.parent === g.id && i.type !== 'group'); if (kids.length) { const c = [0, 1, 2].map(a => kids.reduce((s, k) => s + k.pos[a], 0) / kids.length); g.pos = c.map(v => Math.round(v * 100) / 100); } return g; },
-    byName: (n) => instances.find(i => i.name.toLowerCase() === String(n).toLowerCase()),
+    byName: (n) => instances.find(i => i.type !== 'group' && i.name.toLowerCase() === String(n).toLowerCase()) || instances.find(i => i.name.toLowerCase() === String(n).toLowerCase()),
     count: (n) => byName.get(String(n).toLowerCase()) || 0,
-    build({ thumbnail } = {}) {
+    build({ thumbnail, flipZ = false } = {}) {
       // validate every script program + every referenced part name
       const problems = []; const has = (n) => d.count(n) > 0;
       for (const i of instances) for (const s of i.scripts || []) {
@@ -112,6 +112,7 @@ export function createDoc({ id, name, description, sky = 'day', ground = 'basepl
       }
       const dupTargets = new Set(); for (const i of instances) for (const s of i.scripts || []) for (const r of s.program.rules || []) for (const a of [...(r.actions || []), ...(r.else || [])]) if (a.target && d.count(a.target) > 1) dupTargets.add(a.target);
       if (dupTargets.size) problems.push(`targets with duplicate names: ${[...dupTargets].join(', ')}`);
+      if (flipZ) for (const i of instances) { i.pos[2] = -i.pos[2] || 0; i.pos = i.pos.map(v => (v === 0 ? 0 : v)); for (const s of i.scripts || []) { for (const c of s.program.continuous || []) { if (c.type === 'move' && c.axis === 'z') c.distance = -c.distance; if (c.type === 'path') c.points = c.points.map(p => (Array.isArray(p) ? [p[0], p[1], -p[2]] : p)); } for (const r of s.program.rules || []) for (const a of [...(r.actions || []), ...(r.else || [])]) { if (Array.isArray(a.offset)) a.offset = [a.offset[0], a.offset[1], -a.offset[2]]; if (Array.isArray(a.to)) a.to = [a.to[0], a.to[1], -a.to[2]]; } } }
       const now = 1763700000000; // fixed so the seed JSON is reproducible
       const doc = { id, version: 2, name, description, music, snow, mobile, starterGears: [], animations: [], sky, ground, template: 'blank', author, createdAt: now, updatedAt: now, instances };
       if (thumbnail) doc.thumbnail = thumbnail;

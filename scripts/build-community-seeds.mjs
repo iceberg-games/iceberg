@@ -15,7 +15,7 @@ for (const g of games) {
   const { meta } = g; const b = g.build();
   const tp = path.join(out, `${meta.slug}.thumb.jpg`);
   const thumbnail = fs.existsSync(tp) ? `data:image/jpeg;base64,${fs.readFileSync(tp).toString('base64')}` : undefined;
-  const { doc, problems } = b.build({ thumbnail });
+  const { doc, problems } = b.build({ thumbnail, flipZ: !!meta.flipZ });
   if (problems.length) { console.error(`✗ ${meta.slug}:\n  ${problems.join('\n  ')}`); process.exitCode = 1; continue; }
   const json = JSON.stringify(doc);
   fs.writeFileSync(path.join(out, `${meta.slug}.json`), json);

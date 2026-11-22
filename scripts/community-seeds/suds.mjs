@@ -9,6 +9,7 @@ export const meta = {
   name: 'Suds & Duds Laundromat',
   description: 'Run the corner laundromat! Click the sorting table to wash loads, then step on glowing pads to buy washers, dryers, a vending machine and more. Knock down the wall to expand into the Dry-Cleaning Wing and light up the Grand Reopening sign. A cozy tycoon by gooberr478.',
   tagline: 'Tycoon · Clicker',
+  flipZ: true,   // authored with the street at +z; mirrored so the player spawns facing the machines
 };
 
 const T = { teal: '#2bb5a0', tealD: '#1f8c7c', cream: '#fff4e0', navy: '#1d3a6e', yellow: '#ffd34d', pink: '#ff7ac8', white: '#f2f5f7', steel: '#c9d1d9', red: '#e2474b', blue: '#3f8fd0', orange: '#ff8c2a', green: '#3ddc84', wood: '#9a6b43', brick: '#b5533c' };
@@ -123,18 +124,18 @@ export function build() {
   for (const [i, x, col] of [[1, -17, T.pink], [2, -9, T.yellow], [3, 0, T.blue], [4, 9, T.orange], [5, 17, T.green]]) d.box(`Poster ${i}`, [x, 6.2, -14.4], [3.4, 2.6, 0.1], col, { collide: false });
   d.box('Clock Face', [0, 7.6, -14.4], [2.2, 2.2, 0.15], '#ffffff', { collide: false });
   d.box('Clock Hand', [0, 7.9, -14.3], [0.15, 1.0, 0.1], '#22262e', { collide: false, scripts: [] });
-  for (const [x, z] of [[-14, 8], [-2, 11]]) d.group('Hamper', () => { d.box('Hamper Body', [x, FLOOR + 1.3, z], [2.2, 2.6, 2.2], '#d9b382'); d.box('Hamper Clothes', [x, FLOOR + 2.8, z], [1.9, 0.6, 1.9], T.pink); });
+  for (const [x, z] of [[-19, 6], [-2, 11.5]]) d.group('Hamper', () => { d.box('Hamper Body', [x, FLOOR + 1.3, z], [2.2, 2.6, 2.2], '#d9b382'); d.box('Hamper Clothes', [x, FLOOR + 2.8, z], [1.9, 0.6, 1.9], T.pink); });
 
   // ================= CLICK STATION: the Sorting Table =================
   d.group('Sorting Station', () => {
     d.box('Sorting Table', [-10, FLOOR + 0.9, 0], [8, 1.8, 3.6], '#ffffff', {
       material: 'plastic',
       scripts: [script('Wash a load (click!)', program([
-        R.press([A.add('cash', 1), A.add('earned', 1), A.sound('coin')]),
-        R.press([A.add('cash', 2), A.add('earned', 2)], { if: IF('skill', '>=', 1) }),
-        R.press([A.add('cash', 4), A.add('earned', 4)], { if: IF('skill', '>=', 2) }),
-        R.press([A.add('cash', 8), A.add('earned', 8)], { if: IF('skill', '>=', 3) }),
-        R.press([A.add('cash', 16), A.add('earned', 16)], { if: IF('skill', '>=', 4) }),
+        R.press([A.add('cash', 1), A.add('points', 1), A.sound('coin')]),
+        R.press([A.add('cash', 2), A.add('points', 2)], { if: IF('skill', '>=', 1) }),
+        R.press([A.add('cash', 4), A.add('points', 4)], { if: IF('skill', '>=', 2) }),
+        R.press([A.add('cash', 8), A.add('points', 8)], { if: IF('skill', '>=', 3) }),
+        R.press([A.add('cash', 16), A.add('points', 16)], { if: IF('skill', '>=', 4) }),
       ]))],
     });
     d.box('Table Trim', [-10, FLOOR + 1.85, 0], [8.2, 0.2, 3.8], T.teal, { collide: false });
@@ -226,6 +227,9 @@ export function build() {
     for (let i = -5; i <= 5; i++) d.ball(`Balloon ${i + 5}`, [i * 2.2, 13.5 + (i % 2) * 0.8, 17.6], 1.5, [T.red, T.blue, T.yellow, T.green, T.pink][Math.abs(i) % 5], { collide: false });
   }); return d.instances.filter(i => i.parent === g.id).map(i => i.name); })());
 
+  // blueprint plots show where each future machine will stand (hidden when it is bought)
+  const PLOTS = { 'Pad Washer 1': [-15, -12, 4.8, 4], 'Pad Washer 2': [-10, -12, 4.8, 4], 'Pad Dryer 1': [5, -12, 4.8, 4], 'Pad Washer 3': [-5, -12, 4.8, 4], 'Pad Dryer 2': [10, -12, 4.8, 4], 'Pad Vending': [16.5, -12.4, 4, 3.4], 'Pad Press': [26, -11, 6, 4.2], 'Pad Robot': [35, -11.5, 6.4, 4.4], 'Pad Arcade': [28.5, 10.5, 11, 3.4], 'Pad Coffee': [41, 6, 3.8, 10.8] };
+  for (const [k, [x, z, w, dd]] of Object.entries(PLOTS)) d.box(`Plot ${k.slice(4)}`, [x, FLOOR + 0.03, z], [w, 0.06, dd], '#a8d3ec', { collide: false });
   // ================= BUY PADS =================
   // chain A (machines & expansion): each purchase raises `level`; chain B (skills): raises `skill`.
   const pad = (nm, x, z, cost, label, reveal, next, okMsg, extra = []) => {
@@ -254,6 +258,7 @@ export function build() {
   chainA.forEach((a, i) => {
     const next = i + 1 < chainA.length ? chainA[i + 1][0] : 'Pad Grand';
     const extra = [];
+    if (PLOTS[a[0]]) extra.push(A.hide(`Plot ${a[0].slice(4)}`));
     if (a[0] === 'Pad Expand') { extra.push(...PARTITION.map(n => A.hide(n)), A.fx('explosion', 'Partition B', 1.2), A.sound('boom'), A.fx('smoke', 'Partition A', 2)); }
     pad(a[0], a[1], a[2], a[3], a[4], a[5], next, a[6], extra.concat(a[7] || []).filter(x => x !== 'noIncome'));
   });
@@ -279,8 +284,8 @@ export function build() {
 
   // ================= SHOP MANAGER (controller: setup, passive income, milestones) =================
   const incomePerTick = [1, 3, 6, 12, 24, 48, 0, 96, 192, 384, 768];   // level k => +income (level 7 is the expansion)
-  const incomeRules = incomePerTick.map((inc, i) => inc && R.every(2, [A.add('cash', inc), A.add('earned', inc)], { if: IF('level', '>=', i + 1) })).filter(Boolean);
-  const ms = (n, text, fx = 'sparkles') => R.reach('earned', '>=', n, [A.sound('chime'), A.say(text), A.fx(fx, 'Cash Register', 1.5)], { once: true });
+  const incomeRules = incomePerTick.map((inc, i) => inc && R.every(2, [A.add('cash', inc), A.add('points', inc)], { if: IF('level', '>=', i + 1) })).filter(Boolean);
+  const ms = (n, text, fx = 'sparkles') => R.reach('points', '>=', n, [A.sound('chime'), A.say(text), A.fx(fx, 'Cash Register', 1.5)], { once: true });
   d.zone('Shop Manager', [0, 1, 0], [1, 1, 1], [
     script('Setup', program([R.start([...[...new Set(hidden)].map((n) => A.hide(n)), A.board(true), A.wait(1.2),
       A.say('🧺 Welcome to Suds & Duds! Click the white Sorting Table (or tap it) to wash a load and earn cash.'), A.wait(5),
@@ -294,6 +299,6 @@ export function build() {
     ])),
   ]);
   // spawn: just inside the door, facing the machines
-  d.add('spawn', { pos: [0, FLOOR + 0.2, 10], size: [4, 0.4, 4], color: T.navy, transparency: 0, name: 'SpawnLocation' });
+  d.add('spawn', { pos: [0, FLOOR + 0.2, 4], size: [4, 0.4, 4], color: T.navy, transparency: 0, name: 'SpawnLocation' });
   return d;
 }
