@@ -1,4 +1,4 @@
-// In-game HUD + drawers (Shop, Locker, Get Birg Bucks, Models, Help).
+// In-game HUD + drawers (Catalog, Locker, Get Birg Bucks, Models, Help).
 import { h, clear } from './dom.js';
 import { toast as showToast, confirmModal } from './overlay.js';
 import { playUi } from '../audio/uiSounds.js';
@@ -63,7 +63,7 @@ export class UI {
       h('div.bottombar',
         btn('btn-home', '🏠', 'Games', null, () => this.onHome()),
         this.buildBtn,
-        btn('btn-shop', '🛍️', 'Shop', 'T', () => this.openDrawer('shop')),
+        btn('btn-shop', '🛍️', 'Catalog', 'T', () => this.openDrawer('shop')),
         btn('btn-locker', '🎒', 'Locker', 'L', () => this.openDrawer('locker')),
         btn('btn-store', '💎', 'Get BB', null, () => this.openDrawer('store')),
         btn('btn-models', '📦', 'Models', 'M', () => this.openDrawer('models')),
@@ -78,7 +78,7 @@ export class UI {
         h('li', 'Drag mouse — orbit camera · Scroll — zoom'),
         h('li', h('kbd', 'B'), ' — build mode (Frost Fields)'), h('li', 'Click — place block · ', h('kbd', 'Shift'), '+click or right-click — remove'),
         h('li', h('kbd', '1'), '–', h('kbd', '9'), ' — pick block'), h('li', h('kbd', 'F'), ' — fly with the Ice Rocket'),
-        h('li', h('kbd', 'T'), ' Shop · ', h('kbd', 'L'), ' Locker · ', h('kbd', 'M'), ' Models · ', h('kbd', 'Esc'), ' close')),
+        h('li', h('kbd', 'T'), ' Catalog · ', h('kbd', 'L'), ' Locker · ', h('kbd', 'M'), ' Models · ', h('kbd', 'Esc'), ' close')),
       h('p.muted', `Collect coins (+${REWARDS.coinPickup} BB), build (+${REWARDS.blockPlaced} BB/block, up to ${REWARDS.blockDailyCap}/day) and claim a daily bonus (+${REWARDS.dailyBonus} BB). Birg Bucks are play money.`),
       this._deviceRow(),
       h('button.btn', { onclick: () => this.toggleHelp(false) }, 'Got it'));
@@ -234,7 +234,7 @@ export class UI {
         h('div.price', owned ? (eq ? '✔ Equipped' : 'Owned') : c.earnOnly ? '🎁 Free event reward' : `${CURRENCY.icon} ${c.price.toLocaleString()} BB`),
         action);
     }));
-    return this._frame('🛍️ Cosmetics Shop', `You have ${fmt(e.coins)}`, tabs, cards);
+    return this._frame('🛍️ Cosmetics Catalog', `You have ${fmt(e.coins)}`, tabs, cards);
   }
   // ---------- earn-only event items (Natural Disasters) ----------
   // Uses Publisher's economy.getQuests / claimQuestReward when present; never grants client-side.
@@ -317,7 +317,7 @@ export class UI {
     const e = this.economy, p = e.profile;
     const owned = COSMETICS.filter(c => e.owns(c.id));
     const sections = [];
-    if (!owned.length) sections.push(h('div.empty', 'Your locker is empty. Visit the Shop to buy cosmetics with Birg Bucks!', h('br'), h('button.btn', { onclick: () => this.openDrawer('shop') }, 'Open Shop')));
+    if (!owned.length) sections.push(h('div.empty', 'Your locker is empty. Visit the Catalog to buy cosmetics with Birg Bucks!', h('br'), h('button.btn', { onclick: () => this.openDrawer('shop') }, 'Open Catalog')));
     const bySlot = {};
     owned.forEach(c => (bySlot[c.slot] ||= []).push(c));
     for (const [slot, items] of Object.entries(bySlot)) {

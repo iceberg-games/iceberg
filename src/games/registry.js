@@ -43,6 +43,16 @@ export const BUILTIN_GAMES = [
   lanternHollow,
   frostlings,
 ];
+
+// LISTING FLAG (Editor Update): built-in games are still registered (code, assets, data and play-by-link all keep
+// working via BUILTIN_GAMES / findGame) but only LISTED_GAMES appear on the Games menu and the portal.
+// To bring a game back on the list, delete its id from UNLISTED_IDS (one-line change). Empty the set to show all.
+export const UNLISTED_IDS = new Set([
+  'natural-disaster-survival', 'winterhaven', 'starfall-lake', 'sled-rush', 'knockout-floes', 'lumen-tag', 'rimebound',
+  'glacier-drift', 'snowball-siege', 'pengu-plaza', 'crystal-spire', 'lantern-hollow', 'frostlings', 'corner-bakery',
+  'snowcone-tycoon', 'giant-rainbow-obby',
+]);
+export const LISTED_GAMES = BUILTIN_GAMES.filter(g => !UNLISTED_IDS.has(g.id));
 export const CREATOR = creatorDef;
 
 export function allGames() {

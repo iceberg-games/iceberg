@@ -42,7 +42,7 @@ export const drafts = {
 export { newGameId } from './ids.js';
 
 const signedInRemote = () => { const r = getRemote(); return r && r.signedIn ? r : null; };
-const REASONS = { too_large: 'game is too big to publish (try fewer uploaded models)', id_taken: 'this game id belongs to another player; use Save As / re-import', limit_reached: 'you reached the published game limit', bad_name: 'game needs a name (1-40 characters)', bad_doc: 'game data is invalid', bad_id: 'game id is invalid', thumb_too_large: 'thumbnail image is too big' };
+const REASONS = { too_large: 'game is too big to publish (try fewer uploaded models)', id_taken: 'this game id belongs to another player; use Save As / re-import', limit_reached: 'you reached the published game limit', bad_name: 'game needs a name (1-40 characters)', bad_doc: 'game data is invalid', bad_id: 'game id is invalid', thumb_too_large: 'thumbnail image is too big', bad_description: 'description is too long (120 characters max)', bad_thumbnail: 'thumbnail must be a PNG, JPEG or WebP image' };
 
 /** Publish (signed-in only; guests get an error and keep their draft): local copy first (verified), then server. Returns { doc, remote }. Throws on failure. */
 export async function publish(doc) {
@@ -57,6 +57,31 @@ export async function publish(doc) {
   if (!r || r.ok !== true) throw new Error(`saved on this device, but the server refused: ${REASONS[r?.reason] || r?.reason || 'unknown error'}`);
   pub.serverId = r.id; backend.saveCustomGame(pub);
   return { doc: pub, remote: true, modelsLocalOnly: usesUploadedModels(pub) };
+}
+/** Owner-only: change a published game's name, description and thumbnail (not its world).
+ *  Signed in: calls update_custom_game_meta (migration 20261121000020, owner-checked on the server). If that RPC is not on the
+ *  backend yet, falls back to re-publishing the published copy with the new fields (same owner-checked publish path).
+ *  The local copy and any local/draft copy are updated too. Throws a readable Error on failure. Returns the updated doc. */
+export async function updateGameMeta(id, { name, description, thumbnail }) {
+  name = String(name || '').trim(); description = String(description || '').slice(0, 120);
+  if (name.length < 1 || name.length > 40) throw new Error('game needs a name (1-40 characters)');
+  const remote = signedInRemote();
+  if (!remote) throw new Error('sign in to edit your published game');
+  const local = backend.loadCustomGames().find(g => g.id === id);
+  const patch = { name, description, ...(thumbnail ? { thumbnail } : {}) };
+  let r;
+  try { r = await remote.updateCustomGameMeta(id, { name, description, thumbnail }); }
+  catch (e) {
+    if (!/PGRST202|42883|could not find the function|not found|404/i.test(`${e.code || ''} ${e.status || ''} ${e.message || ''}`)) throw new Error(`server error: ${e.message}`);
+    const base = local || (await getServerGame(id)); if (!base) throw new Error('game not found');
+    const res = await publish({ ...base, ...patch, updatedAt: base.updatedAt });
+    return res.doc;
+  }
+  if (!r || r.ok !== true) throw new Error(REASONS[r?.reason] || (r?.reason === 'not_found' ? 'only the owner can edit a published game' : r?.reason) || 'update failed');
+  if (local) backend.saveCustomGame({ ...local, ...patch });
+  const dr = drafts.get(id);
+  if (dr) { try { localStorage.setItem(KEY, JSON.stringify(read().map(d => d.id === id ? { ...d, ...patch } : d))); } catch { /* cache full */ } }
+  return { ...(local || {}), ...patch, id };
 }
 export const isPublished = (id) => backend.loadCustomGames().some(g => g.id === id);
 /** Unpublish: server soft-delete (row kept) when signed in, then remove the local list entry. The draft is kept. */

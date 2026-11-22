@@ -203,7 +203,7 @@ export class HuntMenu {
   celebrate(itemId) {
     const info = itemInfo(itemId);
     const conf = Array.from({ length: 40 }, (_, i) => `<s style="left:${(i * 37) % 100}%;background:${['#6fd8ff', '#ffc860', '#ffffff', '#7dffb0', '#b48cff'][i % 5]};animation-delay:${(i % 10) * 0.07}s"></s>`).join('');
-    this.cele.innerHTML = `${conf}<div class="c"><div class="ic">${esc(info.icon || '🎁')}</div><b>${esc(info.name || itemId)}</b><small>Added to your inventory! Equip it in the Avatar shop.</small></div>`;
+    this.cele.innerHTML = `${conf}<div class="c"><div class="ic">${esc(info.icon || '🎁')}</div><b>${esc(info.name || itemId)}</b><small>Added to your inventory! Equip it in the Avatar Catalog.</small></div>`;
     this.cele.classList.add('show'); this.sfx('big'); this.sfx('collected');
     clearTimeout(this._cT); this._cT = setTimeout(() => this.cele.classList.remove('show'), 3200);
   }

@@ -58,6 +58,7 @@ export class SupabaseBackend {
   // ---- custom (Studio) games; see supabase/migrations/20261031000017_custom_games.sql ----
   // Game docs only: never touches Birg Bucks / inventory.
   publishCustomGame(doc)           { return this.client.rpc('publish_custom_game', { p_game_key: doc.id, p_name: (doc.name || 'Untitled').slice(0, 40), p_doc: doc }); }
+  updateCustomGameMeta(gameKey, { name, description, thumbnail }) { return this.client.rpc('update_custom_game_meta', { p_game_key: gameKey, p_name: name, p_description: description ?? '', p_thumbnail: thumbnail || null }); }
   unpublishCustomGame(gameKey)     { return this.client.rpc('unpublish_custom_game', { p_game_key: gameKey }); }
   getPublishedGame(gameKey)        { return this.client.rpc('get_published_game', { p_game_key: gameKey }, { anon: !this.client.signedIn }); }
   saveCustomDraft(doc)             { return this.client.rpc('save_custom_draft', { p_game_key: doc.id, p_name: (doc.name || 'Untitled').slice(0, 40), p_doc: doc }); }
