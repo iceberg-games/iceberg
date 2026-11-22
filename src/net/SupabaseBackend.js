@@ -4,6 +4,7 @@
 // All methods return Promises. See docs/ECONOMY_API.md.
 import { SupabaseClient } from './supabaseClient.js';
 import { CONFIG } from './config.js';
+import { GAME_MODELS_BUCKET, publicObjectPath, publicObjectUrl } from '../game/modelAssets.js';
 
 export class SupabaseBackend {
   constructor(client) { this.client = client; this.remote = true; }
@@ -20,8 +21,18 @@ export class SupabaseBackend {
   earn(source, amount, reason, ref) { return this.client.rpc('game_earn', { p_source: source, p_amount: amount, p_reason: reason ?? null, p_ref: ref ?? null }); }
   spend(amount, reason, ref)       { return this.client.rpc('game_spend', { p_amount: amount, p_reason: reason ?? null, p_ref: ref ?? null }); }
   purchase(itemId)                 { return this.client.rpc('buy_cosmetic', { p_item_id: itemId }); }
-  saveLoadout({ equipped = null, rocketColors = null, cosmeticColors = null } = {}) {
-    return this.client.rpc('save_loadout', { p_equipped: equipped, p_rocket_colors: rocketColors, p_cosmetic_colors: cosmeticColors });
+  saveLoadout({ equipped = null, rocketColors = null, cosmeticColors = null, customWear } = {}) {
+    const args = { p_equipped: equipped, p_rocket_colors: rocketColors, p_cosmetic_colors: cosmeticColors };
+    const tryWear = customWear !== undefined && this._customWearRpc !== false;
+    if (tryWear) args.p_custom_wear = customWear;
+    return this.client.rpc('save_loadout', args).catch((e) => {
+      if (tryWear && (e.status === 404 || e.code === 'PGRST202' || /could not find.*save_loadout|function.*save_loadout/i.test(e.message || ''))) {
+        this._customWearRpc = false;   // live DB may not have migration 0020 yet
+        delete args.p_custom_wear;
+        return this.client.rpc('save_loadout', args);
+      }
+      throw e;
+    });
   }
   saveGameData(gameId, data)       { return this.client.rpc('save_game_data', { p_game_id: gameId, p_data: data }); }
   loadGameData(gameId)             { return this.client.rpc('load_game_data', { p_game_id: gameId }); }
@@ -64,6 +75,19 @@ export class SupabaseBackend {
   deleteCustomDraft(gameKey)       { return this.client.rpc('delete_custom_draft', { p_game_key: gameKey }); }
   listMyGames()                    { return this.client.rpc('list_my_games'); }
   listPublishedGames(limit = 60)   { return this.client.rpc('list_published_games', { p_limit: limit }, { anon: !this.client.signedIn }); }
+
+  // ---- published custom models (storage bucket game-models; see migration 0020) ----
+  gameModelUrl(userId, hash, format) {
+    return publicObjectUrl(this.client.url, userId, hash, format);
+  }
+  async uploadGameModel({ hash, format, data }) {
+    if (!this.signedIn || !this.userId) throw new Error('sign in to publish models');
+    const path = publicObjectPath(this.userId, hash, format);
+    if (!path) throw new Error('invalid model path');
+    const mime = format === 'gltf' ? 'model/gltf+json' : 'model/gltf-binary';
+    await this.client.uploadObject(GAME_MODELS_BUCKET, path, data, { contentType: mime, upsert: true });
+    return { url: this.client.publicObjectUrl(GAME_MODELS_BUCKET, path), userId: this.userId, path, hash, format };
+  }
 
   // ---- friends ----
   listFriends()                    { return this.client.rpc('list_friends'); }

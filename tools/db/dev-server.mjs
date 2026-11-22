@@ -44,10 +44,24 @@ export async function startDevServer({ port = PORT, dataDir = DATA, staticDir = 
       user: { id: u.id, email: u.email, user_metadata: u.raw_user_meta_data, role: 'authenticated' } };
   };
 
-  const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info, prefer',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' };
+  const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info, prefer, x-upsert, cache-control',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS' };
   const send = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json', ...cors }); res.end(body === undefined ? '' : JSON.stringify(body)); };
+  const objects = new Map();   // `${bucket}/${path}` -> Buffer  (game-models stub)
+  const OBJECT_MAX = 25 * 1024 * 1024;
+  const MODEL_OBJ_RE = /^game-models\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/([0-9a-f]{64})\.(glb|gltf)$/;
   const readBody = (req) => new Promise((ok, bad) => { let b = ''; req.on('data', c => { b += c; if (b.length > 1e6) req.destroy(); }); req.on('end', () => { try { ok(b ? JSON.parse(b) : {}); } catch (e) { bad(e); } }); });
+  const readRaw = (req, max = OBJECT_MAX) => new Promise((ok, bad) => {
+    const chunks = []; let n = 0;
+    req.on('data', c => { n += c.length; if (n > max) { req.destroy(); bad(Object.assign(new Error('too_large'), { code: '413' })); return; } chunks.push(c); });
+    req.on('end', () => ok(Buffer.concat(chunks, n)));
+    req.on('error', bad);
+  });
+  const objectKeyFrom = (pathname) => {
+    const pub = pathname.match(/^\/storage\/v1\/object\/public\/(.+)$/);
+    const auth = pathname.match(/^\/storage\/v1\/object\/(.+)$/);
+    return (pub ? pub[1] : auth ? auth[1] : '').replace(/^\/+/, '');
+  };
 
   const pgError = (res, e, uid) => {
     const code = e.code || null;
@@ -75,7 +89,8 @@ export async function startDevServer({ port = PORT, dataDir = DATA, staticDir = 
       if (req.method === 'OPTIONS') return send(res, 204);
       const url = new URL(req.url, 'http://x');
       if (url.pathname === '/health') return send(res, 200, { ok: true });
-      if (req.headers.apikey !== anonKey) return send(res, 401, { message: 'Invalid API key' });
+      const publicGet = (req.method === 'GET' || req.method === 'HEAD') && url.pathname.startsWith('/storage/v1/object/public/');
+      if (!publicGet && req.headers.apikey !== anonKey) return send(res, 401, { message: 'Invalid API key' });
       const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
       const tok = access.get(bearer);
       const uid = tok && tok.exp > Date.now() / 1000 ? tok.uid : null;
@@ -117,7 +132,36 @@ export async function startDevServer({ port = PORT, dataDir = DATA, staticDir = 
         try { return send(res, 200, await rpc(uid, m[1], await readBody(req))); }
         catch (e) { return pgError(res, e, uid); }
       }
-      return send(res, 404, { message: 'not found (dev stub implements /auth/v1 and /rest/v1/rpc only)' });
+      // Storage stub: same URL shape as hosted Supabase (`game-models` bucket).
+      if (url.pathname.startsWith('/storage/v1/object/')) {
+        const key = objectKeyFrom(url.pathname);
+        const parsed = MODEL_OBJ_RE.exec(key);
+        if (!parsed) return send(res, 400, { statusCode: '400', error: 'InvalidKey', message: 'invalid object path' });
+        if (req.method === 'GET' || req.method === 'HEAD') {
+          const buf = objects.get(key);
+          if (!buf) return send(res, 404, { statusCode: '404', error: 'not_found', message: 'Object not found' });
+          const mime = parsed[3] === 'gltf' ? 'model/gltf+json' : 'model/gltf-binary';
+          res.writeHead(200, { 'Content-Type': mime, 'Content-Length': buf.length, 'Cache-Control': 'public, max-age=31536000, immutable', ...cors });
+          return req.method === 'HEAD' ? res.end() : res.end(buf);
+        }
+        if ((req.method === 'POST' || req.method === 'PUT') && url.pathname.startsWith('/storage/v1/object/game-models/')) {
+          if (!uid) return send(res, 401, { statusCode: '401', error: 'unauthorized', message: 'Must be signed in' });
+          if (parsed[1] !== uid) return send(res, 403, { statusCode: '403', error: 'unauthorized', message: 'Can only upload under your user id' });
+          let buf;
+          try { buf = await readRaw(req); }
+          catch (e) { return send(res, e.code === '413' ? 413 : 400, { statusCode: String(e.code || 400), error: e.message }); }
+          objects.set(key, buf);
+          return send(res, 200, { Key: key, Id: key });
+        }
+        if (req.method === 'DELETE' && url.pathname.startsWith('/storage/v1/object/game-models/')) {
+          if (!uid) return send(res, 401, { statusCode: '401', error: 'unauthorized' });
+          if (parsed[1] !== uid) return send(res, 403, { statusCode: '403', error: 'unauthorized' });
+          objects.delete(key);
+          return send(res, 200, { message: 'deleted' });
+        }
+        return send(res, 405, { message: 'method not allowed' });
+      }
+      return send(res, 404, { message: 'not found (dev stub implements /auth/v1, /rest/v1/rpc and /storage/v1/object)' });
     } catch (e) { return send(res, 500, { message: String(e.message || e) }); }
   });
   const realtime = attachRealtime(server, { db, anonKey: ANON_KEY, uidForToken: (t) => { const a = access.get(t); return a && a.exp > Date.now() / 1000 ? a.uid : null; } });
@@ -126,7 +170,7 @@ export async function startDevServer({ port = PORT, dataDir = DATA, staticDir = 
   if (staticDir) staticServer = await serveStatic(resolve(staticDir), staticPort);
   if (!quiet) console.log(`[dev-backend] API http://localhost:${port} (anon key "${anonKey}", data ${dataDir || 'in-memory'})` +
     (staticServer ? `\n[dev-backend] site http://localhost:${staticPort}/` : ''));
-  return { db, server, staticServer, realtime, close: async () => { server.close(); staticServer?.close(); await db.close(); } };
+  return { db, server, staticServer, realtime, objects, close: async () => { server.close(); staticServer?.close(); await db.close(); } };
 }
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
