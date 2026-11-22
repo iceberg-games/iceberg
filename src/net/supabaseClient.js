@@ -96,9 +96,37 @@ export class SupabaseClient {
     }
     return this._refreshing;
   }
-  async signOut() {
-    try { if (this.signedIn) await this._req('/auth/v1/logout', { body: {} }); } catch { /* ignore */ }
-    this._store(null);
+  async signOut({ scope = 'local' } = {}) {
+    try {
+      if (this.signedIn) await this._req('/auth/v1/logout?scope=' + encodeURIComponent(scope || 'local'), { body: {} });
+    } catch { /* ignore */ }
+    if (scope !== 'others') this._store(null);
+  }
+  /** Change the signed-in user's password (GoTrue PUT /auth/v1/user). */
+  async updateUser({ password, data } = {}) {
+    await this.ensureFresh();
+    return this._req('/auth/v1/user', { method: 'PUT', body: { ...(password ? { password } : {}), ...(data ? { data } : {}) } });
+  }
+  async listFactors() {
+    await this.ensureFresh();
+    const r = await this._req('/auth/v1/factors', { method: 'GET' });
+    return r?.factors || r || [];
+  }
+  async enrollTotp(friendlyName = 'Iceberg') {
+    await this.ensureFresh();
+    return this._req('/auth/v1/factors', { body: { factor_type: 'totp', friendly_name: friendlyName } });
+  }
+  async challengeFactor(factorId) {
+    await this.ensureFresh();
+    return this._req(`/auth/v1/factors/${encodeURIComponent(factorId)}/challenge`, { body: {} });
+  }
+  async verifyFactor(factorId, { challengeId, code }) {
+    await this.ensureFresh();
+    return this._req(`/auth/v1/factors/${encodeURIComponent(factorId)}/verify`, { body: { challenge_id: challengeId, code } });
+  }
+  async unenrollFactor(factorId) {
+    await this.ensureFresh();
+    return this._req(`/auth/v1/factors/${encodeURIComponent(factorId)}`, { method: 'DELETE' });
   }
   async ensureFresh() {
     this._sync();
