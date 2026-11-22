@@ -7,7 +7,7 @@ import { gameThumb } from './thumbs.js';
 import { imageToThumb } from './imageThumb.js';
 import { fmt, CURRENCY } from '../core/currency.js';
 import { bus } from '../core/events.js';
-import { LISTED_GAMES, CREATOR } from '../games/registry.js';
+import { LISTED_GAMES, BUILTIN_GAMES, CREATOR } from '../games/registry.js';
 import { renderPcHome } from './pcHome.js';
 import { canPromptInstall, promptInstall, isInstalledApp, installInstructions, onInstallChange } from '../net/install.js';
 import { TEMPLATES, newGameDoc, customGameDef } from '../games/customGame.js';
@@ -56,7 +56,8 @@ export class Menu {
     // My published games that live on the server but not in this browser (made on another device, or seeded for my account,
     // e.g. the Studio copies of BIRG HQ / Frost Fields) are mine: they belong in Your Games with edit buttons, not in Community.
     if (myId) for (const g of this.serverGames || []) if (g.owner === myId && !localIds.has(g.id)) { custom.push({ ...g, ownerName: g.ownerName }); localIds.add(g.id); }
-    const community = (this.serverGames || []).filter(g => !localIds.has(g.id));
+    // Community = games real players published in Studio (list_published_games) only: never built-in team games.
+    const community = (this.serverGames || []).filter(g => !localIds.has(g.id) && !BUILTIN_GAMES.some(b => b.id === g.id));
     if (!isMobile()) { document.body.classList.add('pc-home-open'); this._custom = custom; clear(this.el).append(renderPcHome(this, { custom, community })); return; }
     document.body.classList.remove('pc-home-open');
     const card = (def, extra = null) => h('div.game-card', { 'data-game': def.id },

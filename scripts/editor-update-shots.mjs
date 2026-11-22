@@ -17,6 +17,7 @@ const fake = [['Lava Run', '#ff6b4a', '#f5b13d', 'zed'], ['Sky Obby', '#8b6cf0',
   ok('PC: friends empty card', /No friends yet\./.test(await p.textContent('#pc-friends-row')));
   await p.evaluate((f) => { const m = window.iceberg.menu; m.serverGames = f; m.serverError = null; m._serverLoading = true; m.showGames(); }, fake);
   await p.waitForSelector('#community-games .game-card');
+  ok('community rows hold no built-in games', await p.evaluate(() => [...document.querySelectorAll('#community-games .game-card,#community-recent .game-card')].every(c => !['birg-hq','frost-fields'].includes(c.dataset.game))));
   const secs = await p.$$eval('.pc-row-head h2', e => e.map(x => x.textContent));
   ok('PC: community rows above built-ins', secs[0] === 'Popular right now' && secs[1] === 'Recently added' && secs.indexOf('Iceberg games') > 1, secs.join(' | '));
   ok('PC: built-in list = HQ + Frost Fields only', JSON.stringify(await p.$$eval('#games-carousel .game-card', e => e.map(x => x.dataset.game).sort())) === JSON.stringify(['birg-hq', 'frost-fields']));
