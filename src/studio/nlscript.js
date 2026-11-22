@@ -127,6 +127,17 @@ const ACTIONS = [
   A('countdown', /\b(count ?down|countdown)\b|\btimer (?:of|for) -?\d/, (t) => ({ do: 'countdown', seconds: num((t.match(re(`${N}(?: seconds)?`)) || [])[1], 10) })),
   A('timer', /\b(?:start|begin|stop|end|pause|reset) (?:the |a )?(?:timer|stopwatch|clock)\b|\b(?:timer|stopwatch) (?:starts?|stops?)\b/, (t) => ({ do: 'timer', start: !/\b(stop|end|pause)/.test(t), reset: /\breset\b/.test(t) })),
   A('leaderboard', /\b(leaderboard|leader board|leaderstats|scoreboard|score board|high ?scores?)\b/, (t) => ({ do: 'leaderboard', show: !/\b(hide|remove)\b/.test(t) })),
+  A('firstPerson', /\b(?:toggle|switch(?:\s+to)?|enable|disable|use|go|turn\s+on|turn\s+off)\s+(?:the\s+)?first[ -]?person(?:\s+camera)?\b|\bfirst[ -]?person(?:\s+camera)?\s+(?:on|off|toggle)\b|\b(?:toggle|switch\s+to)\s+third[ -]?person\b/, (t) => {
+    const off = /\b(off|third[ -]?person|disable|turn off)\b/.test(t);
+    const tog = /\b(toggle|switch)\b/.test(t) && !/\b(on|off)\b/.test(t);
+    return { do: 'firstPerson', on: tog ? 'toggle' : !off };
+  }),
+  A('toggleGui', /\b(?:open|close|toggle|show|hide)\s+(?:the\s+)?(?:panel|menu|shop|gui|frame)\b/, (t) => {
+    const hide = /\b(close|hide)\b/.test(t);
+    const tog = /\b(toggle|open)\b/.test(t) && !hide;
+    const name = (t.match(/\b(?:panel|menu|shop|gui|frame)\s+called\s+([^,.]+)/i) || [])[1];
+    return { do: hide ? 'hideGui' : tog && !/\bopen\b/.test(t) ? 'toggleGui' : (/\bopen\b/.test(t) ? 'showGui' : 'toggleGui'), target: (name || '').trim() || null };
+  }),
   A('elevator', /\b(elevator|lift)\b/, (t) => elevatorActions(t)),
   A('door', /\b(open(?:s|ed)?|unlock(?:s)?|act(?:s)? (?:like|as) a door|like a door|close(?:s)?|shut(?:s)?|lock(?:s)?)\b/, (t) => {
     const close = /\b(close|closes|shut|shuts|lock|locks)\b/.test(t) && !/\b(open|unlock)/.test(t);
@@ -549,7 +560,7 @@ export function translate(text, ctx = {}) {
 }
 
 // ---------- validation (the sandbox boundary) ----------
-export const ACTION_TYPES = ['kill', 'damage', 'heal', 'color', 'hide', 'show', 'wait', 'points', 'bucks', 'setVar', 'addVar', 'multVar', 'message', 'sound', 'teleport', 'bounce', 'speed', 'jump', 'gravity', 'transparency', 'collide', 'glow', 'light', 'particles', 'door', 'checkpoint', 'win', 'animation', 'moveBy', 'moveTo', 'return', 'spin', 'stop', 'resume', 'fall', 'spawn', 'countdown', 'timer', 'leaderboard', 'random'];
+export const ACTION_TYPES = ['kill', 'damage', 'heal', 'color', 'hide', 'show', 'wait', 'points', 'bucks', 'setVar', 'addVar', 'multVar', 'message', 'sound', 'teleport', 'bounce', 'speed', 'jump', 'gravity', 'transparency', 'collide', 'glow', 'light', 'particles', 'door', 'checkpoint', 'win', 'animation', 'moveBy', 'moveTo', 'return', 'spin', 'stop', 'resume', 'fall', 'spawn', 'countdown', 'timer', 'leaderboard', 'random', 'firstPerson', 'toggleGui', 'showGui', 'hideGui'];
 export const TRIGGER_TYPES = ['start', 'touch', 'click', 'press', 'enter', 'leave', 'every', 'countdownEnd', 'death', 'reach'];
 const ALLOWED = new Set(ACTION_TYPES);
 const clamp = (v, a, b, d) => (typeof v === 'number' && isFinite(v) ? Math.min(b, Math.max(a, v)) : d);
@@ -645,6 +656,10 @@ function sayAction(a) {
     case 'door': return a.close ? `close ${a.target ? `the door named "${a.target}"` : 'this door'}` : `open ${a.target ? `the door named "${a.target}"` : 'like a door'}${a.style === 'slide' ? ' (slides up)' : ''}${a.seconds ? ` for ${secs(a.seconds)}, then close` : ' and keep it open'}`;
     case 'checkpoint': return 'save the player\'s progress here (checkpoint)';
     case 'win': return `tell the player they won ("${a.text}")`;
+    case 'firstPerson': return a.on === 'toggle' ? 'toggle first-person camera' : a.on ? 'turn on first-person camera' : 'turn off first-person camera';
+    case 'toggleGui': return a.target ? `toggle the GUI panel "${a.target}"` : 'toggle a GUI panel';
+    case 'showGui': return a.target ? `show the GUI panel "${a.target}"` : 'show a GUI panel';
+    case 'hideGui': return a.target ? `hide the GUI panel "${a.target}"` : 'hide a GUI panel';
     case 'animation': return `play the animation "${a.name}"${a.loop ? ' on repeat' : ''}`;
     case 'moveBy': return `move ${tgt(a)} ${dirWord(a.offset)} over ${secs(a.seconds)}`;
     case 'moveTo': return `move ${tgt(a)} to ${ptName(a.to)} over ${secs(a.seconds)}`;

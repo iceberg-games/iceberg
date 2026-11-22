@@ -16,6 +16,8 @@ import { upgradeDoc } from '../studio/templates.js';
 import { exportGameJSON, importGameJSON, downloadText } from '../core/share.js';
 import { isMobile, onDeviceChange } from '../core/device.js';
 import { TERRAIN_BRUSHES } from '../studio/terrain.js';
+import { attachStudioChat } from '../studio/chatPanel.js';
+import { attachStudioGui, refreshStudioGui } from '../studio/guiOverlay.js';
 
 /** One source of truth for Studio shortcuts: drives the ? cheat sheet, tooltips and the status bar. */
 export const HOTKEYS = [
@@ -51,7 +53,9 @@ export class CreatorPanel {
     if (!this.ed) return;
     if (what === 'animtime' || what === 'bonepose') { this.renderAnimator(true); return; }
     if (what === 'script') { this.renderScriptPreview(); this.renderLeft(); return; }
+    if (what === 'gui') { refreshStudioGui(); return; }
     this.renderRibbon(); this.renderLeft(); this.renderProps(); this.renderAnimator();
+    refreshStudioGui();
   }
   _onKey(e) {
     const ed = this.ed; if (!ed) return;
@@ -146,6 +150,8 @@ export class CreatorPanel {
       h('div.st-status', h('button.st-mini#hotkey-help-btn', { onclick: () => this.toggleHelp() }, '⌨️ Shortcuts (?)'), ' Right-drag look · WASD+Q/E fly · Shift/Ctrl+click add · drag empty = box select · 1–5 tools · G grid · Ctrl+C/X/V copy/cut/paste · Ctrl+D dup · Ctrl+G group · Ctrl+R rotate 90° · F focus · Ctrl+S save'),
     );
     this.renderRibbon(); this.renderLeft(); this.renderProps(); this.renderAnimator();
+    attachStudioChat(this.el, () => this);
+    attachStudioGui(this.el, () => this);
   }
 
   renderRibbon() {
@@ -160,7 +166,7 @@ export class CreatorPanel {
         h('div.st-row', snapSel('move', [0, 0.25, 0.5, 1, 2, 4], '🧲 Move'), snapSel('rot', [0, 5, 15, 45, 90], 'Rotate'),
           h('button.st-mini' + (ed.showGrid() ? '.on' : '') + '#grid-toggle', { onclick: () => ed.toggleGrid(), title: 'Show / hide the snap grid (G). Line spacing follows Move snap.' }, '▦ Grid'),
           h('button.st-mini#space-toggle', { onclick: () => ed.toggleSpace(), title: 'Move in world or local axes (Ctrl+L)' }, ed.space === 'world' ? '🌐 World' : '📐 Local'))),
-      ed.tool === 'terrain' ? this.terrainGroup() : null,
+      ...(ed.tool === 'terrain' ? [this.terrainGroup()] : []),
       h('div.st-group', h('div.st-gl', 'Insert'), h('div.st-row', ins('part', '🧱', 'Block', { shape: 'box' }), ins('part', '⚪', 'Sphere', { shape: 'sphere', size: [3, 3, 3], name: 'Sphere' }), ins('part', '🛢️', 'Cylinder', { shape: 'cylinder', size: [3, 2, 3], name: 'Cylinder' }), ins('part', '📐', 'Wedge', { shape: 'wedge', size: [4, 2, 4], name: 'Wedge' })),
         h('div.st-row', ins('spawn', '📍', 'Spawn'), ins('checkpoint', '🚩', 'Checkpoint'), ins('part', '🔥', 'Kill brick', { name: 'KillBrick', kill: true, material: 'lava', color: '#ff4a1c', size: [4, 1, 4] }), ins('coin', '🪙', 'Coin'))),
       h('div.st-group', h('div.st-gl', 'Edit'), h('div.st-row',
@@ -451,6 +457,7 @@ export class CreatorPanel {
       this.field('Music', h('select#music-pick', { onchange: set('music') }, MUSIC_THEMES.map(m => h('option', { value: m.id, selected: doc.music === m.id }, m.name)))),
       this.field('Snowfall', h('input#snow-toggle', { type: 'checkbox', checked: !!doc.snow, onchange: reload('snow') })),
       this.field('📱 Mobile-playable', h('input#mobile-toggle', { type: 'checkbox', checked: doc.mobile !== false, onchange: set('mobile') })),
+      this.field('First-person camera', h('input#first-person-toggle', { type: 'checkbox', checked: !!doc.firstPerson, onchange: set('firstPerson') })),
       h('h4', 'Starter gears'), h('p.st-hint', 'Every player starts with these.'),
       h('div', GEAR_LIST.map(g => h('label.st-check', h('input', { type: 'checkbox', 'data-starter': g.id, checked: (doc.starterGears || []).includes(g.id), onchange: (e) => { ed.checkpoint(); const s = new Set(doc.starterGears || []); e.target.checked ? s.add(g.id) : s.delete(g.id); doc.starterGears = [...s]; } }), ` ${g.icon} ${g.name}`))),
       h('h4', 'Terrain'), h('p.st-hint', doc.terrain ? 'Snow & ice terrain is on. Press 5 to sculpt.' : 'Press 5 (🏔️ Terrain) and drag on the ground to raise snowy hills; Shift+drag digs, Ctrl+drag smooths.'),
