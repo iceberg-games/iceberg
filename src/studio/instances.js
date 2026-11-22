@@ -143,7 +143,12 @@ export function buildObject(inst, { models, editing }) {
       body = new THREE.Group();
       const obj = models?.instance(inst.modelId);
       if (obj) { body.add(obj); extra.model = obj; const b = new THREE.Box3().setFromObject(obj); hullOffset = b; if (obj.userData.isRig || obj.userData.clips?.length) extra.rig = rigFromModel(obj) || null; }
-      else { const ph = new THREE.Mesh(GEO.box, new THREE.MeshStandardMaterial({ color: '#ff66cc', wireframe: true })); ph.position.y = 0.5; body.add(ph); hullOffset = new THREE.Box3(new THREE.Vector3(-.5, 0, -.5), new THREE.Vector3(.5, 1, .5)); }
+      else {
+        const loading = !!(models?.isLoading?.(inst.modelId) || (inst.modelId && (models?.pending?.has?.(inst.modelId))));
+        const ph = new THREE.Mesh(GEO.box, new THREE.MeshStandardMaterial({ color: loading ? '#8ecbff' : '#ff66cc', wireframe: true, transparent: true, opacity: 0.85 }));
+        ph.position.y = 0.5; ph.userData.placeholder = loading ? 'loading' : 'missing'; body.add(ph);
+        hullOffset = new THREE.Box3(new THREE.Vector3(-.5, 0, -.5), new THREE.Vector3(.5, 1, .5));
+      }
       body.scale.set(...inst.size);
       break;
     }

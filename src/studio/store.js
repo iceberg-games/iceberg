@@ -5,6 +5,7 @@
 import { backend } from '../backend/LocalBackend.js';
 import { getRemote } from '../net/session.js';
 import { bus } from '../core/events.js';
+import { attachModelAssets, collectModelIds } from '../game/modelAssets.js';
 const KEY = 'iceberg:v1:studioDrafts';
 const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } };
 export const drafts = {
@@ -44,19 +45,29 @@ export { newGameId } from './ids.js';
 const signedInRemote = () => { const r = getRemote(); return r && r.signedIn ? r : null; };
 const REASONS = { too_large: 'game is too big to publish (try fewer uploaded models)', id_taken: 'this game id belongs to another player; use Save As / re-import', limit_reached: 'you reached the published game limit', bad_name: 'game needs a name (1-40 characters)', bad_doc: 'game data is invalid', bad_id: 'game id is invalid', thumb_too_large: 'thumbnail image is too big' };
 
-/** Publish (signed-in only; guests get an error and keep their draft): local copy first (verified), then server. Returns { doc, remote }. Throws on failure. */
-export async function publish(doc) {
+/** Publish (signed-in only; guests get an error and keep their draft): local copy first (verified), then server. Returns { doc, remote }. Throws on failure.
+ *  Pass { library } so used glTF models are uploaded to Storage and listed on doc.modelAssets. */
+export async function publish(doc, { library } = {}) {
   if (!signedInRemote()) throw new Error('sign in to publish (your game is saved as a draft on this device)');
-  const pub = { ...doc, published: true, publishedAt: Date.now() };
+  const remote = signedInRemote();
+  let pub = { ...doc, published: true, publishedAt: Date.now() };
+  if (library && typeof remote.uploadGameModel === 'function') {
+    const attached = await attachModelAssets(pub, library, {
+      supabaseUrl: remote.client?.url,
+      upload: (rec) => remote.uploadGameModel(rec),
+    });
+    pub = { ...attached.doc, published: true, publishedAt: pub.publishedAt };
+  }
   backend.saveCustomGame(pub);
   if (!backend.loadCustomGames().some(g => g.id === pub.id && g.publishedAt === pub.publishedAt)) throw new Error('could not save on this device (storage full or private mode)');
-  const remote = signedInRemote();
   let r;
   try { r = await remote.publishCustomGame(pub); }
   catch (e) { throw new Error(`saved on this device, but the server publish failed: ${e.message}`); }
   if (!r || r.ok !== true) throw new Error(`saved on this device, but the server refused: ${REASONS[r?.reason] || r?.reason || 'unknown error'}`);
   pub.serverId = r.id; backend.saveCustomGame(pub);
-  return { doc: pub, remote: true, modelsLocalOnly: usesUploadedModels(pub) };
+  const have = new Set((pub.modelAssets || []).map(a => a.id));
+  const modelsLocalOnly = collectModelIds(pub).some(id => !have.has(id));
+  return { doc: pub, remote: true, modelsLocalOnly };
 }
 export const isPublished = (id) => backend.loadCustomGames().some(g => g.id === id);
 /** Unpublish: server soft-delete (row kept) when signed in, then remove the local list entry. The draft is kept. */
@@ -69,7 +80,7 @@ export async function unpublish(id) {
 const fromRow = (g) => ({ ...g.doc, id: g.game_key, name: g.name, serverId: g.id, owner: g.owner, ownerName: g.owner_name, publishedAt: Date.parse(g.published_at) || null, serverUpdatedAt: Date.parse(g.updated_at) || null, fromServer: true });
 /** One published game by id (play-by-link). null when not found / accounts off. */
 export async function getServerGame(id) { const r = getRemote(); if (!r) return null; const g = await r.getPublishedGame(id); return g ? fromRow(g) : null; }
-/** Uploaded 3D models live in this browser only; other players see a placeholder box. */
+/** True when the doc references an uploaded model. After a successful publish, missing entries in doc.modelAssets still only show locally. */
 export const usesUploadedModels = (doc) => [...(doc.models || []), ...(doc.instances || [])].some(m => m && m.modelId);
 /** Signed in: when the server copy of MY game is newer (or equal), it wins over the local copy. */
 export function mergeOwn(local, server, myId) {

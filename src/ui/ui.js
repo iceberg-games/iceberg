@@ -357,15 +357,15 @@ export class UI {
     if (!list.length) { box.append(h('p.muted', 'Upload a .glb/.gltf/.obj in Models to wear it on your avatar.')); return box; }
     const sel = h('select#wear-model', list.map(m => h('option', { value: m.id, selected: wear?.modelId === m.id }, m.name)));
     const w = wear || { modelId: list[0].id, bone: 'head', scale: 0.5, x: 0, y: 0.62, z: 0, rotY: 0 };
-    const apply = () => { modelPrefs.saveWear(w); this.avatar.updateCustomWear(w); };
+    const apply = () => { modelPrefs.saveWear(w); this.avatar.updateCustomWear(w); bus.emit('wear:changed', w); };
     const slider = (key, label, min, max, step) => h('label.slider', h('span', label), h('input', { type: 'range', min, max, step, value: w[key], 'data-key': key, oninput: (ev) => { w[key] = +ev.target.value; apply(); } }));
     const bone = h('select#wear-bone', ['head', 'torso', 'armR', 'armL'].map(b => h('option', { value: b, selected: w.bone === b }, { head: 'Head', torso: 'Back / torso', armR: 'Right hand', armL: 'Left hand' }[b])));
     bone.onchange = () => { w.bone = bone.value; apply(); };
     box.append(
       h('label.color-row', 'Model', sel), h('label.color-row', 'Attach to', bone),
       slider('scale', 'Size', 0.1, 2, 0.05), slider('x', 'Left/Right', -1.5, 1.5, 0.05), slider('y', 'Up/Down', -1.5, 1.5, 0.05), slider('z', 'Front/Back', -1.5, 1.5, 0.05), slider('rotY', 'Rotate', -3.14, 3.14, 0.05),
-      h('div.row', h('button.btn#wear-btn', { onclick: () => { w.modelId = sel.value; modelPrefs.saveWear(w); this.avatar.setCustomWear(this.models.instance(w.modelId), w); this.toast('Custom cosmetic equipped', '📦'); this.refreshDrawer(); } }, wear ? 'Update model' : 'Wear model'),
-        wear ? h('button.btn.secondary', { onclick: () => { modelPrefs.saveWear(null); this.avatar.setCustomWear(null); this.refreshDrawer(); } }, 'Take off') : null));
+      h('div.row', h('button.btn#wear-btn', { onclick: () => { w.modelId = sel.value; modelPrefs.saveWear(w); this.avatar.setCustomWear(this.models.instance(w.modelId), w); bus.emit('wear:changed', w); this.toast('Custom cosmetic equipped', '📦'); this.refreshDrawer(); } }, wear ? 'Update model' : 'Wear model'),
+        wear ? h('button.btn.secondary', { onclick: () => { modelPrefs.saveWear(null); this.avatar.setCustomWear(null); bus.emit('wear:changed', null); this.refreshDrawer(); } }, 'Take off') : null));
     return box;
   }
 
@@ -418,7 +418,7 @@ export class UI {
           } }, 'Place in world') : null,
           h('button.btn.small.wear-model', { onclick: () => {
             const w = { modelId: m.id, bone: 'head', scale: 0.5, x: 0, y: 0.62, z: 0, rotY: 0 };
-            modelPrefs.saveWear(w); this.avatar.setCustomWear(this.models.instance(m.id), w); this.openDrawer('locker');
+            modelPrefs.saveWear(w); this.avatar.setCustomWear(this.models.instance(m.id), w); bus.emit('wear:changed', w); this.openDrawer('locker');
           } }, 'Wear'),
           h('button.btn.small.secondary', { onclick: async () => { if (await confirmModal(`Delete ${m.name}?`, { title: 'Delete model?', okLabel: 'Delete', danger: true })) this.models.remove(m.id); } }, '🗑')))))
         : h('div.empty', 'No models yet.'),

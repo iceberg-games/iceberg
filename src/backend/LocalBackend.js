@@ -159,19 +159,24 @@ export const backend = new LocalBackend();
 // ---- IndexedDB store for uploaded 3D models (binary files are too big for localStorage) ----
 const DB_NAME = 'iceberg-models';
 const STORE = 'models';
+const ASSET_STORE = 'assets';
 function openDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => req.result.createObjectStore(STORE, { keyPath: 'id' });
+    const req = indexedDB.open(DB_NAME, 2);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id' });
+      if (!db.objectStoreNames.contains(ASSET_STORE)) db.createObjectStore(ASSET_STORE, { keyPath: 'hash' });
+    };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
-async function tx(mode, fn) {
+async function tx(storeName, mode, fn) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const t = db.transaction(STORE, mode);
-    const store = t.objectStore(STORE);
+    const t = db.transaction(storeName, mode);
+    const store = t.objectStore(storeName);
     const out = fn(store);
     t.oncomplete = () => resolve(out && 'result' in out ? out.result : undefined);
     t.onerror = () => reject(t.error);
@@ -179,9 +184,15 @@ async function tx(mode, fn) {
 }
 export const modelStore = {
   /** record: { id, name, format: 'glb'|'gltf'|'obj', data: ArrayBuffer|string, createdAt } */
-  put: (record) => tx('readwrite', s => s.put(record)),
-  getAll: () => tx('readonly', s => s.getAll()),
-  delete: (id) => tx('readwrite', s => s.delete(id)),
+  put: (record) => tx(STORE, 'readwrite', s => s.put(record)),
+  getAll: () => tx(STORE, 'readonly', s => s.getAll()),
+  delete: (id) => tx(STORE, 'readwrite', s => s.delete(id)),
+};
+/** Content-addressed cache of fetched published models (keyed by sha256 hex). */
+export const modelAssetCache = {
+  get: (hash) => tx(ASSET_STORE, 'readonly', s => s.get(hash)),
+  put: (record) => tx(ASSET_STORE, 'readwrite', s => s.put(record)),
+  delete: (hash) => tx(ASSET_STORE, 'readwrite', s => s.delete(hash)),
 };
 // Model placements / wear settings are small JSON -> localStorage
 export const modelPrefs = {

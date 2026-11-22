@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { buildObject } from './instances.js';
 import { buildTerrainMesh, updateTerrainMesh } from './terrain.js';
+import { bus } from '../core/events.js';
 
 export const SKIES = {
   day:    { name: 'Frosty Day',   top: '#7fb8e6', horizon: '#e9f5ff', sun: 1.6, hemi: 1.1, sunColor: '#fff8ee' },
@@ -78,15 +79,31 @@ export function buildEnvironment(scene, doc) {
 }
 
 export class StudioWorld {
-  constructor(scene, doc, { models, editing = false }) {
-    this.scene = scene; this.models = models; this.editing = editing;
+  constructor(scene, doc, { models, editing = false, onRebuilt = null }) {
+    this.scene = scene; this.models = models; this.editing = editing; this.onRebuilt = onRebuilt;
     this.env = buildEnvironment(scene, doc);
     this.group = new THREE.Group(); scene.add(this.group);
     this.entries = new Map();
     for (const inst of doc.instances || []) this.add(inst);
     this.time = 0;
     this.terrain = null; this.setTerrain(doc.terrain);
+    this._offReady = bus.on('models:ready', ({ id }) => this.swapLoadedModels(id));
   }
+  /** After a remote model finishes loading, replace any placeholder for that modelId. */
+  swapLoadedModels(modelId) {
+    if (!modelId || !this.models?.has(modelId)) return;
+    for (const e of [...this.entries.values()]) {
+      if (e.inst?.type !== 'model' || e.inst.modelId !== modelId || e.model) continue;
+      const pose = { p: e.root.position.clone(), r: e.root.rotation.clone(), s: e.root.scale.clone(), vis: e.root.visible };
+      const prev = e;
+      this.rebuild(e.inst);
+      const n = this.entries.get(e.inst.id);
+      if (!n) continue;
+      n.root.position.copy(pose.p); n.root.rotation.copy(pose.r); n.root.scale.copy(pose.s); n.root.visible = pose.vis;
+      try { this.onRebuilt?.(n, prev); } catch (err) { console.warn(err); }
+    }
+  }
+  dispose() { this._offReady?.(); this._offReady = null; }
   /** (re)build the snow/ice heightfield mesh; t = doc.terrain or null */
   setTerrain(t) {
     if (!t) { if (this.terrain) { this.scene.remove(this.terrain); this.terrain.geometry.dispose(); this.terrain = null; } return; }

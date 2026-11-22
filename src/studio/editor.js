@@ -39,6 +39,7 @@ class FlyCamera {
 export async function createEditor(ctx, doc) {
   const { engine, models } = ctx;
   const scene = new THREE.Scene();
+  if (doc.modelAssets?.length && models?.ensureAssets) models.ensureAssets(doc.modelAssets).catch((e) => console.warn('model assets', e));
   const world = new StudioWorld(scene, doc, { models, editing: true });
   const st = cache.get(doc.id) || { undo: [], redo: [], cam: null };
   cache.set(doc.id, st);
@@ -463,6 +464,6 @@ export async function createEditor(ctx, doc) {
     if (A.open) for (const e of world.entries.values()) e.rig?.mixer?.update(dt);
     if (!tc.dragging && boxes.children.length && (boxTimer += dt) > 0.25) { boxTimer = 0; drawBoxes(); }
   };
-  ed.dispose = () => { st.cam = cam.state(); marquee.remove(); painting = false; tc.detach(); tc.disconnect(); tc.getHelper().traverse(c => { c.geometry?.dispose(); c.material?.dispose?.(); }); }; // r169 tc.dispose() calls this.traverse (bug)
+  ed.dispose = () => { st.cam = cam.state(); marquee.remove(); painting = false; tc.detach(); tc.disconnect(); tc.getHelper().traverse(c => { c.geometry?.dispose(); c.material?.dispose?.(); }); world.dispose?.(); }; // r169 tc.dispose() calls this.traverse (bug)
   return ed;
 }

@@ -4,7 +4,7 @@ import { syncPlus } from './core/plus.js';
 import { isBanned, showBanned } from './net/ban.js';
 import './style.css';
 import './ui/iceSkin.css';
-import { backend, modelStore, modelPrefs } from './backend/LocalBackend.js';
+import { backend, modelStore, modelPrefs, modelAssetCache } from './backend/LocalBackend.js';
 import { Economy } from './core/economy.js';
 import { bindQuests } from './core/quests.js';
 import { getAudioListener, setAudioCamera } from './core/audio.js';
@@ -31,6 +31,7 @@ import { registerServiceWorker } from './net/pwa.js';
 import { mountGameChat } from './chat/gameChat.js';
 import { startPlaySession } from './net/gameStats.js';
 import { createMultiplayer } from './mp/multiplayer.js';
+import { publishWearRef } from './game/wearPublish.js';
 import { initUiSounds } from './audio/uiSounds.js';
 import { uiSoundOptions } from './audio/siteSounds.js';
 
@@ -49,7 +50,7 @@ async function boot() {
   await syncPlus(remote);                               // Iceberg Plus from the server (0015) before studio perks render
   const settings = modelPrefs.loadSettings();
   const music = new Music(settings, (s) => modelPrefs.saveSettings({ ...modelPrefs.loadSettings(), ...s }));
-  const models = new ModelLibrary(modelStore);
+  const models = new ModelLibrary(modelStore, { assetCache: modelAssetCache });
   await models.init();
 
   const avatar = new Avatar();
@@ -93,8 +94,20 @@ async function boot() {
   setAudioCamera(engine.camera);
   try { avatar.attachWindAudio?.(getAudioListener()); } catch (e) { console.warn('audio listener', e); }
   const mp = createMultiplayer({ engine, getRemote: () => remote, bubbles: gameChat.bubbles, me: () => me, getListener: getAudioListener,
-    localName: () => economy.profile.displayName || economy.profile.username || 'You' });
+    localName: () => economy.profile.displayName || economy.profile.username || 'You',
+    getCustomWear: () => economy.profile?.customWear || null });
   engine.mp = mp;                  // games: ctx.mp (engine ctx) / ctx.engine.mp / window.iceberg.mp (docs/MULTIPLAYER_API.md)
+
+  async function syncCustomWear(wear) {
+    try {
+      const ref = wear ? await publishWearRef({ wear, library: models, remote, supabaseUrl: remote?.client?.url }) : null;
+      if (economy.profile) economy.profile.customWear = ref;
+      economy.syncLoadoutNow?.();
+      mp.setCustomWear(ref);
+    } catch (e) { console.warn('publish custom wear', e); mp.setCustomWear(null); }
+  }
+  bus.on('wear:changed', (wear) => { syncCustomWear(wear); });
+  if (wear && models.has(wear.modelId)) syncCustomWear(wear);
   mp.onChatHint(() => gameChat.pollNow());
   addEventListener('pagehide', () => { mp.leave(); });
   bus.on('economy:rejected', (e) => ui.toast(e.action === 'buy' ? 'The server said no to that purchase; your Birg Bucks were refunded.' : 'Not enough Birg Bucks on the server.', '⚠️'));
