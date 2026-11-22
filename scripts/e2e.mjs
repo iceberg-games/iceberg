@@ -330,7 +330,7 @@ if (want('site')) {
     await p1.hover('#featured-banner .fb-title');
     check('featured: pauses on hover', await p1.evaluate(() => window.icebergPortal.banner.rotating === false && document.querySelector('#featured-banner').dataset.paused === 'true'));
     await p1.mouse.move(5, 5);
-    check('featured: auto-rotates when not hovered', await p1.evaluate(() => window.icebergPortal.banner.rotating === true));
+    check('featured: auto-rotates when not hovered (or a single slide: nothing to rotate)', await p1.evaluate(() => window.icebergPortal.banner.rotating === true || document.querySelectorAll('#featured-banner .fb-dot').length === 0));
     const [fbTab] = await Promise.all([c1.waitForEvent('page'), p1.click('#featured-banner .fb-play')]);
     await fbTab.waitForLoadState();
     check('featured: Play opens the game in a new tab', fbTab.url() === BASE + 'play/?game=birg-hq', fbTab.url());

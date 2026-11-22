@@ -23,6 +23,7 @@ export class Menu {
     root.append(this.el);
     bus.on('coins:changed', () => { const b = this.el.querySelector('.bucks-amount'); if (b) b.textContent = fmt(this.economy.coins); });
     bus.on('drafts:sync', (e) => this.ui?.toast(`Saved on this device; cloud save failed: ${e.message || 'unknown error'}`, '⚠️'));
+    for (const ev of ['inventory:changed', 'cosmetic:colors', 'profile:synced']) bus.on(ev, () => setTimeout(() => this._refreshAvatar?.(), 60));   // PC home avatar follows the loadout
     bus.on('games:changed', () => { if (this.mode === 'games') this.showGames(); });
     // Re-render on device change (mobile opens the simple Mobile Studio, computer the full Studio).
     onDeviceChange(() => { if (this.mode === 'games') this.showGames(); });

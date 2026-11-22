@@ -2,28 +2,36 @@
 // avatar + "Hello, <name>!" + Friends row, then horizontal rows of square game tiles. PC only (menu.js gates by device mode).
 import { h, clear } from './dom.js';
 import { gameThumb } from './thumbs.js';
+import { avatarSnapshot } from './avatarThumb.js';
 import { fmt, CURRENCY } from '../core/currency.js';
 import { groups } from '../core/groups.js';
 import { getRemote } from '../net/session.js';
 import './pcHome.css';
 
 const NAV = [
-  ['home', '🏠', 'Home'], ['profile', '👤', 'Profile', 'soon'], ['friends', '👥', 'Friends'], ['catalog', '🛍️', 'Catalog'],
+  ['home', '🏠', 'Home'], ['profile', '👤', 'Profile'], ['friends', '👥', 'Friends'], ['catalog', '🛍️', 'Catalog'],
   ['inventory', '🎒', 'Inventory'], ['avatar', '🧍', 'Avatar'], ['groups', '🫂', 'Groups'], ['settings', '⚙️', 'Settings'],
 ];
 const initial = (s) => (String(s || '?').trim()[0] || '?').toUpperCase();
 
-/** A little blocky avatar drawn from the player's real avatar colors (no extra WebGL context). */
-function avatarFigure(avatar) {
-  const m = avatar?.mats || {}; const c = (k, d) => (m[k]?.color ? '#' + m[k].color.getHexString() : d);
-  const skin = c('skin', '#f5cd30'), torso = c('torso', '#3d7bd9'), arms = c('arms', skin), legs = c('legs', '#4a9e4a');
-  const b = (cls, col) => h('i.' + cls, { style: { background: col } });
-  return h('div.pc-avatar#pc-avatar', b('head', skin), h('div.body', b('arm', arms), b('torso', torso), b('arm', arms)), h('div.legs', b('leg', legs), b('leg', legs)));
+/** The player's real avatar (current loadout + cosmetics) as a snapshot from the existing avatar renderer. Falls back to a plain block figure if WebGL is unavailable. */
+function avatarFigure(menu) {
+  const box = h('div.pc-avatar#pc-avatar');
+  const draw = () => {
+    const url = avatarSnapshot(menu.avatar);
+    clear(box);
+    if (url) box.append(h('img', { src: url, alt: 'Your avatar', draggable: false }));
+    else { const m = menu.avatar?.mats || {}; const c = (k, d) => (m[k]?.color ? '#' + m[k].color.getHexString() : d); const b = (cls, col) => h('i.' + cls, { style: { background: col } });
+      box.append(b('head', c('skin', '#f5cd30')), h('div.body', b('arm', c('arms', '#f5cd30')), b('torso', c('torso', '#3d7bd9')), b('arm', c('arms', '#f5cd30'))), h('div.legs', b('leg', c('legs', '#4a9e4a')), b('leg', c('legs', '#4a9e4a')))); }
+  };
+  draw(); menu._refreshAvatar = () => { if (box.isConnected) draw(); };
+  return box;
 }
 
 export function renderPcHome(menu, { custom, community }) {
   const { economy, ui } = menu;
-  const username = economy.profile.displayName || economy.profile.username || 'Player';
+  const signedIn = !!getRemote()?.signedIn;
+  const username = (signedIn ? economy.profile.username : (economy.profile.displayName || economy.profile.username)) || 'Player';   // signed in: the account username
   const state = { view: menu.pcView || 'home', q: '' };
   const countOf = (id) => (menu.gameStats || {})[id] || 0;
 
@@ -77,7 +85,7 @@ export function renderPcHome(menu, { custom, community }) {
 
   const homeView = () => { drawRows(); loadFriends();
     return h('div.pc-home-view',
-      h('div.pc-hero', avatarFigure(menu.avatar), h('div.pc-hello', h('h1', 'Hello, ', h('b', username), '!'), h('div.pc-friends', h('h3', 'Friends ', friendsCount), friendsRow))),
+      h('div.pc-hero', avatarFigure(menu), h('div.pc-hello', h('h1', 'Hello, ', h('b', username), '!'), h('div.pc-friends', h('h3', 'Friends ', friendsCount), friendsRow))),
       rowsEl, h('p.pc-foot', 'Your avatar, Birg Bucks and cosmetics carry across every game.')); };
   const groupsView = () => {
     const list = h('div#groups-list'); const msg = h('p.pc-msg#groups-msg', '');
@@ -95,16 +103,20 @@ export function renderPcHome(menu, { custom, community }) {
       msg, h('h3', 'My groups'), list);
   };
 
+  const profileView = () => { const pr = economy.profile; const remote = getRemote();
+    return h('div.pc-panel#pc-profile', h('div.pc-profile', avatarFigure(menu), h('div', h('h2', username), h('p', remote?.signedIn ? `@${pr.username}` : 'Guest (sign in on the Iceberg site to keep your progress)'),
+      h('dl', h('dt', 'Birg Bucks'), h('dd', fmt(economy.coins)), h('dt', 'Games made'), h('dd', String(custom.length)), h('dt', 'Cosmetics owned'), h('dd', String((pr.owned || []).length)))))); };
   const main = h('main.pc-main#pc-main');
   const bucks = h('button.bucks', { onclick: () => ui.openDrawer('store') }, h('span.bb-ico', CURRENCY.icon), h('span.bucks-amount', fmt(economy.coins)), h('span.plus', '+'));
   const search = h('input#pc-search', { type: 'search', placeholder: 'Search games or creators', autocomplete: 'off', 'aria-label': 'Search games',
     oninput: (e) => { state.q = e.target.value; if (state.view !== 'home') { state.view = 'home'; menu.pcView = 'home'; renderMain(); setActive(); } drawRows(); } });
   const top = h('div.pc-top', h('div.pc-search', search), bucks, h('button.pc-gear#pc-settings', { title: 'Settings', 'aria-label': 'Settings', onclick: () => menu.showSettings() }, '⚙️'));
-  const renderMain = () => { clear(main).append(top, state.view === 'groups' ? groupsView() : homeView()); if (state.q && state.view === 'home') search.value = state.q; };
+  const renderMain = () => { clear(main).append(top, state.view === 'groups' ? groupsView() : state.view === 'profile' ? profileView() : homeView()); if (state.q && state.view === 'home') search.value = state.q; };
 
   const act = {
     home: () => { state.view = 'home'; menu.pcView = 'home'; renderMain(); setActive(); },
     friends: () => menu.onFriends?.(), catalog: () => ui.openDrawer('shop'), inventory: () => ui.openDrawer('locker'), avatar: () => ui.openDrawer('locker'),
+    profile: () => { state.view = 'profile'; menu.pcView = 'profile'; renderMain(); setActive(); },
     groups: () => { state.view = 'groups'; menu.pcView = 'groups'; renderMain(); setActive(); }, settings: () => menu.showSettings(),
     studio: () => menu.openStudio(), create: () => menu.showCreateDialog(), download: () => menu.showInstall(),
   };

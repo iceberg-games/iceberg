@@ -135,7 +135,7 @@ export class UI {
     this.bucksEl.textContent = fmt(coins);
     if (delta > 0) {
       const pop = h('div.coin-pop', `+${delta.toLocaleString()} BB`); this.hud.append(pop); setTimeout(() => pop.remove(), 1100);
-      if (reason && reason !== 'Pickup' && reason !== 'Building') this.toast(`${reason}: +${delta.toLocaleString()} ${CURRENCY.name}`, '🧊');
+      if (reason && reason !== 'Pickup' && reason !== 'Building' && reason !== 'Daily bonus') this.toast(`${reason}: +${delta.toLocaleString()} ${CURRENCY.name}`, '🧊');
     }
     if (!this.palette.classList.contains('hidden')) this._updateReward();
     this.refreshDrawer();
