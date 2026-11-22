@@ -20,7 +20,7 @@ ok('unit: built-ins marked mobile', ['giant-rainbow-obby', 'birg-hq', 'frost-fie
 ok('unit: unmarked / retired built-in hidden', !isMobilePlayable({ id: 'rainbow-obby' }) && !isMobilePlayable({ id: 'some-new-game' }));
 ok('unit: game may declare mobile on its def', isMobilePlayable({ id: 'x', mobile: true }) && !isMobilePlayable({ id: 'frost-fields', mobile: false }));
 ok('unit: Studio games follow doc.mobile', isMobilePlayable({ id: 'g1', custom: true, doc: { mobile: true } }) && !isMobilePlayable({ id: 'g2', custom: true, doc: { mobile: false } }) && isMobilePlayable({ id: 'g3', custom: true, doc: {} }));
-const MOBILE_IDS = Object.keys(GAME_META).filter(id => GAME_META[id].mobile && !GAME_META[id].retired);
+const MOBILE_IDS = Object.keys(GAME_META).filter(id => GAME_META[id].mobile && !GAME_META[id].retired && ['birg-hq', 'frost-fields'].includes(id));   // only listed built-ins (registry UNLISTED_IDS)
 
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.svg': 'image/svg+xml' };
 const srv = createServer(async (q, r) => {
@@ -43,6 +43,7 @@ const DOC = { id: 'g_phone_test', version: 2, name: 'Phone Test', mobile: true, 
 try {
   for (const ph of PHONES) {
     const ctx = await b.newContext({ viewport: ph.viewport, deviceScaleFactor: ph.deviceScaleFactor, hasTouch: true, isMobile: true });
+    await ctx.addInitScript(() => { try { localStorage.setItem('iceberg:v1:allowMobile', '1'); } catch {} });
     await ctx.addInitScript((doc) => { try { localStorage.setItem('iceberg:v1:deviceMode', 'mobile'); if (!localStorage.getItem('iceberg:v1:customGames')) localStorage.setItem('iceberg:v1:customGames', JSON.stringify([doc])); } catch {} }, DOC);
     // featured list that also names a non-mobile game: the banner must skip it in Mobile mode
     await ctx.route('**/featured.json', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ featured: [{ gameId: 'rainbow-obby' }, ...MOBILE_IDS.map(gameId => ({ gameId }))] }) }));

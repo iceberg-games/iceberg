@@ -18,9 +18,11 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+// Editor Update: only these built-ins are listed (src/games/registry.js UNLISTED_IDS); the others still load by id.
+const LISTED = ['birg-hq', 'frost-fields'];
 // expected portal 'Newest' order: every non-retired game in src/data/gameMeta.js, newest publishedAt first
 const NEWEST_ORDER = Object.entries((await import(resolve(ROOT, 'src/data/gameMeta.js'))).GAME_META)
-  .filter(([, m]) => !m.retired && m.publishedAt).sort((a, b) => Date.parse(b[1].publishedAt) - Date.parse(a[1].publishedAt)).map(([id]) => id).join();
+  .filter(([id, m]) => !m.retired && m.publishedAt && LISTED.includes(id)).sort((a, b) => Date.parse(b[1].publishedAt) - Date.parse(a[1].publishedAt)).map(([id]) => id).join();
 // Parallel runs (other worktrees/agents) must not share the temp dir or ports: a second run used to
 // rmSync the first run's built site mid-test (-> waitForSelector timeouts). Each run takes a free slot.
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -82,8 +84,8 @@ if (want('game')) {
   await page.goto(file);
   await page.click('#start-btn'); await page.waitForSelector('.game-card');
   const cards = await page.$$eval('.game-card .gc-name', e => e.map(x => x.textContent));
-  check('game: menu lists built-in games', cards.length >= 4, JSON.stringify(cards));
-  const ids = await page.evaluate(() => [...document.querySelectorAll('.game-card')].map(c => c.dataset.game).filter(id => id && id !== 'creator'));
+  check('game: menu lists the listed built-in games (HQ + Frost Fields)', ['Frost Fields', 'BIRG HQ'].every(n => cards.includes(n)), JSON.stringify(cards));
+  const ids = Object.entries((await import(resolve(ROOT, 'src/data/gameMeta.js'))).GAME_META).filter(([, m]) => !m.retired).map(([id]) => id);   // listed AND unlisted built-ins must still load by id
   for (const id of ids) {
     const ok = await page.evaluate(async (id) => { try { await window.iceberg.play(id); return !!window.iceberg.engine.running; } catch (e) { return 'ERR ' + e.message; } }, id);
     await page.waitForTimeout(700);
@@ -156,7 +158,7 @@ if (want('site')) {
     p1.on('request', r => { if (BIGM.test(r.url()) && !/\/audio\/ui\//.test(r.url())) portalMedia.push(r.url()); });   // UI click sounds (audio/ui/) are the portal's own
     await p1.goto(BASE);
     await p1.waitForSelector('#view-games .game-card');
-    check('site: portal at root lists games', (await p1.$$('#view-games .game-card')).length >= 3);
+    check('site: portal at root lists games', (await p1.$$('#view-games .game-card')).length >= 2);
     const sw = await p1.evaluate(async () => { const r = await navigator.serviceWorker.ready; return r.scope; });
     check('pwa: service worker registered with sub-path scope', sw === BASE, sw);
     const man = await p1.evaluate(async () => { const l = document.querySelector('link[rel=manifest]'); const r = await fetch(l.href); const j = await r.json(); return { ok: r.ok, scope: j.scope, icons: j.icons.length, url: l.href }; });
@@ -324,9 +326,7 @@ if (want('site')) {
       const img = getComputedStyle(el.querySelector('.fb-img')).backgroundImage.match(/url\("?(.*?)"?\)/)[1];
       return { first: el.querySelector('.fb-slide').dataset.game, dots: el.querySelectorAll('.fb-dot').length, imgOk: (await fetch(img)).ok, title: el.querySelector('.fb-title').textContent };
     });
-    check('featured: banner shows Giant Rainbow Obby first, 2 dots, image loads', fb.first === 'giant-rainbow-obby' && fb.dots === 2 && fb.imgOk, JSON.stringify(fb));
-    await p1.click('#featured-banner .fb-next');
-    check('featured: arrow goes to BIRG HQ', (await p1.$eval('#featured-banner .fb-slide', e => e.dataset.game)) === 'birg-hq');
+    check('featured: banner shows BIRG HQ (Giant Rainbow Obby is unlisted), image loads', fb.first === 'birg-hq' && fb.imgOk, JSON.stringify(fb));
     await p1.hover('#featured-banner .fb-title');
     check('featured: pauses on hover', await p1.evaluate(() => window.icebergPortal.banner.rotating === false && document.querySelector('#featured-banner').dataset.paused === 'true'));
     await p1.mouse.move(5, 5);
@@ -349,7 +349,7 @@ if (want('site')) {
     const order = async (sort) => { await p1.click(`#games-sort button[data-sort="${sort}"]`); await p1.waitForTimeout(150); return p1.$$eval('#games-grid .game-card', e => e.map(x => x.dataset.game)); };
     const newest = await order('newest'), popular = await order('popular'), active = await order('active');
     check('tabs: Newest = publish date, newest first', newest.join() === NEWEST_ORDER, newest.join());
-    check('tabs: Most Popular = 7-day plays (deduped), ties by all-time then newest', popular[0] === 'birg-hq' && popular.indexOf('giant-rainbow-obby') < popular.indexOf('frost-fields'), popular.join());
+    check('tabs: Most Popular = 7-day plays (deduped), ties by all-time then newest', popular[0] === 'birg-hq', popular.join());
     check('tabs: Most Active Players = live heartbeats', active[0] === 'frost-fields' && /2 playing now/.test(await p1.$eval('#games-grid .game-card', e => e.textContent)), active.join());
     await p1.screenshot({ path: resolve(SHOTS, 'portal-featured-tabs.png') });
     check('portal: no page errors', e1.length === 0 && e2.length === 0, [...e1, ...e2].join(' | '));
@@ -376,7 +376,7 @@ if (want('site')) {
     await p.goto(`http://localhost:${WEB + 1}/iceberg/`);
     await p.evaluate(({ today, old }) => localStorage.setItem('iceberg:v1:playCounts', JSON.stringify({ 'frost-fields': { [today]: 3 }, 'birg-hq': { [old]: 50, [today]: 1 } })), { today, old });
     await p.reload(); await p.waitForSelector('#featured-banner .fb-slide'); await p.waitForSelector('#games-grid .game-card');
-    check('offline: featured banner from site featured.json', (await p.$eval('#featured-banner .fb-slide', e => e.dataset.game)) === 'giant-rainbow-obby');
+    check('offline: featured banner from site featured.json', (await p.$eval('#featured-banner .fb-slide', e => e.dataset.game)) === 'birg-hq');
     const ord = async (sort) => { await p.click(`#games-sort button[data-sort="${sort}"]`); await p.waitForTimeout(150); return p.$$eval('#games-grid .game-card', e => e.map(x => x.dataset.game)); };
     check('offline: Newest uses local publish dates', (await ord('newest')).join() === NEWEST_ORDER);
     const pop = await ord('popular');
@@ -753,7 +753,7 @@ if (want('portal')) {
     await c.close();
 
     // phone 375x667: square poster, fits the screen, no sideways scroll
-    [c, p] = await fresh({ viewport: { width: 375, height: 667 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }); await p.goto(BASE);
+    [c, p] = await fresh({ viewport: { width: 375, height: 667 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }); await c.addInitScript(() => { try { localStorage.setItem('iceberg:v1:allowMobile', '1'); } catch {} }); await p.goto(BASE);
     check('phone: event popup shown', await popupShown(p));
     const ph = await p.evaluate(async () => { const d = document.querySelector('#event-popup .ib-modal').getBoundingClientRect(); const img = document.querySelector('#event-popup img'); await img.decode().catch(() => {});
       const play = document.querySelector('#event-popup .ev-play').getBoundingClientRect();
@@ -844,7 +844,7 @@ if (want('portal')) {
     await c.close();
     // phones: fewer drops; reduced motion: static palette, no rain, no flashes
     await dev.db.exec(eventWindowSQL('natural_disasters', { start: 'now', days: 7 }));
-    [c, p] = await fresh({ viewport: { width: 375, height: 667 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 }, seen); await p.goto(BASE); await p.waitForSelector('#view-games .game-card'); await p.waitForTimeout(1000);
+    [c, p] = await fresh({ viewport: { width: 375, height: 667 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 }, seen); await c.addInitScript(() => { try { localStorage.setItem('iceberg:v1:allowMobile', '1'); } catch {} }); await p.goto(BASE); await p.waitForSelector('#view-games .game-card'); await p.waitForTimeout(1000);
     st = await stormState(p);
     const cw = await p.evaluate(() => document.querySelector('.storm-rain')?.width);
     check('storm theme: phone uses fewer raindrops + DPR capped at 1.5', st.cls && st.drops === 40 && cw === Math.round(375 * 1.5), JSON.stringify({ ...st, cw }));

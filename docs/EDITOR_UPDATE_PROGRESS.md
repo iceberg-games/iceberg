@@ -29,3 +29,11 @@ the set (one line). Empty the set to list everything.
 ## Migrations written (not applied)
 - `supabase/migrations/20261121000020_custom_game_meta.sql`: `update_custom_game_meta` RPC (owner-only name/description/thumbnail edit).
   Client falls back to re-publishing if the RPC is missing.
+
+## Event leftovers flag
+`src/games/registry.js`: `EVENT_QUESTS_ACTIVE = false` removes the Natural Disasters event quest wrappers (quest HUD + the five
+meteor shards in BIRG HQ + Frost Fields / Obby trackers). Code/assets under `src/games/_event/` are untouched; set it to `true` to restore.
+
+## Phone gate flag
+`src/core/mobileGate.js`: `MOBILE_BLOCKED = true` shows "Sorry, mobile is being fixed right now." on phones (existing mobile detection
++ small screen; PC browsers in narrow windows are not blocked). Phone layout code is untouched. `?allowMobile=1` bypasses it for tests.

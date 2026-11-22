@@ -1,6 +1,6 @@
 // TEMPORARY phone block (Editor Update): phones / touch-only devices see "Sorry, mobile is being fixed right now."
 // ALL phone code (Mobile Studio, touch controls, phone menu layout) stays in the repo behind this gate.
-// To re-enable phones, set MOBILE_BLOCKED = false (one flag). Testing escape hatch: add ?allowMobile=1 to the URL.
+// To re-enable phones, set MOBILE_BLOCKED = false (one flag). Testing escape hatch: ?allowMobile=1 in the URL, or localStorage iceberg:v1:allowMobile=1.
 import { detectDeviceMode } from './device.js';
 import './mobileGate.css';
 
@@ -10,7 +10,7 @@ export const MOBILE_BLOCKED = true;
 export function isBlockedMobile() {
   if (!MOBILE_BLOCKED) return false;
   try {
-    if (new URLSearchParams(location.search).get('allowMobile') === '1') return false;
+    if (new URLSearchParams(location.search).get('allowMobile') === '1' || localStorage.getItem('iceberg:v1:allowMobile') === '1') return false;
     if (detectDeviceMode() !== 'mobile') return false;        // existing detection (mobile UA / coarse-touch-only), never the saved picker choice
     const small = Math.min(screen.width || 9999, screen.height || 9999) <= 900 || Math.min(innerWidth, innerHeight) <= 600;
     return small;

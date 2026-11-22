@@ -52,6 +52,9 @@ export class Menu {
     const myId = getRemote()?.signedIn ? getRemote().userId : null;
     for (let i = 0; i < custom.length; i++) custom[i] = mergeOwn(custom[i], (this.serverGames || []).find(g => g.id === custom[i].id), myId);
     const localIds = new Set(custom.map(g => g.id));
+    // My published games that live on the server but not in this browser (made on another device, or seeded for my account,
+    // e.g. the Studio copies of BIRG HQ / Frost Fields) are mine: they belong in Your Games with edit buttons, not in Community.
+    if (myId) for (const g of this.serverGames || []) if (g.owner === myId && !localIds.has(g.id)) { custom.push({ ...g, ownerName: g.ownerName }); localIds.add(g.id); }
     const community = (this.serverGames || []).filter(g => !localIds.has(g.id));
     if (!isMobile()) { document.body.classList.add('pc-home-open'); this._custom = custom; clear(this.el).append(renderPcHome(this, { custom, community })); return; }
     document.body.classList.remove('pc-home-open');

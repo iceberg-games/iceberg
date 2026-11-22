@@ -23,10 +23,15 @@ import { withEventQuest, frostQuest, hqQuest, obbyQuest } from './_event/hooks.j
 import { creatorDef, customGameDef } from './customGame.js';
 import { backend } from '../backend/LocalBackend.js';
 
+// FIRST-EVENT LEFTOVERS (Editor Update): the Natural Disasters event quest wrappers (quest HUD, the five glowing meteor shards
+// in BIRG HQ, Frost Fields / Obby quest trackers). Off for now; all code and assets stay. Set to true to bring the event back.
+export const EVENT_QUESTS_ACTIVE = false;
+const evt = (def, ...quest) => (EVENT_QUESTS_ACTIVE ? withEventQuest(def, ...quest) : def);
+
 export const BUILTIN_GAMES = [
-  withEventQuest(frostFields, ...frostQuest),
-  withEventQuest(birgHQ, ...hqQuest),
-  withEventQuest(giantRainbowObby, ...obbyQuest),
+  evt(frostFields, ...frostQuest),
+  evt(birgHQ, ...hqQuest),
+  evt(giantRainbowObby, ...obbyQuest),
   cornerBakery,
   snowconeTycoon,
   naturalDisasterSurvival,

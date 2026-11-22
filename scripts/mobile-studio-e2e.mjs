@@ -21,6 +21,7 @@ const watch = (p) => { p.on('pageerror', e => errs.push('pageerror: ' + e.messag
 
 try {
   const ctx = await b.newContext({ viewport: { width: 375, height: 667 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+  await ctx.addInitScript(() => { try { localStorage.setItem('iceberg:v1:allowMobile', '1'); } catch {} });
   await ctx.addInitScript(() => { try { localStorage.setItem('iceberg:v1:deviceMode', 'mobile'); } catch {} });
   const p = await ctx.newPage(); watch(p);
   const cdp = await ctx.newCDPSession(p);

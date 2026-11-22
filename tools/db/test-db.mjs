@@ -819,6 +819,38 @@ await t('custom games: publish, public list, owner-only, soft delete', async () 
 });
 
 
+await t('custom games: update_custom_game_meta is owner-only and edits name/description/thumbnail', async () => {
+  const thumb = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==';
+  const doc = { id: 'g_meta1', name: 'Old', description: 'old', instances: [{ id: 'i1' }], thumbnail: 'custom' };
+  assert.equal((await rpc(db, A, 'publish_custom_game', { p_game_key: 'g_meta1', p_name: 'Old', p_doc: doc })).ok, true);
+  const r = await rpc(db, A, 'update_custom_game_meta', { p_game_key: 'g_meta1', p_name: ' New Name ', p_description: 'fresh words', p_thumbnail: thumb });
+  assert.equal(r.ok, true);
+  const g = await rpc(db, null, 'get_published_game', { p_game_key: 'g_meta1' });
+  assert.equal(g.name, 'New Name'); assert.equal(g.doc.name, 'New Name'); assert.equal(g.doc.description, 'fresh words'); assert.equal(g.doc.thumbnail, thumb);
+  assert.deepEqual(g.doc.instances, [{ id: 'i1' }]);   // the world is untouched
+  assert.equal((await rpc(db, B, 'update_custom_game_meta', { p_game_key: 'g_meta1', p_name: 'Hax', p_description: '', p_thumbnail: null })).ok, false);   // not the owner
+  assert.equal((await rpc(db, A, 'update_custom_game_meta', { p_game_key: 'g_meta1', p_name: '', p_description: '', p_thumbnail: null })).reason, 'bad_name');
+  assert.equal((await rpc(db, A, 'update_custom_game_meta', { p_game_key: 'g_meta1', p_name: 'x', p_description: 'y'.repeat(121), p_thumbnail: null })).reason, 'bad_description');
+  assert.equal((await rpc(db, A, 'update_custom_game_meta', { p_game_key: 'g_meta1', p_name: 'x', p_description: '', p_thumbnail: 'data:text/html;base64,AAAA' })).reason, 'bad_thumbnail');
+  assert.equal((await rpc(db, A, 'update_custom_game_meta', { p_game_key: 'g_meta1', p_name: 'x', p_description: '', p_thumbnail: 'data:image/png;base64,' + 'A'.repeat(400000) })).reason, 'thumb_too_large');
+  await denied(rpc(db, null, 'update_custom_game_meta', { p_game_key: 'g_meta1', p_name: 'x', p_description: '', p_thumbnail: null }));
+  assert.equal((await rpc(db, null, 'get_published_game', { p_game_key: 'g_meta1' })).name, 'New Name');   // failed edits changed nothing
+});
+
+await t('seed: Studio copies of BIRG HQ + Frost Fields go to gooberr478 (idempotent)', async () => {
+  const { readFileSync } = await import('node:fs');
+  const sql = readFileSync(resolve(ROOT, 'supabase/seeds/studio_copies_gooberr478.sql'), 'utf8');
+  const have = await su(db, `select id from public.profiles where username = 'gooberr478'`);
+  if (!have.length) { await db.exec(sql); assert.equal((await su(db, `select count(*)::int n from public.custom_games where game_key like '%_studio'`))[0].n, 0); }   // no such player: skipped with a notice
+  const G = have.length ? have[0].id : await createUser(db, { username: 'gooberr478' });
+  await db.exec(sql); await db.exec(sql);   // twice: the second run is a no-op
+  const rows = await su(db, `select game_key, owner, published from public.custom_games where game_key like '%_studio' order by game_key`);
+  assert.deepEqual(rows.map(r => r.game_key), ['g_birg_hq_studio', 'g_frost_fields_studio']);
+  assert.ok(rows.every(r => r.owner === G && r.published));
+  const list = await rpc(db, G, 'list_my_games', {}); assert.equal(list.filter(x => x.game_key.endsWith('_studio')).length, 2);
+});
+
+
 await db.close();
 for (const r of results) console.log(r[0], r[1], r[2] ? '\n     ' + r[2] : '');
 const failed = results.filter(r => r[0] === 'FAIL').length;
