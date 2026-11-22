@@ -1,7 +1,7 @@
 // Intent + apply tests for the offline Studio corner chat.
 // Run: node scripts/studio-chat-tests.mjs
 import { classifyIntent, EXAMPLE_PHRASES } from '../src/studio/chatIntent.js';
-import { planBuild, applyBuild } from '../src/studio/builder.js';
+import { planBuild, applyBuild, aabbOf, aabbsOverlap, nextFreeOrigin, originBeside } from '../src/studio/builder.js';
 import { handleChat, applyChat, sendChat } from '../src/studio/chat.js';
 import { buttonProgram, planGui, makeGuiElement } from '../src/studio/gui.js';
 import { translate } from '../src/studio/nlscript.js';
@@ -215,6 +215,24 @@ const cases = [
   ['planGui health bar binds health', () => {
     const p = planGui({ kind: 'gui', type: 'bar', bind: 'health', text: 'Health', anchor: 'top-left' });
     return p.elements[0].type === 'bar' && p.elements[0].bind === 'health';
+  }],
+  ['second house at the same preferred origin does not overlap the first', () => {
+    const a = planBuild(C('build a small house'), { origin: [0, 0, 0] });
+    const b = planBuild(C('build a small house'), { origin: [0, 0, 0], existing: a.instances });
+    return a.ok && b.ok && !aabbsOverlap(aabbOf(a.instances), aabbOf(b.instances), 0.4);
+  }],
+  ['a tower placed beside a house stays clear of it', () => {
+    const house = planBuild(C('build a small house'), { origin: [0, 0, 0] });
+    const tower = planBuild(C('make a tower 10 high'), { existing: house.instances, selection: house.instances });
+    return !aabbsOverlap(aabbOf(house.instances), aabbOf(tower.instances), 0.4);
+  }],
+  ['applyChat places a second build without overlapping', () => {
+    const ed = mockEditor([inst('spawn', { pos: [0, 0.2, 0] })]);
+    applyChat(ed, handleChat('build a small house'), { origin: [0, 0, 0] });
+    applyChat(ed, handleChat('make a tower 10 high'), { origin: [0, 0, 0] });
+    const tower = ed.doc.instances.filter((i) => /Tower/.test(i.name));
+    const house = ed.doc.instances.filter((i) => /House/.test(i.name));
+    return house.length && tower.length && !aabbsOverlap(aabbOf(house), aabbOf(tower), 0.4);
   }],
 ];
 

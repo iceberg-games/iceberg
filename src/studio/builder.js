@@ -159,6 +159,84 @@ const LABELS = {
   checkpoint: 'checkpoint', wall: 'wall', platform: 'platform', stairs: 'stairs',
 };
 
+
+/** Axis-aligned bounds of placed instances (groups skipped). */
+export function aabbOf(instances) {
+  let min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+  let any = false;
+  for (const i of instances || []) {
+    if (!i || i.type === 'group' || !i.pos || !i.size) continue;
+    any = true;
+    const [x, y, z] = i.pos, [sx, sy, sz] = i.size;
+    min = [Math.min(min[0], x - sx / 2), Math.min(min[1], y - sy / 2), Math.min(min[2], z - sz / 2)];
+    max = [Math.max(max[0], x + sx / 2), Math.max(max[1], y + sy / 2), Math.max(max[2], z + sz / 2)];
+  }
+  return any ? { min, max } : null;
+}
+
+export function aabbsOverlap(a, b, pad = 0.5) {
+  if (!a || !b) return false;
+  return a.min[0] < b.max[0] + pad && a.max[0] > b.min[0] - pad
+    && a.min[1] < b.max[1] + pad && a.max[1] > b.min[1] - pad
+    && a.min[2] < b.max[2] + pad && a.max[2] > b.min[2] - pad;
+}
+
+function shiftAabb(b, d) {
+  return { min: b.min.map((v, i) => v + d[i]), max: b.max.map((v, i) => v + d[i]) };
+}
+
+/** Origin that centers the local build on a world XZ point, sitting on y=0. */
+export function originAtPoint(local, point) {
+  const L = aabbOf(local);
+  if (!L || !point) return [0, 0, 0];
+  const cx = (L.min[0] + L.max[0]) / 2, cz = (L.min[2] + L.max[2]) / 2;
+  return [+(point[0] - cx).toFixed(3), 0, +(point[2] - cz).toFixed(3)];
+}
+
+/** Origin that parks the local build just beside a neighbor group (+X). */
+export function originBeside(local, neighbor, gap = 1.5) {
+  const L = aabbOf(local), N = aabbOf(neighbor);
+  if (!L || !N) return [0, 0, 0];
+  const cz = (N.min[2] + N.max[2]) / 2 - (L.min[2] + L.max[2]) / 2;
+  return [+(N.max[0] + gap - L.min[0]).toFixed(3), 0, +cz.toFixed(3)];
+}
+
+/**
+ * Slide a preferred origin on the XZ plane until the local build no longer
+ * overlaps existing parts. Never returns an overlapping origin when a free
+ * ring slot exists (up to 12 rings).
+ */
+export function nextFreeOrigin(local, existing, preferred = [0, 0, 0], pad = 1) {
+  const L = aabbOf(local);
+  if (!L) return preferred;
+  const others = aabbOf((existing || []).filter((i) => i && i.type !== 'group' && i.type !== 'spawn'));
+  const stepX = Math.max(4, (L.max[0] - L.min[0]) + pad * 2);
+  const stepZ = Math.max(4, (L.max[2] - L.min[2]) + pad * 2);
+  const pref = [preferred[0] || 0, preferred[1] || 0, preferred[2] || 0];
+  const tryAt = (o) => !others || !aabbsOverlap(shiftAabb(L, o), others, pad);
+  if (tryAt(pref)) return pref;
+  for (let ring = 1; ring <= 12; ring++) {
+    for (let dx = -ring; dx <= ring; dx++) {
+      for (let dz = -ring; dz <= ring; dz++) {
+        if (Math.max(Math.abs(dx), Math.abs(dz)) !== ring) continue;
+        const o = [pref[0] + dx * stepX, pref[1], pref[2] + dz * stepZ];
+        if (tryAt(o)) return o;
+      }
+    }
+  }
+  return [pref[0] + stepX * 13, pref[1], pref[2]];
+}
+
+/** Preferred origin: beside the selection if any, else a look/front point, then the next free slot. */
+export function resolveBuildOrigin(local, { existing = [], selection = [], lookPoint = null, origin = null } = {}) {
+  const sel = (selection || []).filter((i) => i && i.type !== 'group');
+  let preferred;
+  if (sel.length) preferred = originBeside(local, sel);
+  else if (lookPoint) preferred = originAtPoint(local, lookPoint);
+  else preferred = origin || [0, 0, 0];
+  return nextFreeOrigin(local, existing, preferred);
+}
+
 /**
  * Plan a build (no editor mutation).
  * @param {object} intent classifyIntent() build result
@@ -171,7 +249,9 @@ export function planBuild(intent, ctx = {}) {
   const d = dims(intent);
   let instances = maker(d, intent.color);
   if (intent.color && template !== 'coins' && template !== 'checkpoint') paint(instances, intent.color);
-  const origin = ctx.origin || [0, 0, 0];
+  const origin = (ctx.existing || ctx.selection || ctx.lookPoint)
+    ? resolveBuildOrigin(instances, ctx)
+    : (ctx.origin || [0, 0, 0]);
   offsetAll(instances, origin);
   const label = LABELS[template] || template;
   const bits = [];
@@ -189,6 +269,7 @@ export function planBuild(intent, ctx = {}) {
     groupName: template === 'coins' ? 'Coins' : template[0].toUpperCase() + template.slice(1),
     summary: bits.join(' '),
     instances,
+    origin,
   };
 }
 
@@ -199,7 +280,9 @@ export function planBuild(intent, ctx = {}) {
 export function applyBuild(ed, plan) {
   if (!plan?.ok || !plan.instances?.length) return { ok: false, ids: [] };
   if (typeof ed.insertMany === 'function') {
-    return ed.insertMany(plan.instances, { groupName: plan.instances.length > 1 ? plan.groupName : null });
+    const out = ed.insertMany(plan.instances, { groupName: plan.instances.length > 1 ? plan.groupName : null });
+    if (out?.ok) ed.lastBuild = { ids: out.ids, groupId: out.groupId, template: plan.template, summary: plan.summary };
+    return out;
   }
   // Fallback used by unit tests / minimal editors
   ed.checkpoint?.();

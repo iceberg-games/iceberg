@@ -278,6 +278,13 @@ export async function createEditor(ctx, doc) {
     changed(); return inst.id;
   };
   ed.placementPoint = (size = [1, 1, 1]) => placementPoint(size);
+  /** A ground point in front of the camera — not snapped onto an existing part. */
+  ed.lookPoint = () => {
+    const p = cam.pos.clone().addScaledVector(cam.forward(), 16);
+    p.y = 0;
+    const s = ed.snap.move || 0; if (s) { p.x = Math.round(p.x / s) * s; p.z = Math.round(p.z / s) * s; }
+    return [round(p.x), 0, round(p.z)];
+  };
   /** Insert many parts as one undo step. Optionally group them. */
   ed.insertMany = (specs, { groupName } = {}) => {
     ed.checkpoint();

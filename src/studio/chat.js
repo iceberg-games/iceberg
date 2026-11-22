@@ -239,8 +239,11 @@ export function applyChat(ed, result, ctx = {}) {
   if (!result || !ed) return result;
   if (result.kind === 'help') return helpReply(ed, { ...ctx, doc: ed.doc });
   if (result.kind === 'build') {
-    const origin = (typeof ed.placementPoint === 'function' ? ed.placementPoint([1, 1, 1]) : ctx.origin) || [0, 0, 0];
-    const plan = planBuild(result.intent, { origin });
+    const existing = (ed.doc?.instances || []).filter((i) => i.type !== 'group');
+    const selIds = new Set(ed.selection || ctx.selection || []);
+    const selection = existing.filter((i) => selIds.has(i.id) || (i.parent && selIds.has(i.parent)));
+    const lookPoint = (typeof ed.lookPoint === 'function' ? ed.lookPoint() : null) || ctx.lookPoint || ctx.origin || null;
+    const plan = planBuild(result.intent, { existing, selection, lookPoint, origin: ctx.origin || [0, 0, 0] });
     const out = applyBuild(ed, plan);
     return {
       ...result,
