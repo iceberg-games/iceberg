@@ -324,6 +324,7 @@ export async function createRuntime(ctx, doc) {
       r.fire('click', fake); r.fire('press', fake); r.start();
       const has = (prog.rules || []).some(rule => ['click', 'press', 'start'].includes(rule.trigger?.type));
       if (!has) (prog.rules || []).forEach((_, i) => r.runRule(i));
+      r.update(0); // click actions run now, not on the next animation frame
     }
     playSfx('click');
   }

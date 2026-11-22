@@ -151,6 +151,6 @@ body.studio-active #hud, body.studio-active .help, body.studio-active #back-to-e
 .st-gui-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin: 4px 0; font-size: 12px; }
 .st-gui-row input, .st-gui-row select { width: 120px; }
 .st-gui-inspect textarea { width: 100%; margin-top: 4px; }
-.rt-gui { position: absolute; inset: 0; pointer-events: none; z-index: 13; }
+.rt-gui { position: absolute; inset: 0 0 110px 0; pointer-events: none !important; z-index: 13; }
 .rt-gui-el { pointer-events: none; }
 .rt-gui-el.rt-gui-button { pointer-events: auto; border: 0; }
