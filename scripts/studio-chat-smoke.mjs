@@ -60,6 +60,28 @@ try {
   ok('unknown phrase admits it', /didn'?t understand/i.test(last), last.slice(0, 180));
   ok('unknown phrase suggests examples', (await p.locator('#studio-chat-suggest [data-phrase]').count()) >= 2);
 
+  await p.fill('#studio-chat-input', 'add a coin counter top right');
+  await p.click('#studio-chat-send');
+  await p.waitForTimeout(400);
+  const gui = await p.evaluate(() => {
+    const g = window.iceberg.engine.game.doc.gui || [];
+    return { n: g.length, bind: g[0]?.bind, anchor: g[0]?.anchor, type: g[0]?.type };
+  });
+  ok('coin counter added to doc.gui', gui.n >= 1 && gui.bind === 'coins' && gui.anchor === 'top-right', JSON.stringify(gui));
+  ok('GUI toggle visible', await p.isVisible('#studio-gui-toggle'));
+  await p.click('[data-node=workspace]');
+  await p.waitForTimeout(200);
+  ok('first-person setting is in game settings', await p.isVisible('#first-person-toggle'));
+
+  await p.click('#studio-chat-close');
+  await p.waitForTimeout(150);
+  await p.click('#studio-gui-toggle');
+  await p.waitForTimeout(300);
+  ok('GUI overlay opens', await p.locator('#studio-gui-overlay').evaluate((el) => !el.classList.contains('off')));
+  ok('coin counter is on the overlay', await p.locator('.st-gui-el').count() >= 1);
+  await p.screenshot({ path: path.join(outDir, 'studio-gui-editor.png') });
+  ok('gui screenshot written', fs.existsSync(path.join(outDir, 'studio-gui-editor.png')));
+
   const pageErrors = errs.filter((e) => !/favicon|AudioContext|webkitAudio/i.test(String(e)));
   ok('no page errors', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '));
 } finally {

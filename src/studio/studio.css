@@ -133,3 +133,24 @@ body.studio-active #hud, body.studio-active .help, body.studio-active #back-to-e
 .st-chat-suggest { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 8px 6px; }
 .st-chat-compose { display: flex; gap: 6px; padding: 8px; border-top: 1px solid #3a414b; align-items: flex-end; }
 .st-chat-compose textarea { flex: 1; resize: none; min-height: 40px; }
+
+/* ---- Studio GUI builder + play HUD ---- */
+#studio-gui-root { position: absolute; left: 260px; bottom: 32px; z-index: 29; pointer-events: none; }
+#studio-gui-root > * { pointer-events: auto; }
+#studio-gui-toggle { position: relative; }
+.st-gui-overlay { position: fixed; left: 250px; right: 300px; top: 96px; bottom: 24px; z-index: 28; pointer-events: none; }
+.st-gui-overlay.off { display: none; }
+.st-gui-stage { position: absolute; inset: 0; pointer-events: none; }
+.st-gui-el { pointer-events: auto; user-select: none; box-shadow: 0 2px 8px #0005; }
+.st-gui-el.sel { outline: 2px solid #f5c542; outline-offset: 1px; }
+.st-gui-el.hidden-el { outline: 1px dashed #8b98a6; }
+.st-gui-handle { position: absolute; right: -5px; bottom: -5px; width: 12px; height: 12px; background: #f5c542; border: 1px solid #1d2026; border-radius: 2px; cursor: nwse-resize; pointer-events: auto; }
+.st-gui-tools { position: absolute; left: 10px; top: 10px; display: flex; gap: 4px; align-items: center; pointer-events: auto; background: #1d2128cc; padding: 6px 8px; border-radius: 8px; border: 1px solid #3a414b; }
+.st-gui-inspect { position: absolute; right: 10px; bottom: 10px; width: 230px; pointer-events: auto; background: #1d2128f2; border: 1px solid #3a414b; border-radius: 8px; padding: 8px; color: #e4edf5; }
+.st-gui-inspect-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.st-gui-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin: 4px 0; font-size: 12px; }
+.st-gui-row input, .st-gui-row select { width: 120px; }
+.st-gui-inspect textarea { width: 100%; margin-top: 4px; }
+.rt-gui { position: absolute; inset: 0; pointer-events: none; z-index: 13; }
+.rt-gui-el { pointer-events: none; }
+.rt-gui-el.rt-gui-button { pointer-events: auto; border: 0; }

@@ -9,6 +9,7 @@ import { computeCollider, makeInstance, newId } from './instances.js';
 import { Motion, ScriptRunner, compare } from './behaviors.js';
 import { translate } from './nlscript.js';
 import { heightAt as terrainHeightAt } from './terrain.js';
+import { mountPlayGui } from './gui.js';
 import { GEARS, Backpack, creatorGearsOf, gearMods } from './gears.js';
 import { sampleAnimation } from './animation.js';
 import { bus } from '../core/events.js';
@@ -95,7 +96,8 @@ export async function createRuntime(ctx, doc) {
     boardEl.classList.remove('hidden');
   }
   const renderHealth = () => { healthEl.classList.remove('hidden'); healthEl.querySelector('i').style.width = `${Math.max(0, vars.health)}%`; healthEl.querySelector('span').textContent = `❤️ ${Math.max(0, Math.round(vars.health))}`; };
-  const setVar = (name, v) => { vars[name] = Math.round(v * 1000) / 1000; if (name === 'points') setScore(); else if (name === 'health') { if (vars.health <= 0) { vars.health = 100; respawn('You died!'); } renderHealth(); } else renderBoard(); };
+  let guiHud = null, guiRunners = [];
+  const setVar = (name, v) => { vars[name] = Math.round(v * 1000) / 1000; if (name === 'points') setScore(); else if (name === 'health') { if (vars.health <= 0) { vars.health = 100; respawn('You died!'); } renderHealth(); } else renderBoard(); guiHud?.refresh(); };
   const getVar = (name) => vars[name] ?? 0;
   const fillText = (text) => String(text).replace(/\{(\w+)\}/g, (_, k) => getVar(k === 'score' ? 'points' : k));
 
@@ -283,6 +285,10 @@ export async function createRuntime(ctx, doc) {
         case 'countdown': startCountdown(a.seconds); return a.seconds;
         case 'timer': if (a.start) { timer = { t: a.reset || !timer ? 0 : timer.t, running: true }; timerEl.classList.remove('hidden'); } else if (timer) timer.running = false; break;
         case 'leaderboard': boardOn = !!a.show; if (boardOn) renderBoard(); else boardEl.classList.add('hidden'); break;
+        case 'firstPerson': engine.player.setFirstPerson(a.on); break;
+        case 'toggleGui': toggleGuiEl(a.target, 'toggle'); break;
+        case 'showGui': toggleGuiEl(a.target, 'show'); break;
+        case 'hideGui': toggleGuiEl(a.target, 'hide'); break;
       }
       // moving a part along a tween makes the action take that long only for 'return'
       if ((a.do === 'moveBy' || a.do === 'moveTo') && a.seconds) return a.seconds;
@@ -299,6 +305,30 @@ export async function createRuntime(ctx, doc) {
   const fireAll = (type, src = null) => { for (const r of runners) r.fire(type, src); };
   const fireOn = (type, e) => { for (const r of runners) r.fire(type, e); };
   runners.forEach(r => r.start());
+  function toggleGuiEl(idOrName, mode = 'toggle') {
+    const list = doc.gui || [];
+    const el = list.find(g => g.id === idOrName || (g.name && g.name.toLowerCase() === String(idOrName || '').toLowerCase()));
+    if (!el) return;
+    if (mode === 'show') el.visible = true;
+    else if (mode === 'hide') el.visible = false;
+    else el.visible = el.visible === false;
+    guiHud?.refresh();
+  }
+  function clickGui(el) {
+    if (el.toggles) toggleGuiEl(el.toggles, 'toggle');
+    const prog = el.program;
+    if (prog && (prog.rules || []).length) {
+      const fake = { inst: { id: el.id, name: el.name }, root: { position: engine.player.pos }, motion: null };
+      const r = new ScriptRunner(fake.inst, fake, prog, api);
+      guiRunners.push(r);
+      r.fire('click', fake); r.fire('press', fake); r.start();
+      const has = (prog.rules || []).some(rule => ['click', 'press', 'start'].includes(rule.trigger?.type));
+      if (!has) (prog.rules || []).forEach((_, i) => r.runRule(i));
+    }
+    playSfx('click');
+  }
+  guiHud = mountPlayGui(ui, doc, { vars: () => ({ ...vars, timer: timer?.t || 0 }), click: clickGui });
+  if (doc.firstPerson && engine.player.setFirstPerson) engine.player.setFirstPerson(true);
   const clickable = () => entries.filter(e => e.visible && runners.some(r => r.program.rules.some(x => (x.trigger.type === 'click' || x.trigger.type === 'press') && (x.trigger.part ? x.trigger.part.toLowerCase() === e.inst.name.toLowerCase() : r.entry === e))));
 
   // ---- mobile controls ----
@@ -386,7 +416,8 @@ export async function createRuntime(ctx, doc) {
       for (let i = tweens.length - 1; i >= 0; i--) if (!tweens[i](dt)) tweens.splice(i, 1);
       for (let i = bursts.length - 1; i >= 0; i--) if (!bursts[i].update(dt)) bursts.splice(i, 1);
       if (countdown) { countdown.left -= dt; countdownEl.textContent = `⏳ ${Math.max(0, Math.ceil(countdown.left))}`; if (countdown.left <= 0) { countdown = null; countdownEl.classList.add('hidden'); playSfx('alarm'); fireAll('countdownEnd'); } }
-      if (timer?.running) { timer.t += dt; timerEl.textContent = `⏱ ${timer.t.toFixed(1)}s`; }
+      if (timer?.running) { timer.t += dt; timerEl.textContent = `⏱ ${timer.t.toFixed(1)}s`; guiHud?.refresh(); }
+      for (const r of guiRunners) { r.update(dt); r.checkReach(getVar); }
       // animations
       for (const e of entries) if (e.rig?.mixer) e.rig.mixer.update(dt);
       for (const [id, st] of playing) { if (st.anim) { st.t += dt; sampleAnimation({ ...st.anim, loop: st.loop }, world.entries.get(id).rig, st.t); } }
@@ -408,6 +439,7 @@ export async function createRuntime(ctx, doc) {
     },
     dispose() {
       removeEventListener('keydown', onKey); offDevice?.(); backpack.clear(); resetEffects(); ui.remove();
+      if (engine.player.setFirstPerson) engine.player.setFirstPerson(false);
       engine.input.analog = null; engine.input.keys.delete('Space'); engine.renderer.domElement.style.cursor = '';
       for (const b of bursts) scene.remove(b.points);
       for (const e of entries) clearTimeout(e._doorT);

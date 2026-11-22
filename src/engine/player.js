@@ -20,6 +20,7 @@ export class PlayerController {
     // gear / gameplay modifiers
     this.mods = { speed: 1, gravity: 1, jump: 1, carpet: false };
     this.onFall = null; // callback when falling out of the world
+    this.firstPerson = false;
   }
 
   teleport(v, facing = 0) {
@@ -28,9 +29,16 @@ export class PlayerController {
 
   orbit(dx, dy) {
     this.camYaw -= dx * 0.006;
-    this.camPitch = Math.min(1.3, Math.max(-0.25, this.camPitch + dy * 0.005));
+    const lo = this.firstPerson ? -1.4 : -0.25, hi = this.firstPerson ? 1.4 : 1.3;
+    this.camPitch = Math.min(hi, Math.max(lo, this.camPitch + dy * 0.005));
   }
-  zoom(delta) { this.camDist = Math.min(this.maxCamDist, Math.max(3, this.camDist + delta * 0.01)); }
+  zoom(delta) { if (this.firstPerson) return; this.camDist = Math.min(this.maxCamDist, Math.max(3, this.camDist + delta * 0.01)); }
+  setFirstPerson(on) {
+    this.firstPerson = on === 'toggle' ? !this.firstPerson : !!on;
+    if (this.avatar?.root) this.avatar.root.visible = !this.firstPerson;
+    this.updateCamera();
+    return this.firstPerson;
+  }
 
   _hits(col, p) { return col.overlaps(p.x - HW, p.y, p.z - HW, p.x + HW, p.y + HEIGHT, p.z + HW); }
 
@@ -109,6 +117,14 @@ export class PlayerController {
   updateCamera() {
     const target = this.pos.clone().add(new THREE.Vector3(0, 2.2 * (getBodySlots(this.avatar?.bodyType).height / CLASSIC_H), 0));   // eye tracks body height; classic exact
     const dir = new THREE.Vector3(Math.sin(this.camYaw) * Math.cos(this.camPitch), Math.sin(this.camPitch), Math.cos(this.camYaw) * Math.cos(this.camPitch));
+    if (this.firstPerson) {
+      if (this.avatar?.root) this.avatar.root.visible = false;
+      const eye = this.pos.clone().add(new THREE.Vector3(0, Math.max(1.15, 2.2 * (getBodySlots(this.avatar?.bodyType).height / CLASSIC_H) * 0.92), 0));
+      this.camera.position.copy(eye);
+      this.camera.lookAt(eye.clone().addScaledVector(dir, -1));
+      return;
+    }
+    if (this.avatar?.root && this.avatar.root.visible === false) this.avatar.root.visible = true;
     let dist = this.camDist;
     if (this.occluders.length) {
       this.ray.set(target, dir); this.ray.far = dist;

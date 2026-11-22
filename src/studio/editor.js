@@ -11,6 +11,7 @@ import { translate } from './nlscript.js';
 import { setKey, deleteKey, sampleAnimation, waveAnimation, boneRot } from './animation.js';
 import { bus } from '../core/events.js';
 import { newTerrain, applyBrush, heightAt } from './terrain.js';
+import { makeGuiElement, planGui } from './gui.js';
 
 const R2D = THREE.MathUtils.radToDeg, D2R = THREE.MathUtils.degToRad;
 const round = (v, n = 3) => +(+v).toFixed(n);
@@ -67,14 +68,14 @@ export async function createEditor(ctx, doc) {
 
   const ed = {
     scene, collision: null, hideAvatar: true, editing: true, cameraController: cam, doc, world, music: doc.music || 'none',
-    selection: [], tool: st.tool || 'move', snap: st.snap || { move: 1, rot: 15 }, space: 'world',
+    selection: [], selectedGui: null, guiEdit: false, tool: st.tool || 'move', snap: st.snap || { move: 1, rot: 15 }, space: 'world',
     brush: st.brush || { mode: 'raise', radius: 8, strength: 0.6 },
     tc, pivot,
     animator: { open: false, rigId: null, animId: null, time: 0, bone: null, playing: false, clip: null },
   };
   // selectedId = the primary (last clicked) selection, kept for single-selection callers
   Object.defineProperty(ed, 'selectedId', { get: () => ed.selection[ed.selection.length - 1] || null, set: (id) => { ed.selection = id ? [id] : []; } });
-  st.snap = ed.snap; st.brush = ed.brush; buildGrid();
+  doc.gui = doc.gui || []; st.snap = ed.snap; st.brush = ed.brush; buildGrid();
   const changed = (what = 'doc') => bus.emit('studio:changed', what);
   const instById = (id) => doc.instances.find(i => i.id === id);
   const snapshot = () => JSON.stringify({ instances: doc.instances, animations: doc.animations, terrain: doc.terrain || null, gui: doc.gui || [], firstPerson: !!doc.firstPerson });
@@ -300,6 +301,31 @@ export async function createEditor(ctx, doc) {
     return { ok: true, ids, groupId, count: ids.length };
   };
   ed.setGameProp = (key, value) => { ed.checkpoint(); doc[key] = value === 'toggle' ? !doc[key] : value; changed(); };
+  ed.selectGui = (id) => { ed.selectedGui = id || null; changed('gui'); };
+  ed.addGui = (intent) => {
+    ed.checkpoint();
+    doc.gui = doc.gui || [];
+    const plan = planGui(intent || { type: 'label' });
+    const ids = [];
+    for (const el of plan.elements) { doc.gui.push(el); ids.push(el.id); }
+    ed.selectedGui = ids[0] || null; ed.guiEdit = true; changed('gui');
+    return { ok: true, id: ids[0], ids };
+  };
+  ed.updateGui = (id, patch, { soft } = {}) => {
+    const el = (doc.gui || []).find(g => g.id === id); if (!el) return;
+    if (!soft) { ed.checkpoint(); ed._guiSoft = false; }
+    else if (!ed._guiSoft) { ed.checkpoint(); ed._guiSoft = true; }
+    Object.assign(el, patch); changed('gui');
+  };
+  ed.commitGui = () => { ed._guiSoft = false; };
+  ed.removeGui = (id) => {
+    const list = doc.gui || []; if (!list.some(g => g.id === id)) return;
+    ed.checkpoint();
+    doc.gui = list.filter(g => g.id !== id).map(g => g.toggles === id ? { ...g, toggles: null } : g);
+    if (ed.selectedGui === id) ed.selectedGui = null;
+    changed('gui');
+  };
+
   const asList = (ids) => (ids == null ? [...ed.selection] : Array.isArray(ids) ? ids : [ids]).filter(id => instById(id));
   /** delete parts/Models (and everything inside them) as one undo step */
   ed.remove = (ids) => {

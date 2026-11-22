@@ -17,6 +17,7 @@ import { exportGameJSON, importGameJSON, downloadText } from '../core/share.js';
 import { isMobile, onDeviceChange } from '../core/device.js';
 import { TERRAIN_BRUSHES } from '../studio/terrain.js';
 import { attachStudioChat } from '../studio/chatPanel.js';
+import { attachStudioGui, refreshStudioGui } from '../studio/guiOverlay.js';
 
 /** One source of truth for Studio shortcuts: drives the ? cheat sheet, tooltips and the status bar. */
 export const HOTKEYS = [
@@ -52,7 +53,9 @@ export class CreatorPanel {
     if (!this.ed) return;
     if (what === 'animtime' || what === 'bonepose') { this.renderAnimator(true); return; }
     if (what === 'script') { this.renderScriptPreview(); this.renderLeft(); return; }
+    if (what === 'gui') { refreshStudioGui(); return; }
     this.renderRibbon(); this.renderLeft(); this.renderProps(); this.renderAnimator();
+    refreshStudioGui();
   }
   _onKey(e) {
     const ed = this.ed; if (!ed) return;
@@ -148,6 +151,7 @@ export class CreatorPanel {
     );
     this.renderRibbon(); this.renderLeft(); this.renderProps(); this.renderAnimator();
     attachStudioChat(this.el, () => this);
+    attachStudioGui(this.el, () => this);
   }
 
   renderRibbon() {
@@ -453,6 +457,7 @@ export class CreatorPanel {
       this.field('Music', h('select#music-pick', { onchange: set('music') }, MUSIC_THEMES.map(m => h('option', { value: m.id, selected: doc.music === m.id }, m.name)))),
       this.field('Snowfall', h('input#snow-toggle', { type: 'checkbox', checked: !!doc.snow, onchange: reload('snow') })),
       this.field('📱 Mobile-playable', h('input#mobile-toggle', { type: 'checkbox', checked: doc.mobile !== false, onchange: set('mobile') })),
+      this.field('First-person camera', h('input#first-person-toggle', { type: 'checkbox', checked: !!doc.firstPerson, onchange: set('firstPerson') })),
       h('h4', 'Starter gears'), h('p.st-hint', 'Every player starts with these.'),
       h('div', GEAR_LIST.map(g => h('label.st-check', h('input', { type: 'checkbox', 'data-starter': g.id, checked: (doc.starterGears || []).includes(g.id), onchange: (e) => { ed.checkpoint(); const s = new Set(doc.starterGears || []); e.target.checked ? s.add(g.id) : s.delete(g.id); doc.starterGears = [...s]; } }), ` ${g.icon} ${g.name}`))),
       h('h4', 'Terrain'), h('p.st-hint', doc.terrain ? 'Snow & ice terrain is on. Press 5 to sculpt.' : 'Press 5 (🏔️ Terrain) and drag on the ground to raise snowy hills; Shift+drag digs, Ctrl+drag smooths.'),

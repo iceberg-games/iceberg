@@ -3,8 +3,9 @@
 import { classifyIntent, EXAMPLE_PHRASES } from '../src/studio/chatIntent.js';
 import { planBuild, applyBuild } from '../src/studio/builder.js';
 import { handleChat, applyChat, sendChat } from '../src/studio/chat.js';
-import { inst } from '../src/studio/builder.js';
+import { buttonProgram, planGui, makeGuiElement } from '../src/studio/gui.js';
 import { translate } from '../src/studio/nlscript.js';
+import { inst } from '../src/studio/builder.js';
 
 function mockEditor(seed = []) {
   const doc = { instances: [...seed], animations: [], gui: [], firstPerson: false, updatedAt: 0 };
@@ -174,6 +175,46 @@ const cases = [
   ['example phrases stay classified as something we handle', () => {
     const bad = EXAMPLE_PHRASES.filter((p) => classifyIntent(p, { names }).kind === 'unknown');
     return bad.length === 0;
+  }],
+  ['coin counter chat creates a bound label', async () => {
+    const ed = mockEditor([inst('spawn')]);
+    const r = await sendChat('add a coin counter top right', ed);
+    const g = ed.doc.gui || [];
+    return r.applied && g.length === 1 && g[0].bind === 'coins' && g[0].anchor === 'top-right' && g[0].type === 'label';
+  }],
+  ['shop button creates a button that toggles a hidden panel', async () => {
+    const ed = mockEditor([inst('spawn')]);
+    const r = await sendChat('make a shop button that opens a panel', ed);
+    const g = ed.doc.gui || [];
+    const btn = g.find((x) => x.type === 'button');
+    const panel = g.find((x) => x.type === 'frame');
+    return r.applied && btn && panel && btn.toggles === panel.id && panel.visible === false;
+  }],
+  ['gui add is one undo step', async () => {
+    const ed = mockEditor([inst('spawn')]);
+    await sendChat('add a health bar', ed);
+    const n = (ed.doc.gui || []).length;
+    ed.undo();
+    return n >= 1 && (ed.doc.gui || []).length === 0;
+  }],
+  ['first-person setting toggles the game flag', async () => {
+    const ed = mockEditor([inst('spawn')]);
+    await sendChat('toggle first person', ed);
+    return ed.doc.firstPerson === true;
+  }],
+  ['buttonProgram gives a click rule for give 10 coins', () => {
+    const r = buttonProgram('give 10 coins');
+    return r.program.rules[0].trigger.type === 'click' && r.program.rules[0].actions.some((a) => a.do === 'addVar' && a.name === 'coins' && a.amount === 10);
+  }],
+  ['translator understands teleport to spawn and toggle first person on click', () => {
+    const a = translate('when clicked, teleport to spawn');
+    const b = translate('when clicked, toggle first person');
+    return a.program.rules[0].actions.some((x) => x.do === 'teleport' && x.to === 'spawn')
+      && b.program.rules[0].actions.some((x) => x.do === 'firstPerson' && x.on === 'toggle');
+  }],
+  ['planGui health bar binds health', () => {
+    const p = planGui({ kind: 'gui', type: 'bar', bind: 'health', text: 'Health', anchor: 'top-left' });
+    return p.elements[0].type === 'bar' && p.elements[0].bind === 'health';
   }],
 ];
 
