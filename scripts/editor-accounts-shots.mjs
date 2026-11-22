@@ -78,7 +78,10 @@ try {
   await p.waitForSelector('#session-list .ib-session');
   const badge = await p.$eval('#session-list .ib-session[data-current="1"] .ib-badge', e => e.textContent).catch(() => '');
   check('PC: active sessions lists this device', badge.includes('This device'), badge);
+  await p.locator('#settings-account').scrollIntoViewIfNeeded();
   await shot(p, 'pc-1440x900-settings-account-security.png');
+  await p.locator('#settings-account').screenshot({ path: resolve(OUT, 'pc-1440x900-account-card.png') });
+  await p.locator('#settings-security').screenshot({ path: resolve(OUT, 'pc-1440x900-security-card.png') });
 
   // Change DOB
   await p.fill('#settings-account input[name=dob]', '1998-12-01');
@@ -120,7 +123,10 @@ try {
   await m.waitForSelector('#settings-account');
   await m.waitForSelector('#settings-security');
   check('phone: Account and Security settings render', !!(await m.$('#deactivate-account')) && !!(await m.$('#form-change-password')));
+  await m.locator('#settings-account').scrollIntoViewIfNeeded();
   await shot(m, 'phone-390x844-settings-account-security.png');
+  await m.locator('#settings-account').screenshot({ path: resolve(OUT, 'phone-390x844-account-card.png') });
+  await m.locator('#settings-security').screenshot({ path: resolve(OUT, 'phone-390x844-security-card.png') });
 
   // Play page gate (signed-out)
   const playCtx = await browser.newContext({ viewport: { width: 1440, height: 900 } });

@@ -1,3 +1,11 @@
+
+/* style.css sets html/body to height:100% and overflow:hidden for the game canvas.
+   The portal and the play-page sign-in gate need to scroll when settings or forms are taller than the screen. */
+html:has(body.portal-page),
+html:has(#auth-gate) { height: auto; min-height: 100%; overflow: auto; }
+body.portal-page,
+body:has(#auth-gate) { height: auto; min-height: 100%; overflow: auto; }
+
 /* Auth forms + account settings. Does not restyle portal/play chrome. */
 .ib-auth-gate {
   min-height: 100%;
@@ -35,3 +43,7 @@
 .ib-totp-secret { font-family: ui-monospace, monospace; word-break: break-all; background: rgba(0,0,0,.05); padding: 8px 10px; border-radius: 8px; }
 .ib-danger-note { color: #8a1f32; font-weight: 600; }
 .ib-settings .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+#form-change-password { display: flex; flex-direction: column; align-items: stretch; gap: 8px; max-width: 420px; }
+#form-change-password input { width: 100%; box-sizing: border-box; }
+#form-change-password .btn { align-self: flex-start; }

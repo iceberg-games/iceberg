@@ -40,3 +40,23 @@ Screenshots: `designs/editor-accounts/`.
 - Hiding a deactivated profile from every public surface (friends lists, published games, chat presence). The flag is stored and the user is signed out; a full sweep of listing RPCs can follow.
 - Paying for AI / Birg Bucks chat (explicitly out of this drop).
 - MFA at the sign-in prompt (challenge after password) — enrollment and management are in Settings; a forced second step on every login needs a follow-up if GoTrue AAL is enabled on the project.
+
+## Test results (Nov 21, 2026, America/Phoenix)
+
+- `node tools/test-account.mjs` — passed
+- `node tools/test-session.mjs` — passed
+- `node tools/db/test-db.mjs` — 44/45. The new accounts RPC test passed. The one failure is an existing event-catalog fixture mismatch (`sr_powder_scarf` present on the server but not in the expected list) and is unrelated to this drop.
+- `node scripts/editor-accounts-shots.mjs` — 14/14 passed
+
+## Screenshots
+
+All under `designs/editor-accounts/`:
+
+- `pc-1440x900-gate.png` — required sign-in / sign-up (DOB on create)
+- `pc-1440x900-home-after-signin.png` — games after sign-in
+- `pc-1440x900-settings-account-security.png` — Settings scrolled to Account
+- `pc-1440x900-account-card.png` / `pc-1440x900-security-card.png` — Account and Security cards
+- `pc-1440x900-delete-confirm.png` / `pc-1440x900-deactivate-confirm.png` — confirm dialogs
+- `pc-1440x900-play-gate.png` — play page blocks guests
+- `phone-390x844-gate.png` / `phone-390x844-settings-account-security.png`
+- `phone-390x844-account-card.png` / `phone-390x844-security-card.png`
