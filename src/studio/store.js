@@ -5,7 +5,8 @@
 import { backend } from '../backend/LocalBackend.js';
 import { getRemote } from '../net/session.js';
 import { bus } from '../core/events.js';
-import { attachModelAssets, collectModelIds } from '../game/modelAssets.js';
+import { attachModelAssets, collectModelIds, unpublishedModelIds, shouldPromptRepublish } from '../game/modelAssets.js';
+export { unpublishedModelIds, shouldPromptRepublish };
 const KEY = 'iceberg:v1:studioDrafts';
 const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || '[]'); } catch { return []; } };
 export const drafts = {

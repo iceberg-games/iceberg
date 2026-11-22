@@ -398,7 +398,7 @@ export class UI {
     const g = this.engine.game;
     const input = h('input#model-file', { type: 'file', accept: '.glb,.gltf,.obj', style: { display: 'none' }, onchange: async (ev) => {
       const f = ev.target.files[0]; if (!f) return;
-      try { const rec = await this.models.addFile(f); this.toast(`Uploaded ${rec.name}`, '📦'); }
+      try { const rec = await this.models.addFile(f); let note = `Uploaded ${rec.name}`; if (rec.convertedFrom === 'obj') note += ' (converted to .glb so other players can see it)'; else if (rec.unshareable) note += '. This .obj could not be converted — other players will see a placeholder unless you re-export as .glb'; this.toast(note, rec.unshareable ? '⚠️' : '📦'); }
       catch (err) { console.warn(err); this.toast(`Could not load model: ${err.message || err}`, '⚠️'); }
       ev.target.value = '';
     } });

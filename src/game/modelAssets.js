@@ -171,14 +171,27 @@ export function collectModelIds(doc) {
   return [...ids];
 }
 
+/** Model ids this doc uses that are not listed in doc.modelAssets. */
+export function unpublishedModelIds(doc, library) {
+  const have = new Set((doc?.modelAssets || []).map((a) => a.id));
+  return collectModelIds(doc).filter((id) => !have.has(id) && (!library || library.has?.(id) || library.info?.(id)));
+}
+/** Owner still has the files locally but they were never published to Storage. */
+export function shouldPromptRepublish(doc, library) {
+  if (!doc) return false;
+  return unpublishedModelIds(doc, library).some((id) => library?.has?.(id));
+}
+
 /** Build doc.modelAssets by hashing local library records and uploading glTF files. .obj is skipped. */
 export async function attachModelAssets(doc, library, { upload, supabaseUrl } = {}) {
   const ids = collectModelIds(doc);
   const assets = [];
   const skipped = [];
   for (const id of ids) {
-    const rec = library?.info?.(id) || library?.items?.get?.(id)?.record;
+    const rec = (library?.toShareable ? await library.toShareable(id) : null)
+      || library?.info?.(id) || library?.items?.get?.(id)?.record;
     if (!rec) { skipped.push({ id, reason: 'missing' }); continue; }
+    if (rec.unshareable) { skipped.push({ id, reason: rec.unshareableReason || 'unshareable' }); continue; }
     const format = String(rec.format || '').toLowerCase();
     if (!FORMAT_RE.test(format)) { skipped.push({ id, reason: 'not_gltf', format }); continue; }
     const data = rec.data;

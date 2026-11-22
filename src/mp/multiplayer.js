@@ -257,6 +257,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     ch.onPresence(({ state: pres, joins, leaves }) => {
       if (s !== sess) return;
       sess.presenceSeen = true;
+      sess.presenceMeta = pres || {};
       sess.present = new Set([me.username, ...Object.keys(pres)]);
       for (const k of leaves) removeOther(k);
       const fresh = joins.filter(k => k !== me.username);
@@ -278,6 +279,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     ch.track({ u: me.username });
     sendWear();
     sess.timers.push(setInterval(sendTick, 50), setInterval(heartbeat, 20000), setInterval(proximityTick, PROXIMITY_MS), setInterval(livenessTick, LIVENESS_MS),
+      setInterval(() => { if (s === sess && sess.others.size) sendWear(); }, 8000),
       setInterval(() => { if (s === sess && isHost() && sess.others.size && state.size && now() - sess.lastSnap >= SNAPSHOT_EVERY_MS) scheduleSnapshot(0); }, 1000));
     // late joiner: ask the host for the snapshot (twice, in case the first ask races presence)
     for (const ms of [600, 2000, 5000]) sess.timers.push(setTimeout(() => { if (s === sess && !isHost() && !sess.gotSnapshot) ch.send('sq', { u: me.username }); }, ms));
@@ -343,7 +345,8 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
       anim: 0, animsSeen: new Set(), events: { j: 0, l: 0, t: 0 }, snaps: 0 };
     s.others.set(k, o);
     bubbles?.track(k, avatar.bones?.head || avatar.root, { name: p.displayName || k, offsetY: () => nameTagOffset(avatar.bodyType) });
-    applyRemoteWear(avatar, p.customWear || null, engine.models, { supabaseUrl: s.remote?.client?.url || s.remote?.realtimeConfig?.url }).catch((e) => console.warn(e));
+    const wear = p.customWear || (s.presenceMeta?.[k] || [])[0]?.wear || null;
+    applyRemoteWear(avatar, wear, engine.models, { supabaseUrl: s.remote?.client?.url || s.remote?.realtimeConfig?.url }).catch((e) => console.warn(e));
   }
   function removeOther(k) {
     const o = s?.others.get(k); if (!o) return;
@@ -505,6 +508,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     if (!s) return;
     const wear = localWear || getCustomWear?.() || null;
     localWear = wear;
+    try { s.channel?.track({ u: s.me.username, wear }); } catch { /* */ }
     try { s.channel?.send('w', { u: s.me.username, wear }); } catch { /* */ }
   }
   function setCustomWear(ref) {

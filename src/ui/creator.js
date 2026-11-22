@@ -11,7 +11,7 @@ import { MUSIC_THEMES } from '../audio/music.js';
 import { EXAMPLES, HELP, CHEATSHEET } from '../studio/nlscript.js';
 import { getScriptTranslator } from '../studio/ai.js';
 import { checkScript } from '../studio/scriptCheck.js';
-import { drafts, publish, isPublished } from '../studio/store.js';
+import { drafts, publish, isPublished, shouldPromptRepublish, unpublishedModelIds } from '../studio/store.js';
 import { upgradeDoc } from '../studio/templates.js';
 import { exportGameJSON, importGameJSON, downloadText } from '../core/share.js';
 import { isMobile, onDeviceChange } from '../core/device.js';
@@ -284,7 +284,7 @@ export class CreatorPanel {
   toolbox() {
     const ed = this.ed;
     const item = (icon, label, fn, attrs = {}) => h('button.st-tbx', { onclick: fn, ...attrs }, h('span', icon), label);
-    const fileIn = h('input#studio-model-file', { type: 'file', accept: '.glb,.gltf,.obj', style: { display: 'none' }, onchange: async (e) => { const f = e.target.files[0]; if (!f) return; try { const r = await this.models.addFile(f); this.ui.toast(`Uploaded ${r.name}${r.isRig ? ' (rig with bones!)' : ''}`, '📦'); ed.insert('model', { modelId: r.id, name: r.name }); } catch (err) { this.ui.toast(`Could not load model: ${err.message}`, '⚠️'); } e.target.value = ''; } });
+    const fileIn = h('input#studio-model-file', { type: 'file', accept: '.glb,.gltf,.obj', style: { display: 'none' }, onchange: async (e) => { const f = e.target.files[0]; if (!f) return; try { const r = await this.models.addFile(f); let note = `Uploaded ${r.name}`; if (r.convertedFrom === 'obj') note += ' (converted to .glb so other players can see it)'; else if (r.unshareable) note += `. This .obj could not be converted, so other players will see a placeholder — re-export it as .glb if you can`; if (r.isRig) note += ' (rig with bones!)'; this.ui.toast(note, r.unshareable ? '⚠️' : '📦'); ed.insert('model', { modelId: r.id, name: r.name }); } catch (err) { this.ui.toast(`Could not load model: ${err.message}`, '⚠️'); } e.target.value = ''; } });
     const models = this.models.list();
     return h('div.st-toolbox',
       h('h4', 'Parts'), h('div.st-grid',
@@ -463,6 +463,7 @@ export class CreatorPanel {
       h('h4', 'Terrain'), h('p.st-hint', doc.terrain ? 'Snow & ice terrain is on. Press 5 to sculpt.' : 'Press 5 (🏔️ Terrain) and drag on the ground to raise snowy hills; Shift+drag digs, Ctrl+drag smooths.'),
       h('h4', 'Publishing'), h('p.st-hint#cloud-status', 'Signed in: drafts + published games save to your account (server). Guests keep drafts in this browser and must sign in to publish.'),
       h('p#publish-status', pub ? '✅ Published — it shows in the Games menu. Publish again to update it.' : '📝 Draft — only you can see it here. Press 🚀 Publish to add it to the Games menu.'),
+      shouldPromptRepublish(doc, this.models) ? h('p.st-warn#republish-models', `Other players can't see ${unpublishedModelIds(doc, this.models).length} imported model(s) yet. Press 🚀 Publish again to share them.`) : null,
       h('p.st-hint', `${doc.instances.length} instances · ${(doc.animations || []).length} animations`));
   }
 

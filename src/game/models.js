@@ -7,6 +7,7 @@ import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.j
 import { bus } from '../core/events.js';
 import { CONFIG } from '../net/config.js';
 import { MAX_MODEL_BYTES, fetchModelAsset, parseModelRef } from './modelAssets.js';
+import { convertObjToGlb } from './objToGlb.js';
 
 export { MAX_MODEL_BYTES };
 
@@ -55,13 +56,44 @@ export class ModelLibrary {
     return record;
   }
 
-  /** Accepts a File from an <input type=file>. Returns the stored record. */
+  /** Accepts a File from an <input type=file>. Returns the stored record.
+   *  .obj files are converted to .glb when possible so other players can fetch them. */
   async addFile(file) {
     const ext = file.name.split('.').pop().toLowerCase();
     if (!['glb', 'gltf', 'obj'].includes(ext)) throw new Error('Use a .glb, .gltf or .obj file');
     if (file.size > MAX_MODEL_BYTES) throw new Error('File is larger than 25 MB');
     const data = ext === 'glb' ? await file.arrayBuffer() : await file.text();
-    return this.addRecord({ id: 'm_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: file.name.replace(/\.[^.]+$/, ''), format: ext, data, createdAt: Date.now() });
+    const rec = { id: 'm_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), name: file.name.replace(/\.[^.]+$/, ''), format: ext, data, createdAt: Date.now() };
+    if (ext === 'obj') {
+      try {
+        rec.data = await convertObjToGlb(data);
+        rec.format = 'glb';
+        rec.convertedFrom = 'obj';
+      } catch (e) {
+        rec.unshareable = true;
+        rec.unshareableReason = e.message || 'Could not convert this .obj';
+      }
+    }
+    return this.addRecord(rec);
+  }
+  /** Return a glTF/GLB record for publishing; convert a stored .obj in place when possible. */
+  async toShareable(id) {
+    const rec = this.info(id); if (!rec) return null;
+    if (rec.format === 'glb' || rec.format === 'gltf') return rec;
+    if (rec.format !== 'obj') { rec.unshareable = true; return rec; }
+    try {
+      const data = await convertObjToGlb(rec.data);
+      const next = { ...rec, format: 'glb', data, convertedFrom: 'obj' };
+      delete next.unshareable; delete next.unshareableReason;
+      await this._register(next);
+      try { await this.store.put(next); } catch { /* still shareable this session */ }
+      bus.emit('models:changed');
+      return next;
+    } catch (e) {
+      rec.unshareable = true;
+      rec.unshareableReason = e.message || 'Could not convert this .obj';
+      return rec;
+    }
   }
   async addRecord(record) {
     await this._register(record); // throws if the file can't be parsed

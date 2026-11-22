@@ -3,7 +3,9 @@
 import http from 'node:http';
 import { sha256hex, gltfKind, validateModelBytes, parseModelRef, parseWearRef,
   allowedModelUrl, publicObjectUrl, attachModelAssets, fetchModelAsset,
-  makeMinimalGlb, collectModelIds, MAX_MODEL_BYTES, hasExternalUris } from '../src/game/modelAssets.js';
+  makeMinimalGlb, collectModelIds, unpublishedModelIds, shouldPromptRepublish,
+  MAX_MODEL_BYTES, hasExternalUris } from '../src/game/modelAssets.js';
+import { convertObjToGlb } from '../src/game/objToGlb.js';
 
 const uid = '11111111-1111-4111-8111-111111111111';
 let fail = 0, pass = 0;
@@ -119,5 +121,41 @@ await t('fetch, cache, validate against a local HTTP asset', async () => {
   server.close();
 });
 
+
+await t('OBJ converts to a valid GLB; empty OBJ is rejected', async () => {
+  const glb = convertObjToGlb('v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n');
+  assert(gltfKind(glb) === 'glb');
+  const v = await Promise.resolve(validateModelBytes(glb, { format: 'glb' }));
+  assert(v.ok, v.reason);
+  let threw = false; try { convertObjToGlb('v 0 0 0\n'); } catch { threw = true; }
+  assert(threw, 'empty obj must throw');
+});
+
+await t('unpublishedModelIds / shouldPromptRepublish for old games', () => {
+  const doc = { instances: [{ modelId: 'm_old' }], modelAssets: [] };
+  const library = { has: (id) => id === 'm_old', info: () => ({ id: 'm_old', format: 'glb' }) };
+  assert(unpublishedModelIds(doc, library).join() === 'm_old');
+  assert(shouldPromptRepublish(doc, library) === true);
+  const published = { ...doc, modelAssets: [{ id: 'm_old' }] };
+  assert(unpublishedModelIds(published, library).length === 0);
+  assert(shouldPromptRepublish(published, library) === false);
+});
+
+await t('attachModelAssets converts obj via toShareable', async () => {
+  const glb = convertObjToGlb('v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n');
+  const hash = await sha256hex(glb);
+  const uid = '11111111-1111-4111-8111-111111111111';
+  const supabaseUrl = 'http://127.0.0.1:54321';
+  const url = publicObjectUrl(supabaseUrl, uid, hash, 'glb');
+  const library = {
+    async toShareable(id) { return id === 'm_obj' ? { id, name: 'mesh', format: 'glb', data: glb, convertedFrom: 'obj' } : null; },
+    info() { return null; },
+  };
+  const { assets, skipped, complete } = await attachModelAssets({ instances: [{ modelId: 'm_obj' }] }, library, {
+    supabaseUrl, upload: async () => ({ url, userId: uid }),
+  });
+  assert(complete && assets.length === 1 && skipped.length === 0, JSON.stringify({ assets, skipped }));
+  assert(assets[0].format === 'glb' && assets[0].hash === hash);
+});
 console.log(`${pass}/${pass + fail} editor-models unit tests passed`);
 process.exit(fail ? 1 : 0);

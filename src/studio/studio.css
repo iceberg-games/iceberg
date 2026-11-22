@@ -36,6 +36,7 @@ body.studio-active #hud, body.studio-active .help, body.studio-active #back-to-e
 .st-tbx { display: flex; flex-direction: column; align-items: center; padding: 6px 2px; background: #33383f; border: 1px solid #434b55; border-radius: 6px; color: #e4edf5; font: 11px inherit; font-family: inherit; cursor: pointer; text-align: center; }
 .st-tbx span { font-size: 18px; } .st-tbx:hover { background: #3d444d; border-color: #3fa2ea; }
 .st-hint { color: #8b98a6; font-size: 11px; margin: 4px 0; }
+.st-warn { color: #f3c56b; font-size: 12px; margin: 6px 0; line-height: 1.35; }
 .st-right { position: absolute; top: 96px; right: 0; bottom: 24px; width: 300px; background: #2a2e35; border-left: 1px solid #3a414b; overflow-y: auto; }
 .st-props { padding: 8px 10px 20px; }
 .st-props h3 { margin: 2px 0 8px; font-size: 15px; } .st-props h4 { margin: 12px 0 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #8b98a6; border-bottom: 1px solid #3a414b; padding-bottom: 2px; }

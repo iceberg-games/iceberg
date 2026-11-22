@@ -21,7 +21,7 @@ import { rigSpawn } from './game/avatarRig.js';
 import { mountFriendsPanel } from './ui/friendsPanel.js';
 import { h } from './ui/dom.js';
 import { CREATOR, findGame } from './games/registry.js';
-import { getServerGame } from './studio/store.js';
+import { getServerGame, shouldPromptRepublish } from './studio/store.js';
 import { customGameDef } from './games/customGame.js';
 import { showDevicePicker } from './ui/devicePicker.js';
 import { mountTouchControls } from './ui/touchControls.js';
@@ -82,6 +82,10 @@ async function boot() {
   const play = async (def, { friend = null } = {}) => {
     menu.hide(); testingDoc = null; backToEditor.classList.add('hidden');
     await engine.loadGame(def);
+    if (def.doc && shouldPromptRepublish(def.doc, models)) {
+      const mine = def.doc.owner === economy.profile?.playerId || (!def.doc.fromServer && backend.loadCustomGames().some(g => g.id === def.doc.id));
+      if (mine) ui.toast("Other players can't see your imported models yet. Open Studio and press Publish again to share them.", 'ℹ️');
+    }
     gameChat.show(true);
     // multiplayer: pick/create a server instance (or the friend's from ?join=), then chat in that instance's room
     const joinFriend = friend || (def.id === GAME_PARAM ? params.get('join') : null);
