@@ -11,6 +11,9 @@ import { plusCard } from '../core/plus.js';
 import { REWARDS } from '../core/economy.js';
 import { modelPrefs } from '../backend/LocalBackend.js';
 import { BODY_TYPES, saveBodyType } from '../game/bodyTypes.js';
+import { buyUgc, ugcStatus } from '../ugc/store.js';   // player-made accessories (✨ Creations)
+import { renderUgcThumb } from '../ugc/thumb.js';
+import { isMobile } from '../core/device.js';
 
 // Optional device-mode module (owned by Publisher). import.meta.glob resolves to {}
 // when the file doesn't exist, so the build never breaks on its absence.
@@ -19,7 +22,7 @@ const loadDevice = () => (DEVICE_MODULE['../core/device.js'] ? DEVICE_MODULE['..
 
 const CATS = [
   ['all', 'All'], ['hat', 'Hats'], ['face', 'Face'], ['skin', 'Skins'], ['shirt', 'Shirts'],
-  ['acc', 'Accessories'], ['winter', '❄️ Winter'], ['premium', '🚀 Premium'],
+  ['acc', 'Accessories'], ['winter', '❄️ Winter'], ['premium', '🚀 Premium'], ['ugc', '✨ Creations'],
 ];
 const SLOT_NAMES = { hat: 'Hat', face: 'Face', skin: 'Skin', shirt: 'Shirt', neck: 'Neck', back: 'Back', hand: 'Hand' };
 
@@ -208,7 +211,7 @@ export class UI {
 
   _shop() {
     const e = this.economy;
-    const filter = (c) => this.shopCat === 'all' || c.slot === this.shopCat || (this.shopCat === 'acc' && ['neck', 'back', 'hand'].includes(c.slot)) || (this.shopCat === 'winter' && c.winter) || (this.shopCat === 'premium' && c.premium);
+    const filter = (c) => this.shopCat === 'all' || c.slot === this.shopCat || (this.shopCat === 'acc' && ['neck', 'back', 'hand'].includes(c.slot)) || (this.shopCat === 'winter' && c.winter) || (this.shopCat === 'premium' && c.premium) || (this.shopCat === 'ugc' && c.ugc);
     const tabs = h('div.tabs', CATS.map(([id, label]) => h('button.tab' + (this.shopCat === id ? '.sel' : ''), { 'data-sfx': 'tab', onclick: () => { this.shopCat = id; this.refreshDrawer(); } }, label)));
     // Release A (Colin): event items stay hidden until their event starts (economy.shopVisible; owned items always show).
     const listed = (c) => {
@@ -227,14 +230,19 @@ export class UI {
       else if (av && av.state === 'event_ended') action = h('button.btn.disabled.event-ended', { disabled: true }, 'Event ended');
       else action = h('button.btn.buy' + (afford ? '' : '.disabled'), { 'data-sfx': 'none', onclick: () => this._buy(c) }, afford ? 'Buy' : `Need ${(c.price - e.coins).toLocaleString()}`);
       if (av && av.limited && av.forSale && !owned) limitBadge = h('div.limited-badge', { style: 'display:inline-block;margin:2px auto 4px;padding:2px 8px;border-radius:999px;background:linear-gradient(90deg,#ff7a1a,#ff3d6e);color:#fff;font-size:11px;font-weight:700' }, `⏳ Limited time${av.msLeft > 0 ? ' · ' + this._fmtLeft(av.msLeft) + ' left' : ''}`);
-      return h('div.card' + (c.premium ? '.premium' : '') + (owned ? '.owned' : '') + (av?.state === 'event_ended' && !owned ? '.ended' : ''), { 'data-id': c.id, style: av?.state === 'event_ended' && !owned ? 'opacity:0.6' : null },
+      return h('div.card' + (c.premium ? '.premium' : '') + (c.ugc ? '.ugc-card' : '') + (owned ? '.owned' : '') + (av?.state === 'event_ended' && !owned ? '.ended' : ''), { 'data-id': c.id, style: av?.state === 'event_ended' && !owned ? 'opacity:0.6' : null },
         limitBadge,
-        h('div.card-icon', c.icon), h('div.card-name', c.name),
-        c.desc ? h('div.card-desc', c.desc) : null,
+        c.ugc ? h('div.ugc-badge', '✨ CREATION') : null,
+        h('div.card-icon', c.ugc ? this._ugcThumb(c) : c.icon), h('div.card-name', c.name),
+        c.ugc ? h('div.ugc-by', c.mine ? 'by you · free for you' : `by ${c.creator}`) : c.desc ? h('div.card-desc', c.desc) : null,
         h('div.price', owned ? (eq ? '✔ Equipped' : 'Owned') : c.earnOnly ? '🎁 Free event reward' : `${CURRENCY.icon} ${c.price.toLocaleString()} BB`),
         action);
     }));
-    return this._frame('🛍️ Cosmetics Shop', `You have ${fmt(e.coins)}`, tabs, cards);
+    const ugcHead = this.shopCat === 'ugc' ? h('div.ugc-banner#ugc-banner', h('span.ugc-banner-ico', '🛠️'),
+      h('div', h('b', 'Catalog · Creations'), h('span.muted.small', `Accessories made by players in the Accessory Editor. ${ugcStatus.mode === 'server' ? '' : 'Creations are stored on this device until account sync is live.'}`)),
+      isMobile() ? h('small.muted', 'Create on a computer') : h('button.btn.small.ugc-entry#ugc-create-btn', { onclick: () => { this.closeDrawer(); bus.emit('ugc:open'); } }, '✚ Create accessory')) : null;
+    if (this.shopCat === 'ugc' && !cards.children.length) cards.append(h('div.empty', 'No creations yet. Be the first: build one in the Accessory Editor!'));
+    return this._frame('🛍️ Cosmetics Shop', `You have ${fmt(e.coins)}`, tabs, ugcHead, cards);
   }
   // ---------- earn-only event items (Natural Disasters) ----------
   // Uses Publisher's economy.getQuests / claimQuestReward when present; never grants client-side.
@@ -300,8 +308,12 @@ export class UI {
     const m = Math.floor(ms / 60000), d = Math.floor(m / 1440), hh = Math.floor((m % 1440) / 60), mm = m % 60;
     return d ? `${d}d ${hh}h` : hh ? `${hh}h ${mm}m` : `${Math.max(1, mm)}m`;
   }
+  _ugcThumb(c) {
+    const src = c.thumb || renderUgcThumb(c.spec);
+    return src ? h('img.ugc-thumb', { src, alt: c.name }) : c.icon;
+  }
   _buy(c) {
-    const r = this.economy.buy(c.id) || { ok: false, reason: 'Could not buy right now' };
+    const r = (c.ugc ? buyUgc(this.economy, c) : this.economy.buy(c.id)) || { ok: false, reason: 'Could not buy right now' };
     if (r && typeof r.then === 'function') { r.then((x) => this._buyResult(c, x || {}), () => playUi('error') || this.toast('Could not buy right now. Try again soon.', '⚠️')); return; }
     this._buyResult(c, r);
   }

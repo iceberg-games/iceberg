@@ -11,6 +11,7 @@ export { BODY_TYPES, BODY_TYPE_IDS, getBodySlots, loadBodyType, saveBodyType } f
 import { QOL_GAME_BUILDERS } from './cosmetics/qolGameWearables.js';
 import { FINAL_SHOWCASE_BUILDERS } from './cosmetics/finalShowcase.js'; // lane 1 (fs_glacier_wings, fs_polar_cub_pal)
 import { FINAL_SHOWCASE_LANE2_BUILDERS } from './cosmetics/finalShowcaseLane2.js'; // lane 2 (fs_aurora_lantern_staff)
+import { buildUgcObject } from '../ugc/spec.js'; // player-made accessories (UGC editor): same builder as the editor preview
 import WIND_MAIN_OGG from '../assets/audio/tornado_hat_wind_loop.ogg?url';
 import WIND_MAIN_MP3 from '../assets/audio/tornado_hat_wind_loop.mp3?url';
 import WIND_HIGH_OGG from '../assets/audio/tornado_hat_wind_loop_high.ogg?url';
@@ -2353,8 +2354,8 @@ export class Avatar {
         if (item.shimmer) { this._shimmerId = id; this._aurU.uAur.value = 1; this._aurU.uAurColor.value.set(skin); }
       }
       else if (item.kind === 'shirt') { shirt = item.color; pants = item.pants; }
-      else if (BUILDERS[id]) {
-        const { bone, object, extras } = BUILDERS[id](this.rocketColors, this.cosmeticColors[id] || item.defaultColor);
+      else if (BUILDERS[id] || (item.ugc && item.spec)) {
+        const { bone, object, extras } = item.ugc ? buildUgcObject(item.spec) : BUILDERS[id](this.rocketColors, this.cosmeticColors[id] || item.defaultColor);
         object.traverse(o => { if (o.isMesh) o.castShadow = true; });
         const cloth = item.slot === 'shirt';
         this._anchorFor(bone, cloth).add(object);
