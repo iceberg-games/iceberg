@@ -287,67 +287,82 @@ await p.click('#back-to-editor').catch(() => {}); await p.waitForTimeout(1200);
 const backEd = await ED();
 ok('back to editor after test', backEd);
 
-// Exit and play from the Games menu
+// Exit and play from the Games menu.
+// PC home tiles open a pop-out (?game=&autostart=1). Remaining play checks run in that window
+// (or in this page if the popup is blocked and playInTab falls back).
 await p.click('#exit-editor'); await p.waitForTimeout(400);
 const names = await p.$$eval('#your-games .gc-name', e => e.map(x => x.textContent));
 ok('published game listed in menu', names.includes('Studio Test World'), names.join(','));
-await p.evaluate(() => { window.__forceTouch = true; });
+await ctx.addInitScript(() => {
+  window.__forceTouch = true;   // show Studio runtime touch controls in the game window
+  try { localStorage.setItem('iceberg:v1:allowMobile', '1'); } catch { /* ignore */ }   // MOBILE_BLOCKED must not hide the game window
+});
 const card = p.locator('.game-card', { hasText: 'Studio Test World' }).first();
 console.log('menu html has', await p.evaluate(() => [...document.querySelectorAll('.game-card .gc-name')].map(e=>e.textContent)));
-await card.locator('.play').first().click({ timeout: 5000 }); await p.waitForTimeout(2000);
-const G = (fn) => p.evaluate(fn);
+const popP = ctx.waitForEvent('page', { timeout: 8000 }).catch(() => null);
+await card.locator('.play').first().click({ timeout: 5000 });
+const pop = await popP;
+const gp = pop || p;
+if (pop) {
+  pop.on('console', m => m.type() === 'error' && errs.push('pop: ' + m.text()));
+  pop.on('pageerror', e => errs.push('pop: ' + e.stack));
+  await pop.waitForFunction(() => window.iceberg?.engine?.game?.runtime === true, null, { timeout: 20000 }).catch(() => {});
+} else {
+  await p.waitForTimeout(2000);
+}
+const G = (fn) => gp.evaluate(fn);
 ok('play from menu', await G(() => window.iceberg.engine.game?.runtime === true));
-ok('mobile controls shown (touch device)', await p.isVisible('.rt-touch .joy'));
+ok('mobile controls shown (touch device)', await gp.isVisible('.rt-touch .joy'));
 const sp = await G(() => window.iceberg.engine.player.pos.toArray());
 ok('spawn at SpawnLocation', Math.abs(sp[0]) < 0.5 && Math.abs(sp[2]) < 0.5 && sp[1] > 0.3, JSON.stringify(sp));
 // spinner rotates
 const r1 = await G(() => { const g = window.iceberg.engine.game; return [...g.world.entries.values()].find(e => e.inst.name === 'Cylinder').root.rotation.y; });
-await p.waitForTimeout(800);
+await gp.waitForTimeout(800);
 const r2 = await G(() => { const g = window.iceberg.engine.game; return [...g.world.entries.values()].find(e => e.inst.name === 'Cylinder').root.rotation.y; });
 ok('plain-words spin script runs', r2 > r1, `${r1.toFixed(3)} -> ${r2.toFixed(3)}`);
 // animation autoplay
 const arm = await G(() => { const g = window.iceberg.engine.game; const e = [...g.world.entries.values()].find(e => e.inst.name === 'R6 Rig'); return e.rig.bones.get('Right Arm').rotation.z; });
 ok('rig animation autoplays in game', Math.abs(arm) > 0.05, `arm z=${arm.toFixed(2)}`);
-const tp = async (x, y, z) => { await G(`window.iceberg.engine.player.teleport(new (window.iceberg.engine.player.pos.constructor)(${x},${y},${z}))`); await p.waitForTimeout(700); };
+const tp = async (x, y, z) => { await G(`window.iceberg.engine.player.teleport(new (window.iceberg.engine.player.pos.constructor)(${x},${y},${z}))`); await gp.waitForTimeout(700); };
 // coin
 const bb0 = await G(() => window.iceberg.economy.coins); await tp(3, 0, 4); const bb1 = await G(() => window.iceberg.economy.coins);
 ok('coin pickup', bb1 === bb0 + 5, `${bb0} -> ${bb1}`);
 // touch script on wedge (points)
-await tp(6, 2.2, 4); await p.waitForFunction(() => /10 points/.test(document.querySelector('.rt-score')?.textContent || ''), null, { timeout: 4000 }).catch(() => {}); ok('touch script gives points', /10 points/.test(await p.textContent('.rt-score').catch(() => '')), await p.textContent('.rt-score').catch(() => ''));
+await tp(6, 2.2, 4); await gp.waitForFunction(() => /10 points/.test(document.querySelector('.rt-score')?.textContent || ''), null, { timeout: 4000 }).catch(() => {}); ok('touch script gives points', /10 points/.test(await gp.textContent('.rt-score').catch(() => '')), await gp.textContent('.rt-score').catch(() => ''));
 // gear
 await tp(0, 1.1, 15); const bp = await G(() => window.iceberg.engine.game.backpack.items);
 ok('gear giver gives Speed Coil', bp.includes('speedCoil'), JSON.stringify(bp));
-await p.keyboard.press('Digit1'); await p.waitForTimeout(100);
+await gp.keyboard.press('Digit1'); await gp.waitForTimeout(100);
 ok('equip gear (key 1) → speed boost', await G(() => window.iceberg.engine.player.mods.speed > 1));
 
 // clicking a part with a "when clicked" script; button opens the door called Gate
 const clickAt = (name) => G(`(() => { const e = window.iceberg.engine, g = e.game; const ent = [...g.world.entries.values()].find(x => x.inst.name === '${name}'); const v = ent.root.position.clone().project(e.camera); const r = e.renderer.domElement.getBoundingClientRect(); e._setMouse({ clientX: r.left + (v.x + 1) / 2 * r.width, clientY: r.top + (1 - v.y) / 2 * r.height }); g.onClick({ ray: e._ray(), button: 0 }); return [v.x, v.y, v.z]; })()`);
 const sphColor = () => G(() => { const ent = [...window.iceberg.engine.game.world.entries.values()].find(x => x.inst.name === 'Sphere'); let c = null; ent.root.traverse(o => { if (!c && o.material?.color) c = o.material.color.getHexString(); }); return c; });
-await tp(-6, 1, 10); await p.waitForTimeout(300);
-const sc0 = await sphColor(); await clickAt('Sphere'); await p.waitForTimeout(700); const sc1 = await sphColor();
+await tp(-6, 1, 10); await gp.waitForTimeout(300);
+const sc0 = await sphColor(); await clickAt('Sphere'); await gp.waitForTimeout(700); const sc1 = await sphColor();
 ok('runtime: "when clicked, turn green" works', sc0 !== sc1, `${sc0} -> ${sc1}`);
-await tp(-20, 1, 8); await p.waitForTimeout(300);
+await tp(-20, 1, 8); await gp.waitForTimeout(300);
 const gateState = () => G(() => { const e = [...window.iceberg.engine.game.world.entries.values()].find(x => x.inst.name === 'Gate'); return { open: !!e.doorOpen, solid: e.solid !== false }; });
 const gate0 = await gateState();
-await clickAt('GateButton'); await p.waitForTimeout(1500);
+await clickAt('GateButton'); await gp.waitForTimeout(1500);
 const gate1 = await gateState();
 ok('runtime: button click opens the door called Gate', !gate0.open && gate0.solid && gate1.open && !gate1.solid, `${JSON.stringify(gate0)} -> ${JSON.stringify(gate1)}`);
 // riding a moving platform
 const liftX = () => G(() => [...window.iceberg.engine.game.world.entries.values()].find(x => x.inst.name === 'Lift').root.position.x);
-const lx0 = await liftX(); await tp(lx0, 1.6, -20); await p.waitForTimeout(300);
-const ride = []; for (let i = 0; i < 18; i++) { ride.push(await G(() => { const g = window.iceberg.engine.game; const l = [...g.world.entries.values()].find(x => x.inst.name === 'Lift').root.position.x; const pl = window.iceberg.engine.player.pos; return [l, pl.x, pl.y]; })); await p.waitForTimeout(300); }
+const lx0 = await liftX(); await tp(lx0, 1.6, -20); await gp.waitForTimeout(300);
+const ride = []; for (let i = 0; i < 18; i++) { ride.push(await G(() => { const g = window.iceberg.engine.game; const l = [...g.world.entries.values()].find(x => x.inst.name === 'Lift').root.position.x; const pl = window.iceberg.engine.player.pos; return [l, pl.x, pl.y]; })); await gp.waitForTimeout(300); }
 const offs = ride.map(r => r[1] - r[0]), lxs = ride.map(r => r[0]);
 ok('player rides a moving platform', Math.max(...lxs) - Math.min(...lxs) > 0.3 && Math.max(...offs) - Math.min(...offs) < 0.35 && ride.every(r => r[2] > 0.9), `platform moved ${(Math.max(...lxs) - Math.min(...lxs)).toFixed(2)}, offset drift ${(Math.max(...offs) - Math.min(...offs)).toFixed(3)}`);
 // riding a spinning platform (the Cylinder spins slowly at 0,0.5,40)
-await tp(2, 1.4, 40); await p.waitForTimeout(400);
-const q0 = await G(() => window.iceberg.engine.player.pos.toArray()); await p.waitForTimeout(1200);
+await tp(2, 1.4, 40); await gp.waitForTimeout(400);
+const q0 = await G(() => window.iceberg.engine.player.pos.toArray()); await gp.waitForTimeout(1200);
 const q1 = await G(() => window.iceberg.engine.player.pos.toArray());
 const a0 = Math.atan2(q0[2] - 40, q0[0]), a1 = Math.atan2(q1[2] - 40, q1[0]);
 ok('player rides a rotating platform', Math.abs(a1 - a0) > 0.05 && Math.abs(Math.hypot(q1[0], q1[2] - 40) - Math.hypot(q0[0], q0[2] - 40)) < 0.3 && q1[1] > 0.9, `angle ${a0.toFixed(2)} -> ${a1.toFixed(2)}, r ${Math.hypot(q1[0], q1[2] - 40).toFixed(2)}`);
 // curved collision: standing on a lying (rotated) cylinder off-centre lands on the curve, not on its bounding box
-await tp(20, 4, 21.2); await p.waitForTimeout(900);
+await tp(20, 4, 21.2); await gp.waitForTimeout(900);
 const onLog = await G(() => window.iceberg.engine.player.pos.toArray());
-await tp(20, 4, 20); await p.waitForTimeout(900);
+await tp(20, 4, 20); await gp.waitForTimeout(900);
 const onLogTop = await G(() => window.iceberg.engine.player.pos.toArray());
 ok('accurate collision on a rotated cylinder', onLogTop[1] > 1.9 && onLogTop[1] < 2.1 && onLog[1] > 1.3 && onLog[1] < 1.85, `top y=${onLogTop[1].toFixed(2)}, off-centre y=${onLog[1].toFixed(2)} (box would be 2.00)`);
 // checkpoint then kill brick
@@ -356,17 +371,20 @@ await tp(0, 1.05, 30); const afterKill = await G(() => window.iceberg.engine.pla
 ok('checkpoint + kill brick respawns at checkpoint', Math.abs(afterKill[2] - 20) < 1.5 && afterKill[1] < 2, `after kill ${JSON.stringify(afterKill.map(v => +v.toFixed(2)))}`);
 // walking works with analog input (mobile hook)
 const w0 = await G(() => window.iceberg.engine.player.pos.toArray());
-await G(() => { window.iceberg.engine.input.analog = { x: 0, y: 1 }; }); await p.waitForTimeout(600); await G(() => { window.iceberg.engine.input.analog = null; });
+await G(() => { window.iceberg.engine.input.analog = { x: 0, y: 1 }; }); await gp.waitForTimeout(600); await G(() => { window.iceberg.engine.input.analog = null; });
 const w1 = await G(() => window.iceberg.engine.player.pos.toArray());
 ok('analog move input (mobile hook)', Math.hypot(w1[0] - w0[0], w1[2] - w0[2]) > 0.5, `${w0.map(v => v.toFixed(1))} -> ${w1.map(v => v.toFixed(1))}`);
 
-// Import the exported file back in the studio
-await G(() => window.iceberg.goHome()); await p.click('#create-btn'); await p.click('[data-template=obby]'); await p.waitForTimeout(1200);
+// Import the exported file back in the studio (home tab, not the pop-out — goHome() would close a pop-out)
+if (gp !== p) { try { await gp.close(); } catch { /* ignore */ } }
+else { await G(() => window.iceberg.goHome()); }
+await p.waitForSelector('#create-btn'); await p.click('#create-btn');
+await p.waitForSelector('[data-template=obby]'); await p.click('[data-template=obby]');
+await p.waitForFunction(() => window.iceberg?.engine?.game?.editing, null, { timeout: 15000 });
 const obbyN = await count();
-await p.setInputFiles('#import-game', []).catch(() => {});
-const imp = p.locator('#creator-panel input[type=file][accept=".json"]');
-await imp.setInputFiles(exportPath); await p.waitForTimeout(1500);
 ok('obby template loads', obbyN > 15, `${obbyN} instances`);
+await p.waitForSelector('#import-game-file', { state: 'attached' });
+await p.setInputFiles('#import-game-file', exportPath); await p.waitForTimeout(1500);
 ok('import game file into studio', await p.evaluate(() => window.iceberg.engine.game?.doc?.name === 'Studio Test World' && window.iceberg.engine.game.doc.instances.length > 10));
 
 } catch (e) { results.push(['FAIL', 'test aborted', e.message.split('\n')[0]]); }

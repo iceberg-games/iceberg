@@ -129,14 +129,18 @@ export class CreatorPanel {
     return (this.lastSave || Promise.resolve(d)).then(() => publish(d)).then(({ remote, modelsLocalOnly }) => { if (modelsLocalOnly) setTimeout(() => this.ui.toast('Heads up: uploaded 3D models only show on your device; other players see a placeholder box', 'ℹ️'), 1500); bus.emit('games:changed'); this.ui.toast(remote ? `Published "${d.name}" for everyone!` : `Published "${d.name}" to your Games menu (sign in to share it)`, '🚀'); this.renderProps(); return d; },
       (err) => { bus.emit('games:changed'); this.ui.toast(`Publish failed: ${err.message}`, '⚠️'); this.renderProps(); throw err; });
   }
+  importInput() {
+    if (this._importInput) return this._importInput;
+    return this._importInput = h('input#import-game-file', { type: 'file', accept: '.json', style: { display: 'none' }, onchange: async (e) => { const f = e.target.files[0]; if (!f) return; try { const d = upgradeDoc(await importGameJSON(await f.text(), this.models)); drafts.save(d); this.ui.toast(`Imported "${d.name}"`, '📥'); this.onReload(d); } catch (err) { this.ui.toast(`Import failed: ${err.message}`, '⚠️'); } e.target.value = ''; } });
+  }
   toggleFileMenu() {
     const cur = this.el.querySelector('#studio-file-menu');
     if (cur) { cur.remove(); return; }
-    const importInput = h('input#import-game-file', { type: 'file', accept: '.json', style: { display: 'none' }, onchange: async (e) => { const f = e.target.files[0]; if (!f) return; try { const d = upgradeDoc(await importGameJSON(await f.text(), this.models)); drafts.save(d); this.ui.toast(`Imported "${d.name}"`, '📥'); this.onReload(d); } catch (err) { this.ui.toast(`Import failed: ${err.message}`, '⚠️'); } } });
+    const importInput = this.importInput();
     const menu = h('div.st-file-menu#studio-file-menu',
       h('p.st-hint', 'Save already stores this game on your Iceberg account. Export/import a file only if you need a backup.'),
       h('button.st-mini#export-game', { onclick: () => { const d = this.save(true); downloadText(`${d.name.replace(/[^\w-]+/g, '_')}.iceberg.json`, exportGameJSON(d, this.models)); } }, '⤓ Export JSON'),
-      importInput, h('button.st-mini#import-game', { onclick: () => importInput.click() }, '⤒ Import JSON'));
+      h('button.st-mini#import-game', { onclick: () => importInput.click() }, '⤒ Import JSON'));
     const host = this.el.querySelector('#game-file-menu')?.parentElement || this.ribbon;
     host.append(menu);
   }
@@ -148,6 +152,7 @@ export class CreatorPanel {
       h('div.st-right', this.props = h('div.st-props')),
       this.anim = h('div.st-anim.hidden'),
       h('div.st-status', h('button.st-mini#hotkey-help-btn', { onclick: () => this.toggleHelp() }, '⌨️ Shortcuts (?)'), ' Right-drag look · WASD+Q/E fly · Shift/Ctrl+click add · drag empty = box select · 1–5 tools · G grid · Ctrl+C/X/V copy/cut/paste · Ctrl+D dup · Ctrl+G group · Ctrl+R rotate 90° · F focus · Ctrl+S save'),
+      this.importInput(),
     );
     this.renderRibbon(); this.renderLeft(); this.renderProps(); this.renderAnimator();
     attachStudioChat(this.el, () => this);
