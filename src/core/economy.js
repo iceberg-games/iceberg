@@ -499,8 +499,10 @@ export class Economy {
   syncLoadoutNow() {
     if (!this.remote) return Promise.resolve();
     clearTimeout(this._loadoutTimer);
-    const { equipped, rocketColors, cosmeticColors } = this.profile;
-    this._enqueue(0, (r) => r.saveLoadout({ equipped, rocketColors, cosmeticColors: cosmeticColors || {} }));
+    const { equipped, rocketColors, cosmeticColors, customWear } = this.profile;
+    const loadout = { equipped, rocketColors, cosmeticColors: cosmeticColors || {} };
+    if ('customWear' in this.profile) loadout.customWear = customWear || {};   // {} clears (server null-arg means "leave unchanged")
+    this._enqueue(0, (r) => r.saveLoadout(loadout));
     return this._queue;
   }
 }

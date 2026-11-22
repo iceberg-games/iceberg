@@ -72,6 +72,7 @@ class Burst {
 export async function createRuntime(ctx, doc) {
   const { engine, economy, models, avatar } = ctx;
   const scene = new THREE.Scene();
+  if (doc.modelAssets?.length && models?.ensureAssets) models.ensureAssets(doc.modelAssets).catch((e) => console.warn('model assets', e));
   const world = new StudioWorld(scene, doc, { models, editing: false });
   const collision = new Collision({ floorY: world.env.floorY, bounds: world.env.bounds });
   if (doc.terrain) collision.heightAt = (x, z) => terrainHeightAt(doc.terrain, x, z);
@@ -111,6 +112,14 @@ export async function createRuntime(ctx, doc) {
   }
   const initEntry = (e) => { e.visible = true; e.solid = e.inst.collide !== false; refreshCollider(e); e.home = { pos: e.root.position.clone(), rot: e.root.rotation.clone() }; };
   entries.forEach(initEntry);
+  world.onRebuilt = (n, prev) => {
+    n.visible = prev.visible !== false; n.solid = prev.solid; n.root.visible = n.visible;
+    n.home = prev.home ? { pos: prev.home.pos.clone(), rot: prev.home.rot.clone() } : { pos: n.root.position.clone(), rot: n.root.rotation.clone() };
+    n.motion = prev.motion; if (n.motion) n.motion.entry = n;
+    refreshCollider(n);
+    const i = entries.indexOf(prev);
+    if (i >= 0) entries[i] = n;
+  };
   const byName = (name) => entries.find(e => e.inst.name.toLowerCase() === String(name).toLowerCase() && !e.spawned);
   const topOf = (e) => { const b = e.convex.aabb; return new THREE.Vector3((b.minX + b.maxX) / 2, b.maxY + 0.05, (b.minZ + b.maxZ) / 2); };
   const resolvePoint = (self) => (p) => {
@@ -444,6 +453,7 @@ export async function createRuntime(ctx, doc) {
       engine.input.analog = null; engine.input.keys.delete('Space'); engine.renderer.domElement.style.cursor = '';
       for (const b of bursts) scene.remove(b.points);
       for (const e of entries) clearTimeout(e._doorT);
+      world.dispose?.();
     },
   };
 }

@@ -22,6 +22,7 @@ import { normalizeBodyType, BODY_TYPE_IDS } from '../game/bodyTypes.js';
 import { nameTagOffset } from '../chat/nameTag.js';
 import { RealtimeClient } from '../net/realtime.js';
 import { bus as defaultBus } from '../core/events.js';
+import { applyRemoteWear, sameWear } from './customWear.js';
 
 export const MAX_HZ = 10;                 // never send more than this
 const RECV_MAX_PER_S = 15;                // drop senders above this
@@ -67,10 +68,11 @@ const PROXIMITY_MS = 200;
 export const STALE_MS = 12000;
 const LIVENESS_MS = 1000;                 // avatar.updateProximity ~5x/s (not every frame)
 
-export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, AvatarClass = Avatar, RealtimeImpl = RealtimeClient, now = () => performance.now(), getListener = null, wallNow = () => Date.now(), localName = () => 'You', bus = defaultBus }) {
+export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, AvatarClass = Avatar, RealtimeImpl = RealtimeClient, now = () => performance.now(), getListener = null, wallNow = () => Date.now(), localName = () => 'You', bus = defaultBus, getCustomWear = () => null }) {
   let rt = null, s = null, raf = 0;
   const stats = { sent: 0, recv: 0, dropped: 0, rejected: 0, disposed: 0, proximity: 0, immediate: 0, stateSent: 0, stateRecv: 0, events: 0 };
   let chatHint = null;
+  let localWear = null;                         // published custom-wear ref we last broadcast
   let clockOffset = 0;                                   // server clock - local wall clock (ms)
 
   function realtimeFor(remote) {
@@ -261,7 +263,7 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
       for (const k of fresh) sess.stale.delete(k);
       if (fresh.some(k => !sess.roster.has(k))) refreshRoster();
       syncOthers();
-      if (fresh.length) { sess.wantSend = true; if (isHost() && state.size) scheduleSnapshot(); }   // late joiners: snapshot
+      if (fresh.length) { sess.wantSend = true; if (isHost() && state.size) scheduleSnapshot(); sendWear(); }   // late joiners: snapshot + current wear
       checkRoles();
     });
     ch.onBroadcast('s', onMove);
@@ -270,9 +272,11 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     ch.onBroadcast('ev', onEventMsg);
     ch.onBroadcast('l', (p) => { if (s === sess && p && typeof p.u === 'string' && p.u !== me.username && sess.roster.has(p.u)) { sess.stale.add(p.u); removeOther(p.u); } });   // "bye": don't wait for presence
     ch.onBroadcast('c', (p) => { if (s === sess && p && sess.roster.has(p.u) && sess.present.has(p.u)) chatHint?.(); });
+    ch.onBroadcast('w', onWear);
     try { await ch.subscribe(); }
     catch (e) { stats.rejected++; if (s === sess) s = null; await remote.mpLeave().catch(() => {}); console.warn('multiplayer join refused', e.message); return done(null); }
     ch.track({ u: me.username });
+    sendWear();
     sess.timers.push(setInterval(sendTick, 50), setInterval(heartbeat, 20000), setInterval(proximityTick, PROXIMITY_MS), setInterval(livenessTick, LIVENESS_MS),
       setInterval(() => { if (s === sess && isHost() && sess.others.size && state.size && now() - sess.lastSnap >= SNAPSHOT_EVERY_MS) scheduleSnapshot(0); }, 1000));
     // late joiner: ask the host for the snapshot (twice, in case the first ask races presence)
@@ -282,13 +286,21 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     return { instance: sess.instance, topic: sess.topic, room: sess.room, note: sess.note, cap: sess.cap };
   }
 
+  const lookOf = (p) => JSON.stringify([p?.equipped, p?.rocketColors, p?.cosmeticColors, p?.customWear || null]);
+  function applyLook(o, p) {
+    if (!o || !p) return;
+    const look = lookOf(p);
+    if (o.look === look) return;
+    try { o.avatar.applyLoadout({ equipped: p.equipped || {}, rocketColors: p.rocketColors, cosmeticColors: p.cosmeticColors || {} }); } catch (e) { console.warn(e); }
+    o.look = look;
+    applyRemoteWear(o.avatar, p.customWear || null, engine.models, { supabaseUrl: s?.remote?.client?.url || s?.remote?.realtimeConfig?.url }).catch((e) => console.warn(e));
+  }
   function setRoster(list) {
     if (!s) return;
     s.roster = new Map((list || []).map(p => [p.username, p])); s.rosterAt = now();
     for (const [k, o] of s.others) {
       const p = s.roster.get(k); if (!p) { removeOther(k); continue; }
-      const look = JSON.stringify([p.equipped, p.rocketColors, p.cosmeticColors]);
-      if (o.look !== look) { try { o.avatar.applyLoadout({ equipped: p.equipped || {}, rocketColors: p.rocketColors, cosmeticColors: p.cosmeticColors || {} }); } catch (e) { console.warn(e); } o.look = look; }
+      applyLook(o, p);
     }
     syncOthers(); checkRoles();
   }
@@ -327,10 +339,11 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     avatar.root.userData.remotePlayer = k;          // visuals only: never engine.player, never collides or triggers
     scene.add(avatar.root);
     try { const l = getListener?.(); if (l) avatar.attachWindAudio?.(l); } catch (e) { console.warn(e); }   // shared listener (core/audio.js)
-    const o = { avatar, look: JSON.stringify([p.equipped, p.rocketColors, p.cosmeticColors]), samples: [], recv: [], gap: 100, lastT: 0, addedAt: now(), seq: -1, displayName: p.displayName || k,
+    const o = { avatar, look: lookOf(p), samples: [], recv: [], gap: 100, lastT: 0, addedAt: now(), seq: -1, displayName: p.displayName || k,
       anim: 0, animsSeen: new Set(), events: { j: 0, l: 0, t: 0 }, snaps: 0 };
     s.others.set(k, o);
     bubbles?.track(k, avatar.bones?.head || avatar.root, { name: p.displayName || k, offsetY: () => nameTagOffset(avatar.bodyType) });
+    applyRemoteWear(avatar, p.customWear || null, engine.models, { supabaseUrl: s.remote?.client?.url || s.remote?.realtimeConfig?.url }).catch((e) => console.warn(e));
   }
   function removeOther(k) {
     const o = s?.others.get(k); if (!o) return;
@@ -478,6 +491,27 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     }
   }
 
+
+  function onWear(p) {
+    if (!s) return;
+    if (!p || typeof p.u !== 'string' || p.u === s.me.username || !s.roster.has(p.u) || !s.present.has(p.u)) { stats.dropped++; return; }
+    const o = s.others.get(p.u); if (!o) return;
+    const wear = p.wear == null ? null : p.wear;
+    if (sameWear(o.wearRef, wear)) return;
+    o.wearRef = wear;
+    applyRemoteWear(o.avatar, wear, engine.models, { supabaseUrl: s.remote?.client?.url || s.remote?.realtimeConfig?.url }).catch((e) => console.warn(e));
+  }
+  function sendWear() {
+    if (!s) return;
+    const wear = localWear || getCustomWear?.() || null;
+    localWear = wear;
+    try { s.channel?.send('w', { u: s.me.username, wear }); } catch { /* */ }
+  }
+  function setCustomWear(ref) {
+    localWear = ref || null;
+    sendWear();
+  }
+
   async function leave() {
     const sess = s; if (!sess) return;
     s = null; cancelAnimationFrame(raf); lastFrame = 0;
@@ -506,6 +540,8 @@ export function createMultiplayer({ engine, getRemote, bubbles, me: getMe, Avata
     speak(username, text, ms) { const o = s?.others.get(username); if (!o) return false; bubbles?.say(username, text, ms); o.avatar.talk?.(ms); return true; },
     /** Tell others "I posted a chat message" so they re-poll now (no text in the broadcast). */
     hintChat() { if (s) s.channel.send('c', { u: s.me.username }); },
+    /** Broadcast (or clear) the local player's published custom-wear model ref. Infrequent — not the 10 Hz move packet. */
+    setCustomWear, getCustomWear: () => localWear || getCustomWear?.() || null,
     onChatHint(fn) { chatHint = fn; },
     /** Debug/test: the live Avatar object drawn for a remote player (null when not present). */
     /** Debug/test: run the liveness check now. */

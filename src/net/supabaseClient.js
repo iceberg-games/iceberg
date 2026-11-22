@@ -142,4 +142,28 @@ export class SupabaseClient {
       throw e;
     }
   }
+
+  /** Public URL for a Storage object (bucket is public-read). */
+  publicObjectUrl(bucket, objectPath) {
+    return `${this.url}/storage/v1/object/public/${bucket}/${String(objectPath).replace(/^\/+/, '')}`;
+  }
+
+  /** Upload raw bytes to Storage: POST /storage/v1/object/{bucket}/{path}. */
+  async uploadObject(bucket, objectPath, data, { contentType = 'application/octet-stream', upsert = true } = {}) {
+    await this.ensureFresh();
+    const path = `/storage/v1/object/${bucket}/${String(objectPath).replace(/^\/+/, '')}`;
+    const h = { apikey: this.anonKey, Authorization: `Bearer ${this.session?.access_token || this.anonKey}`, 'Content-Type': contentType };
+    if (upsert) h['x-upsert'] = 'true';
+    const body = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
+    let res;
+    try { res = await this.fetch(this.url + path, { method: 'POST', headers: h, body }); }
+    catch (e) { throw new ApiError('network_error: ' + e.message, { status: 0, code: 'network' }); }
+    const text = await res.text();
+    let parsed = null; try { parsed = text ? JSON.parse(text) : null; } catch { parsed = text; }
+    if (!res.ok) {
+      const msg = (parsed && (parsed.msg || parsed.message || parsed.error)) || `HTTP ${res.status}`;
+      throw new ApiError(msg, { status: res.status, code: parsed?.error || parsed?.code || null, details: parsed });
+    }
+    return parsed;
+  }
 }

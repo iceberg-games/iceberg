@@ -126,7 +126,7 @@ export class CreatorPanel {
   }
   publishGame() {
     const d = this.save(true);
-    return (this.lastSave || Promise.resolve(d)).then(() => publish(d)).then(({ remote, modelsLocalOnly }) => { if (modelsLocalOnly) setTimeout(() => this.ui.toast('Heads up: uploaded 3D models only show on your device; other players see a placeholder box', 'ℹ️'), 1500); bus.emit('games:changed'); this.ui.toast(remote ? `Published "${d.name}" for everyone!` : `Published "${d.name}" to your Games menu (sign in to share it)`, '🚀'); this.renderProps(); return d; },
+    return (this.lastSave || Promise.resolve(d)).then(() => publish(d, { library: this.models })).then(({ remote, modelsLocalOnly }) => { if (modelsLocalOnly) setTimeout(() => this.ui.toast('Heads up: some models could not be published (try .glb/.gltf under 25 MB); other players see a placeholder for those', 'ℹ️'), 1500); bus.emit('games:changed'); this.ui.toast(remote ? `Published "${d.name}" for everyone!` : `Published "${d.name}" to your Games menu (sign in to share it)`, '🚀'); this.renderProps(); return d; },
       (err) => { bus.emit('games:changed'); this.ui.toast(`Publish failed: ${err.message}`, '⚠️'); this.renderProps(); throw err; });
   }
   toggleFileMenu() {

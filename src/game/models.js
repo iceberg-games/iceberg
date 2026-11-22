@@ -1,11 +1,14 @@
 // User-uploaded 3D models (.glb / .gltf / .obj), persisted in IndexedDB.
+// Remote/published models are fetched by hash+URL (see modelAssets.js) and cached.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { bus } from '../core/events.js';
+import { CONFIG } from '../net/config.js';
+import { MAX_MODEL_BYTES, fetchModelAsset, parseModelRef } from './modelAssets.js';
 
-export const MAX_MODEL_BYTES = 25 * 1024 * 1024;
+export { MAX_MODEL_BYTES };
 
 function normalize(obj, targetSize = 2) {
   const box = new THREE.Box3().setFromObject(obj);
@@ -21,7 +24,7 @@ function normalize(obj, targetSize = 2) {
 }
 
 export class ModelLibrary {
-  constructor(store) { this.store = store; this.items = new Map(); }
+  constructor(store, { assetCache = null } = {}) { this.store = store; this.assetCache = assetCache; this.items = new Map(); this.pending = new Map(); }
 
   async init() {
     try {
@@ -72,7 +75,49 @@ export class ModelLibrary {
     bus.emit('models:changed');
   }
   has(id) { return this.items.has(id); }
-  list() { return [...this.items.values()].map(i => i.record); }
+  isLoading(id) { return this.pending.has(id); }
+  /** Local uploads only (excludes models fetched for someone else's game or wear). */
+  list() { return [...this.items.values()].map(i => i.record).filter(r => !r.remote); }
+  listAll() { return [...this.items.values()].map(i => i.record); }
+
+  /**
+   * Fetch, validate, cache and register a published model ref so instance(id) works for everyone.
+   * Safe to call repeatedly; in-flight requests are shared.
+   */
+  async ensureAsset(ref, { cache, fetchImpl, supabaseUrl } = {}) {
+    const parsed = parseModelRef({ ...ref, _supabaseUrl: supabaseUrl || CONFIG.supabaseUrl });
+    if (!parsed.ok) return parsed;
+    const { id } = parsed.ref;
+    if (this.has(id)) return { ok: true, id, cached: true };
+    if (this.pending.has(id)) return this.pending.get(id);
+    const work = this._loadRemote(parsed.ref, { cache, fetchImpl, supabaseUrl }).finally(() => this.pending.delete(id));
+    this.pending.set(id, work);
+    return work;
+  }
+  async _loadRemote(ref, { cache, fetchImpl, supabaseUrl } = {}) {
+    const result = await fetchModelAsset(ref, {
+      cache: cache || this.assetCache,
+      fetchImpl,
+      supabaseUrl: supabaseUrl || CONFIG.supabaseUrl,
+    });
+    if (!result.ok) {
+      bus.emit('models:failed', { id: ref.id, reason: result.reason });
+      return result;
+    }
+    const record = { id: ref.id, name: ref.name || ref.id, format: ref.format, data: result.data, createdAt: Date.now(), remote: true, hash: ref.hash, url: ref.url };
+    try { await this._register(record); }
+    catch (e) {
+      bus.emit('models:failed', { id: ref.id, reason: 'parse_failed' });
+      return { ok: false, reason: 'parse_failed', message: e.message };
+    }
+    bus.emit('models:changed');
+    bus.emit('models:ready', { id: ref.id, hash: ref.hash });
+    return { ok: true, id: ref.id, cached: !!result.cached };
+  }
+  async ensureAssets(refs, opts = {}) {
+    const list = Array.isArray(refs) ? refs : [];
+    return Promise.all(list.map((r) => this.ensureAsset(r, opts)));
+  }
   /** Clone of a model (SkeletonUtils keeps skinned meshes bound to their own bones). */
   instance(id) {
     const it = this.items.get(id); if (!it) return null;
