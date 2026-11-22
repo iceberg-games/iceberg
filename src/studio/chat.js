@@ -5,7 +5,7 @@
 // TODO: Later, players will pay for a paid AI provider with Birg Bucks
 // (not real money). Do not enable a paid API or sign up for anything here.
 import { classifyIntent, EXAMPLE_PHRASES } from './chatIntent.js';
-import { planBuild, applyBuild } from './builder.js';
+import { planBuild, applyBuild, applyTweak, lastBuildParts } from './builder.js';
 import { translate } from './nlscript.js';
 import { checkScript } from './scriptCheck.js';
 
@@ -95,6 +95,18 @@ export function handleChat(text, ctx = {}) {
   const intent = classifyIntent(text, { names });
 
   if (intent.kind === 'unknown') return unknownReply(intent);
+
+  if (intent.kind === 'undoLast') {
+    return { kind: 'undoLast', role: 'assistant', intent, text: "I'll undo the last build.", applied: false, needsApply: true };
+  }
+  if (intent.kind === 'tweak') {
+    const bits = [];
+    if (intent.scale > 1) bits.push('bigger');
+    else if (intent.scale && intent.scale < 1) bits.push('smaller');
+    if (intent.colorName) bits.push(intent.colorName);
+    if (intent.material) bits.push(intent.material);
+    return { kind: 'tweak', role: 'assistant', intent, text: `I'll change the last build${bits.length ? ' — ' + bits.join(', ') : ''}.`, applied: false, needsApply: true };
+  }
 
   if (intent.kind === 'help') {
     return { kind: 'help', role: 'assistant', intent, text: '', applied: false, needsApply: true };
@@ -243,7 +255,8 @@ export function applyChat(ed, result, ctx = {}) {
     const selIds = new Set(ed.selection || ctx.selection || []);
     const selection = existing.filter((i) => selIds.has(i.id) || (i.parent && selIds.has(i.parent)));
     const lookPoint = (typeof ed.lookPoint === 'function' ? ed.lookPoint() : null) || ctx.lookPoint || ctx.origin || null;
-    const plan = planBuild(result.intent, { existing, selection, lookPoint, origin: ctx.origin || [0, 0, 0] });
+    const around = result.intent.around ? (selection.length ? selection : lastBuildParts(ed)) : null;
+    const plan = planBuild(result.intent, { existing, selection, lookPoint, origin: ctx.origin || [0, 0, 0], around });
     const out = applyBuild(ed, plan);
     return {
       ...result,
@@ -253,6 +266,17 @@ export function applyChat(ed, result, ctx = {}) {
       groupId: out.groupId,
       text: out.ok ? `Built ${plan.summary}. That's one undo if you want it gone.` : 'I planned the build but could not add the parts.',
     };
+  }
+  if (result.kind === 'undoLast' || result.kind === 'tweak') {
+    const out = applyTweak(ed, result.intent || result);
+    if (!out.ok) return { ...result, applied: false, text: "I don't have a last build to change. Build something first, then say \"make it bigger\", \"make it blue\", or \"undo that\"." };
+    if (out.action === 'undo') return { ...result, applied: true, text: 'Removed the last build. That is one undo step if you want it back (Ctrl+Z).' };
+    const bits = [];
+    if (out.scale > 1) bits.push('made it bigger');
+    else if (out.scale && out.scale < 1) bits.push('made it smaller');
+    if (result.intent?.colorName) bits.push(`painted it ${result.intent.colorName}`);
+    if (out.material) bits.push(`set the material to ${out.material}`);
+    return { ...result, applied: true, text: `Updated the last build: ${bits.join(', ') || 'changed'}.` };
   }
   if (result.kind === 'script') return applyScript(ed, result, { ...ctx, doc: ed.doc });
   if (result.kind === 'gui') {

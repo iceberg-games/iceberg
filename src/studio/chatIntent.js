@@ -5,14 +5,17 @@ import { COLORS, translate, normalizeNumbers, suggest as suggestPhrases } from '
 
 export const EXAMPLE_PHRASES = [
   'build a small house',
+  'make a 3 story building',
+  'make a 10 jump obby',
+  'make a maze',
+  'add a tree',
   'make a tower 10 high',
   'add 5 coins in a line',
-  'make a bridge',
-  'add a checkpoint',
   'make the red part kill players',
   'my door doesn\'t work',
   'add a coin counter top right',
-  'make a shop button that opens a panel',
+  'make it bigger',
+  'undo that',
 ];
 
 const COLOR_NAMES = Object.keys(COLORS).filter((k) => k !== 'rainbow' && k !== 'random').sort((a, b) => b.length - a.length);
@@ -41,6 +44,16 @@ const GUI_KIND_RE = /\b(coin counter|score counter|health bar|timer bar|timer|hu
 const GUI_VERB_RE = /\b(add|make|create|place|put|show|build)\b/;
 
 const BUILD_KINDS = [
+  { kind: 'obby', re: /\b(obby|obstacle course|jump course)\b/ },
+  { kind: 'building', re: /\b(building|apartments?)\b/ },
+  { kind: 'maze', re: /\bmazes?\b/ },
+  { kind: 'arena', re: /\b(arena|stadium|courtyard)\b/ },
+  { kind: 'lamp', re: /\b(lamp\s*posts?|lampposts?|street ?lamps?|lantern posts?)\b/ },
+  { kind: 'ladder', re: /\bladders?\b/ },
+  { kind: 'fence', re: /\b(fences?|fencing)\b/ },
+  { kind: 'shop', re: /\b(shop stand|market stall|stall|kiosk|booth|shop)\b/ },
+  { kind: 'car', re: /\b(cars?|vehicles?|karts?)\b/ },
+  { kind: 'tree', re: /\b(trees?|pine tree|pines)\b/ },
   { kind: 'house', re: /\b(house|home|hut|cabin|cottage)\b/ },
   { kind: 'tower', re: /\b(tower|turret|spire)\b/ },
   { kind: 'bridge', re: /\bbridges?\b/ },
@@ -50,6 +63,13 @@ const BUILD_KINDS = [
   { kind: 'wall', re: /\bwalls?\b/ },
   { kind: 'platform', re: /\bplatforms?\b/ },
 ];
+const MAT_WORDS = { wood: 'wood', wooden: 'wood', metal: 'metal', iron: 'metal', steel: 'metal', ice: 'ice', glass: 'glass', neon: 'neon', snow: 'snow', plastic: 'plastic', lava: 'lava' };
+function materialIn(t) {
+  for (const [w, m] of Object.entries(MAT_WORDS)) {
+    if (new RegExp(`\\b${w}\\b`).test(t)) return m;
+  }
+  return null;
+}
 const BUILD_VERB_RE = /\b(build|make|add|place|create|spawn|put|drop)\b/;
 const SCRIPT_ON_PART_RE = /\bmake\s+(?:the\s+|this\s+|my\s+)?(.+?)\s+(kill|hurt|heal|damage|teleport|spin|open|close|bounce|give|award|say|play|disappear|hide|show|turn|become)\b/;
 
@@ -65,26 +85,48 @@ function parseBuild(t) {
   const hit = BUILD_KINDS.find((k) => k.re.test(t));
   if (!hit) return null;
   const color = colorIn(t);
-  const count = numberIn(t, /\b(\d+(?:\.\d+)?)\s+(?:coins?|checkpoints?|parts?|blocks?)\b/, hit.kind === 'coins' ? 5 : 1);
+  const count = numberIn(t, /\b(\d+(?:\.\d+)?)\s+(?:coins?|checkpoints?|jumps?|platforms?|parts?|blocks?|stories|storeys|floors|cells?)\b/)
+    ?? numberIn(t, /\b(\d+)[ -]jump\b/, hit.kind === 'coins' ? 5 : hit.kind === 'obby' ? 10 : 1);
   const height = numberIn(t, /\b(\d+(?:\.\d+)?)\s*(?:high|tall|studs?\s+tall|studs?\s+high)\b/)
     ?? numberIn(t, /\b(?:height|tall(?:ness)?)\s+(?:of\s+)?(\d+(?:\.\d+)?)\b/);
   const length = numberIn(t, /\b(\d+(?:\.\d+)?)\s*(?:long|studs?\s+long|in\s+length)\b/)
     ?? numberIn(t, /\blength\s+(?:of\s+)?(\d+(?:\.\d+)?)\b/);
   const width = numberIn(t, /\b(\d+(?:\.\d+)?)\s*(?:wide|studs?\s+wide)\b/)
     ?? numberIn(t, /\bwidth\s+(?:of\s+)?(\d+(?:\.\d+)?)\b/);
+  const stories = numberIn(t, /\b(\d+)\s*[ -]?(?:story|stories|storey|storeys|floor|floors)\b/);
   const line = /\b(in a line|in a row|lined up|a line of)\b/.test(t);
+  const mat = materialIn(t);
   return {
     kind: 'build',
     template: hit.kind,
     color: color?.hex || null,
     colorName: color?.name || null,
+    material: mat,
     count: Math.max(1, Math.min(40, Math.round(count))),
     height: height != null ? Math.max(1, Math.min(80, height)) : null,
     length: length != null ? Math.max(1, Math.min(120, length)) : null,
     width: width != null ? Math.max(1, Math.min(40, width)) : null,
+    stories: stories != null ? Math.max(1, Math.min(8, Math.round(stories))) : (hit.kind === 'building' ? 3 : null),
     scale: sizeWord(t),
     line,
+    around: /\baround\b/.test(t),
   };
+}
+
+const UNDO_LAST_RE = /^(undo that|undo it|undo the last(?: build)?|delete that|remove that|scratch that|never mind that)\.?$/;
+function parseTweak(t) {
+  if (UNDO_LAST_RE.test(t)) return { kind: 'undoLast' };
+  const aboutLast = /\b(it|that|the last(?: build)?|the last thing)\b/.test(t) || /^(make it|paint it|colour it|color it|turn it)\b/.test(t);
+  if (!aboutLast) return null;
+  const color = colorIn(t);
+  const material = materialIn(t);
+  let scale = null;
+  if (/\b(twice as (?:big|large)|two times (?:as )?(?:big|bigger|large)|2 times (?:as )?(?:big|bigger))\b/.test(t) || /\b(much bigger|huge)\b/.test(t)) scale = 2;
+  else if (/\b(bigger|larger|make it big)\b/.test(t)) scale = 1.4;
+  else if (/\b(a bit bigger|slightly bigger)\b/.test(t)) scale = 1.2;
+  else if (/\b(smaller|tinier|make it small)\b/.test(t)) scale = 0.7;
+  if (scale == null && !color && !material) return null;
+  return { kind: 'tweak', scale, color: color?.hex || null, colorName: color?.name || null, material };
 }
 
 const ANCHORS = {
@@ -186,6 +228,9 @@ export function classifyIntent(text, ctx = {}) {
   }
   const t = norm(raw);
 
+  const tweak = parseTweak(t);
+  if (tweak) return { ...tweak, text: raw };
+
   if (HELP_RE.test(t)) return { kind: 'help', text: raw, query: t };
 
   if (isSetting(t)) {
@@ -228,4 +273,4 @@ export function classifyIntent(text, ctx = {}) {
   };
 }
 
-export { parseBuild, parseGui, colorIn, norm };
+export { parseBuild, parseGui, parseTweak, colorIn, materialIn, norm };

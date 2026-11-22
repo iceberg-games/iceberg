@@ -65,6 +65,12 @@ function mockEditor(seed = []) {
       }
       return { id: ids[0], ids };
     },
+    remove(ids) {
+      this.checkpoint();
+      const set = new Set(Array.isArray(ids) ? ids : [ids]);
+      doc.instances = doc.instances.filter((i) => !set.has(i.id) && !set.has(i.parent));
+      return set.size;
+    },
     setGameProp(key, value) {
       this.checkpoint();
       doc[key] = value === 'toggle' ? !doc[key] : value;
@@ -233,6 +239,65 @@ const cases = [
     const tower = ed.doc.instances.filter((i) => /Tower/.test(i.name));
     const house = ed.doc.instances.filter((i) => /House/.test(i.name));
     return house.length && tower.length && !aabbsOverlap(aabbOf(house), aabbOf(tower), 0.4);
+  }],
+  ['a 3 story building is a building with 3 stories', () => {
+    const i = C('make a 3 story building');
+    return i.template === 'building' && i.stories === 3;
+  }],
+  ['a 10 jump obby parses count 10', () => C('make a 10 jump obby').template === 'obby' && C('make a 10 jump obby').count === 10],
+  ['tree, car, lamp, maze, arena, shop, fence, ladder classify as builds', () => {
+    return ['add a tree', 'make a simple car', 'add a lamp post', 'make a maze', 'make an arena', 'make a shop', 'add a fence', 'add a ladder']
+      .every((p) => C(p).kind === 'build');
+  }],
+  ['wooden house captures material', () => C('build a wooden house').material === 'wood'],
+  ['make it bigger / make it blue / undo that are tweaks', () => {
+    return C('make it bigger').kind === 'tweak' && C('make it bigger').scale > 1
+      && C('make it blue').kind === 'tweak' && C('make it blue').colorName === 'blue'
+      && C('undo that').kind === 'undoLast';
+  }],
+  ['3 story building plan has 3 floors and a roof', () => {
+    const p = planBuild(C('make a 3 story building'));
+    const floors = p.instances.filter((i) => /Floor/.test(i.name)).length;
+    return p.ok && floors === 3 && p.instances.some((i) => /Roof/.test(i.name)) && p.instances.some((i) => /Window/.test(i.name));
+  }],
+  ['house plan includes a door and windows', () => {
+    const names = planBuild(C('build a small house')).instances.map((i) => i.name).join(' ');
+    return /Door/.test(names) && /Window/.test(names);
+  }],
+  ['10 jump obby has 10 jump pads and a finish', () => {
+    const p = planBuild(C('make a 10 jump obby'));
+    return p.instances.filter((i) => /Jump/.test(i.name)).length === 10 && p.instances.some((i) => i.type === 'checkpoint' || /Finish|Goal/.test(i.name));
+  }],
+  ['maze has a floor and many walls', () => {
+    const p = planBuild(C('make a maze'));
+    return p.instances.some((i) => /Floor/.test(i.name)) && p.instances.filter((i) => /Wall/.test(i.name)).length > 8;
+  }],
+  ['tree has a trunk and leaves', () => {
+    const p = planBuild(C('add a tree'));
+    return p.instances.some((i) => /Trunk/.test(i.name)) && p.instances.some((i) => /Leaves/.test(i.name));
+  }],
+  ['make it bigger scales the last build', async () => {
+    const ed = mockEditor([inst('spawn')]);
+    await sendChat('add a tree', ed);
+    const before = ed.doc.instances.find((i) => /Trunk/.test(i.name)).size[1];
+    const r = await sendChat('make it bigger', ed);
+    const after = ed.doc.instances.find((i) => /Trunk/.test(i.name)).size[1];
+    return r.applied && after > before * 1.2;
+  }],
+  ['make it blue recolors the last build', async () => {
+    const ed = mockEditor([inst('spawn')]);
+    await sendChat('add a lamp post', ed);
+    const r = await sendChat('make it blue', ed);
+    const pole = ed.doc.instances.find((i) => /Pole/.test(i.name));
+    return r.applied && pole.color === '#3f8fd0';
+  }],
+  ['undo that removes the last build', async () => {
+    const ed = mockEditor([inst('spawn')]);
+    const n = ed.doc.instances.length;
+    await sendChat('add a tree', ed);
+    const mid = ed.doc.instances.length;
+    const r = await sendChat('undo that', ed);
+    return r.applied && mid > n && ed.doc.instances.length === n && !ed.doc.instances.some((i) => /Tree/.test(i.name));
   }],
 ];
 
