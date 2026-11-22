@@ -99,7 +99,7 @@ async function suds(browser) {
     if (pad === 'Pad Expand') { await p.waitForTimeout(600); await view(p, { yaw: Math.PI, pitch: 0.55, dist: 18 }); await p.waitForTimeout(500); await shot(p, `${OUT}/${slug}-6-wall-down.png`); }
   }
   const v4 = await vars(p);
-  ok(`${slug}: full machine chain bought (level 11), skills maxed (4), wing open`, v4.level === 11 && v4.skill === 4 && !(await visible(p, 'Partition A')) && await visible(p, 'Coffee Bar Bar Top'), JSON.stringify(v4));
+  ok(`${slug}: full machine chain bought (level 11), skills maxed (4), wing open`, v4.level === 11 && v4.skill === 4 && !(await visible(p, 'Partition A')) && await visible(p, 'Bar Top'), JSON.stringify(v4));
   await view(p, { pos: [30, 0.6, -2], yaw: Math.PI, pitch: 0.4, dist: 15 }); await p.waitForTimeout(900);
   await shot(p, `${OUT}/${slug}-7-dry-cleaning-wing.png`);
   await buyUntil('Pad Grand', (v) => v.level >= 12); await sim(p, 1.5);
