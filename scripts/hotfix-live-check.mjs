@@ -19,6 +19,7 @@ await p.waitForTimeout(1200);
 await p.screenshot({ path: OUT + `1-after-start-${TAG}.png` });
 ok('first open shows the new home directly (no title / old portal)', first.home && !first.titleScreen && !first.portalList, JSON.stringify(first));
 // ---- 3. built-ins visible + open
+ok('home has no stray text (e.g. "null") between rows', !/\bnull\b|undefined/.test(await p.textContent('#pc-rows')));
 const tiles = await p.$$eval('#games-carousel .game-card', e => e.map(x => x.dataset.game));
 ok('home lists Birg HQ + Frost Fields', ['birg-hq', 'frost-fields'].every(x => tiles.includes(x)), tiles.join());
 const inView = await p.evaluate(() => { const r = document.querySelector('#games-carousel')?.getBoundingClientRect(); return r ? r.top < innerHeight - 60 : false; });
@@ -56,5 +57,9 @@ await p.evaluate(() => window.iceberg.goHome()); await p.waitForSelector('.game-
 await p.evaluate(() => window.iceberg.play('frost-fields')); await p.waitForTimeout(3000);
 await walkCheck('after-home-forward', 'KeyW'); await walkCheck('after-home-right', 'KeyD'); await walkCheck('after-home-left', 'KeyA'); await walkCheck('after-home-back', 'KeyS');
 await p.evaluate(() => { const e = window.iceberg.engine; e.player.camYaw = 0.9; }); await p.waitForTimeout(300); await walkCheck('after-home-diagonal-camera', 'KeyW');
+// Studio Test-play: walk in every direction after the home snapshot has run
+await p.evaluate(() => window.iceberg.goHome()); await p.waitForSelector('#create-btn'); await p.click('#create-btn'); await p.click('[data-template=blank]'); await p.waitForTimeout(1500);
+await p.click('#test-game'); await p.waitForFunction(() => window.iceberg.engine.game?.runtime === true, null, { timeout: 15000 }).catch(() => {}); await p.waitForTimeout(1500);
+await walkCheck('studio-test-forward', 'KeyW'); await walkCheck('studio-test-right', 'KeyD'); await walkCheck('studio-test-left', 'KeyA');
 ok('no page errors', errs.length === 0, errs.slice(0, 3).join(' | '));
 await b.close(); console.log(fails ? `${fails} FAILED` : 'ALL PASS'); process.exit(fails ? 1 : 0);
