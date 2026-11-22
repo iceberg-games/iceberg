@@ -9,13 +9,14 @@ import { backend } from '../backend/LocalBackend.js';
 import { Economy } from '../core/economy.js';
 import { bus } from '../core/events.js';
 import { fmt, CURRENCY } from '../core/currency.js';
-import { BUILTIN_GAMES } from '../games/registry.js';
+import { BUILTIN_GAMES, LISTED_GAMES } from '../games/registry.js';
 import { isMobilePlayable } from '../data/gameMeta.js';
 import { gameThumb } from '../ui/thumbs.js';
 import { accountsEnabled, CONFIG } from '../net/config.js';
 import { getRemote, connectStoredSession } from '../net/session.js';
 import { signIn, signUp, validateCredentials } from '../net/auth.js';
 import { getDeviceMode, setDeviceMode, onDeviceChange } from '../core/device.js';
+import { isBlockedMobile, showMobileBlock } from '../core/mobileGate.js';
 import { registerServiceWorker } from '../net/pwa.js';
 import { isDev, devUpdateButton } from '../net/devAccess.js';
 import { isBanned, showBanned, banUser, unbanUser } from '../net/ban.js';
@@ -106,7 +107,7 @@ function gamesView() {
   const tab = (id, label) => h('button' + (gameSort === id ? '.on' : ''), { type: 'button', 'data-sort': id, onclick: () => { gameSort = id; const u = new URL(location.href); u.searchParams.set('sort', id); history.replaceState(null, '', u); fill(); sortBar.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.sort === id)); } }, label);
   const sortBar = h('div.p-sort#games-sort', { role: 'tablist' }, tab('newest', '🆕 Newest'), tab('popular', '🔥 Most Popular'), tab('active', '👥 Most Active Players'));
   // Mobile mode: only mobile-playable games in every tab and in the featured banner.
-  const shownGames = () => getDeviceMode() === 'mobile' ? BUILTIN_GAMES.filter(isMobilePlayable) : BUILTIN_GAMES;
+  const shownGames = () => getDeviceMode() === 'mobile' ? LISTED_GAMES.filter(isMobilePlayable) : LISTED_GAMES;
   const defsById = Object.fromEntries(shownGames().map(d => [d.id, d]));
   loadFeatured(publicApi).then(({ items }) => {
     banner?.destroy(); banner = createFeaturedBanner(items, defsById, { onPlay: openGame, playUrl });
@@ -114,7 +115,7 @@ function gamesView() {
   });
   let stats = null;
   async function fill() {
-    if (!stats) stats = await loadGameStats(BUILTIN_GAMES, publicApi);
+    if (!stats) stats = await loadGameStats(LISTED_GAMES, publicApi);
     const allowed = new Set(shownGames().map(d => d.id));
     const list = stats.games.filter(g => allowed.has(g.def.id));
     clear(note);
@@ -225,8 +226,10 @@ function checkEventPopup() {
 }
 
 onDeviceChange(() => { if (view === 'settings' || view === 'games') render(); });
-render();
+const mobileBlocked = isBlockedMobile();   // phones are blocked for now (core/mobileGate.js, one flag)
+if (mobileBlocked) showMobileBlock(); else render();
 (async () => {
+  if (mobileBlocked) return;
   remote = await connectStoredSession(economy);
   if (await isBanned(remote)) return showBanned();
   ready = true;

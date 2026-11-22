@@ -33,6 +33,8 @@ import { startPlaySession } from './net/gameStats.js';
 import { createMultiplayer } from './mp/multiplayer.js';
 import { initUiSounds } from './audio/uiSounds.js';
 import { uiSoundOptions } from './audio/siteSounds.js';
+import './net/install.js';   // captures beforeinstallprompt early (Download button)
+import { isBlockedMobile, showMobileBlock } from './core/mobileGate.js';
 
 // Multi-page site: the game lives in play/ and the portal opens it with ?game=<id>.
 const params = new URLSearchParams(location.search);
@@ -40,6 +42,7 @@ const GAME_PARAM = params.get('game');
 const SITE_ROOT = document.querySelector('meta[name="iceberg-root"]')?.content || null;   // set only in the site build
 
 async function boot() {
+  if (isBlockedMobile()) return showMobileBlock();   // phones are blocked for now (core/mobileGate.js, one flag)
   const app = document.getElementById('app');
   if (CONFIG.isSite) document.body.classList.add('iceberg-site');
   const economy = new Economy(backend);
@@ -64,7 +67,8 @@ async function boot() {
   const backToEditor = h('button.btn.floating.hidden#back-to-editor', { onclick: () => edit(testingDoc) }, '✏️ Back to editor');
 
   let session = null;
-  const goHome = () => { session?.stop(); session = null; mp.leave(); gameChat.leave(); engine.unloadGame(); testingDoc = null; backToEditor.classList.add('hidden'); menu.showGames(); music.play('winter'); };
+  const POPOUT = params.get('popout') === '1' && !!window.opener;   // game pop-out window opened from the PC home
+  const goHome = () => { if (POPOUT) { try { window.close(); } catch { /* ignore */ } } session?.stop(); session = null; mp.leave(); gameChat.leave(); engine.unloadGame(); testingDoc = null; backToEditor.classList.add('hidden'); menu.showGames(); music.play('winter'); };
   const play = async (def, { friend = null } = {}) => {
     menu.hide(); testingDoc = null; backToEditor.classList.add('hidden');
     await engine.loadGame(def);
@@ -101,7 +105,7 @@ async function boot() {
   bus.on('economy:capped', (e) => { if (e.source !== 'build') ui.toast('Daily Birg Bucks limit reached for that. Come back tomorrow!', '⏰'); });
   addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') economy.resync().catch(() => {}); });
   const menu = new Menu(app, {
-    economy, models, ui, onPlay: play, onEdit: edit,
+    economy, models, ui, avatar, onPlay: play, onEdit: edit, onFriends: () => friends?.open(),
     onStart: () => {
       music.unlock(); music.play('winter');
       const got = economy.claimDailyBonus();
@@ -137,6 +141,7 @@ async function boot() {
   } });
   await showDevicePicker(document.body);
   menu.showTitle();
+  if (GAME_PARAM && params.get('autostart') === '1') menu.el.querySelector('#start-btn')?.click();   // deep link from a PC tile: boot straight into the game
 
   // Handy hooks for automated tests / debugging in the console.
   window.iceberg = { engine, mobileStudio, economy, quests, getAudioListener, avatar, models, music, ui, menu, backend, remote, gameChat, mp, friends, play: (id) => play(findGame(id)), edit, goHome };

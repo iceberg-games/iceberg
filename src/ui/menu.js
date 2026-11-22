@@ -4,18 +4,21 @@ import { plusBadge } from '../core/plus.js';
 import { confirmModal } from './overlay.js';
 import { isMobile, onDeviceChange } from '../core/device.js';
 import { gameThumb } from './thumbs.js';
+import { imageToThumb } from './imageThumb.js';
 import { fmt, CURRENCY } from '../core/currency.js';
 import { bus } from '../core/events.js';
-import { BUILTIN_GAMES, CREATOR, allGames } from '../games/registry.js';
+import { LISTED_GAMES, CREATOR } from '../games/registry.js';
+import { renderPcHome } from './pcHome.js';
+import { canPromptInstall, promptInstall, isInstalledApp, installInstructions, onInstallChange } from '../net/install.js';
 import { TEMPLATES, newGameDoc, customGameDef } from '../games/customGame.js';
 import { backend } from '../backend/LocalBackend.js';
 import { exportGameJSON, importGameJSON, downloadText } from '../core/share.js';
-import { listServerGames, unpublish, newGameId, mergeOwn, drafts } from '../studio/store.js';
+import { listServerGames, unpublish, newGameId, mergeOwn, drafts, updateGameMeta } from '../studio/store.js';
 import { getRemote } from '../net/session.js';
 
 export class Menu {
-  constructor(root, { economy, models, ui, onPlay, onEdit, onStart }) {
-    Object.assign(this, { root, economy, models, ui, onPlay, onEdit, onStart });
+  constructor(root, { economy, models, ui, avatar, onPlay, onEdit, onStart, onFriends }) {
+    Object.assign(this, { root, economy, models, ui, avatar, onPlay, onEdit, onStart, onFriends });
     this.el = h('div#menu.screen');
     root.append(this.el);
     bus.on('coins:changed', () => { const b = this.el.querySelector('.bucks-amount'); if (b) b.textContent = fmt(this.economy.coins); });
@@ -24,10 +27,10 @@ export class Menu {
     // Re-render on device change (mobile opens the simple Mobile Studio, computer the full Studio).
     onDeviceChange(() => { if (this.mode === 'games') this.showGames(); });
   }
-  hide() { this.el.classList.add('hidden'); this.mode = null; }
+  hide() { this.el.classList.add('hidden'); this.mode = null; document.body.classList.remove('pc-home-open'); }
 
   showTitle() {
-    this.mode = 'title';
+    this.mode = 'title'; document.body.classList.remove('pc-home-open');
     this.el.classList.remove('hidden');
     clear(this.el).append(h('div.title-screen',
       h('div.snowbg'),
@@ -50,27 +53,21 @@ export class Menu {
     for (let i = 0; i < custom.length; i++) custom[i] = mergeOwn(custom[i], (this.serverGames || []).find(g => g.id === custom[i].id), myId);
     const localIds = new Set(custom.map(g => g.id));
     const community = (this.serverGames || []).filter(g => !localIds.has(g.id));
+    if (!isMobile()) { document.body.classList.add('pc-home-open'); this._custom = custom; clear(this.el).append(renderPcHome(this, { custom, community })); return; }
+    document.body.classList.remove('pc-home-open');
     const card = (def, extra = null) => h('div.game-card', { 'data-game': def.id },
       h('div.thumb', { style: { backgroundImage: `url(${gameThumb(def)})` } }),
       h('div.gc-body', h('div.gc-name', def.name), h('div.gc-tag', def.tagline || ''), h('div.gc-desc', def.description || '')),
       h('div.gc-actions', extra || h('button.btn.play', { onclick: () => this.onPlay(def) }, '▶ Play')));
 
-    const featured = [...BUILTIN_GAMES.map(d => card(d)),
+    const featured = [...LISTED_GAMES.map(d => card(d)),
       card(isMobile() ? { ...CREATOR, tagline: 'Mobile Studio: place blocks, pick colors, set a spawn', description: 'Simple touch building. Open the same game on a computer for the full Studio.' } : CREATOR,
         h('button.btn.play.create.studio-entry#create-btn', { onclick: () => this.showCreateDialog() }, '✚ Create'))];
     const yours = custom.map(doc => {
       const def = customGameDef(doc);
-      return card(def, h('div.row',
-        h('button.btn.play', { onclick: () => this.onPlay(def) }, '▶ Play'),
-        h('button.btn.small.secondary.edit-btn', { title: 'Edit', onclick: () => this.onEdit(doc) }, '✏️'),
-        h('button.btn.small.secondary', { title: 'Export as file', onclick: () => downloadText(`${doc.name.replace(/[^\w-]+/g, '_')}.iceberg.json`, exportGameJSON(doc, this.models)) }, '⤓'),
-        h('button.btn.small.secondary', { title: 'Delete', onclick: async () => { if (await confirmModal(`Remove "${doc.name}" from Your Games? Your draft is kept, and a server copy is hidden (not erased).`, { title: 'Unpublish game?', okLabel: 'Unpublish', danger: true })) { try { await unpublish(doc.id); this.serverGames = (this.serverGames || []).filter(g => g.id !== doc.id); } catch (err) { this.ui.toast(`Unpublish failed: ${err.message}`, '⚠️'); } this.showGames(); } } }, '🗑')));
+      return card(def, h('div.row', h('button.btn.play', { onclick: () => this.onPlay(def) }, '▶ Play'), ...this.ownButtons(doc, def)));
     });
-    const importInput = h('input#import-file', { type: 'file', accept: '.json', style: { display: 'none' }, onchange: async (e) => {
-      const f = e.target.files[0]; if (!f) return;
-      try { const doc = await importGameJSON(await f.text(), this.models); if (backend.loadCustomGames().some(g => g.id === doc.id) || this.serverGames?.some(g => g.id === doc.id)) doc.id = newGameId(); backend.saveCustomGame(doc); this.ui.toast(`Imported "${doc.name}"`, '📥'); this.showGames(); }
-      catch (err) { this.ui.toast(`Import failed: ${err.message}`, '⚠️'); }
-    } });
+    const importInput = this.importInput();
 
     clear(this.el).append(h('div.games-screen',
       h('div.snowbg'),
@@ -78,7 +75,7 @@ export class Menu {
         h('div.brand.big', h('span.logo', '🧊'), h('b', 'Iceberg'), plusBadge(h)),
         h('div.menu-actions',
           h('button.bucks', { onclick: () => this.ui.openDrawer('store') }, h('span.bb-ico', CURRENCY.icon), h('span.bucks-amount', fmt(this.economy.coins)), h('span.plus', '+')),
-          h('button.btn.secondary', { onclick: () => this.ui.openDrawer('shop') }, '🛍️ Shop'),
+          h('button.btn.secondary', { onclick: () => this.ui.openDrawer('shop') }, '🛍️ Catalog'),
           h('button.btn.secondary', { onclick: () => this.ui.openDrawer('locker') }, '🎒 Locker'),
           h('button.btn.secondary', { onclick: () => this.ui.openDrawer('models') }, '📦 Models'))),
       h('section', h('h2', 'Games'), h('div.carousel#games-carousel', featured)),
@@ -88,6 +85,90 @@ export class Menu {
         this.serverError ? h('div.empty.small', `Couldn't load community games: ${this.serverError}`) : null,
         community.length ? h('div.carousel#community-games', community.map(doc => { const def = customGameDef(doc); def.tagline = `By ${doc.ownerName || 'a player'} · Made in Iceberg Studio`; return card(def); })) : null) : null,
       h('p.muted.small.center', 'Your avatar, Birg Bucks and cosmetics carry across every game.')));
+  }
+
+  importInput() {
+    return this._importInput || (this._importInput = h('input#import-file', { type: 'file', accept: '.json', style: { display: 'none' }, onchange: async (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      try { const doc = await importGameJSON(await f.text(), this.models); if (backend.loadCustomGames().some(g => g.id === doc.id) || this.serverGames?.some(g => g.id === doc.id)) doc.id = newGameId(); backend.saveCustomGame(doc); this.ui.toast(`Imported "${doc.name}"`, '📥'); this.showGames(); }
+      catch (err) { this.ui.toast(`Import failed: ${err.message}`, '⚠️'); }
+    } }));
+  }
+  customDef(doc) { const d = customGameDef(doc); d.tagline = `By ${doc.ownerName || 'a player'} · Made in Iceberg Studio`; return d; }
+  listedBuiltins() { return LISTED_GAMES; }
+  /** Buttons for a game I own (Edit in Studio, edit details, export, unpublish). Shared by the PC and phone layouts. */
+  ownButtons(doc, def) {
+    const signedIn = !!getRemote()?.signedIn;
+    return [
+      h('button.btn.small.secondary.edit-btn', { title: 'Edit in Studio', onclick: (e) => { e.stopPropagation(); this.onEdit(doc); } }, '✏️'),
+      signedIn ? h('button.btn.small.secondary.details-btn', { title: 'Edit name, thumbnail and description', onclick: (e) => { e.stopPropagation(); this.showEditDetails(doc); } }, '🖼️') : null,
+      h('button.btn.small.secondary', { title: 'Export as file', onclick: (e) => { e.stopPropagation(); downloadText(`${doc.name.replace(/[^\w-]+/g, '_')}.iceberg.json`, exportGameJSON(doc, this.models)); } }, '⤓'),
+      h('button.btn.small.secondary', { title: 'Delete', onclick: async (e) => { e.stopPropagation(); if (await confirmModal(`Remove "${doc.name}" from Your Games? Your draft is kept, and a server copy is hidden (not erased).`, { title: 'Unpublish game?', okLabel: 'Unpublish', danger: true })) { try { await unpublish(doc.id); this.serverGames = (this.serverGames || []).filter(g => g.id !== doc.id); } catch (err) { this.ui.toast(`Unpublish failed: ${err.message}`, '⚠️'); } this.showGames(); } } }, '🗑'),
+    ];
+  }
+  /** PC: open a game in its own pop-out window (no tab bar / toolbar) through the deep link ?game=<id>&popout=1&autostart=1.
+   *  Home, game picking and profile stay in this tab. Blocked popup -> new tab; still blocked -> play in this page. */
+  playInTab(def) {
+    const u = new URL(location.href); u.search = ''; u.hash = ''; u.searchParams.set('game', def.id); u.searchParams.set('autostart', '1'); u.searchParams.set('popout', '1');
+    const W = 1280, H = 760, left = Math.max(0, Math.round((screen.availWidth - W) / 2)), top = Math.max(0, Math.round((screen.availHeight - H) / 2));
+    const feat = `popup=yes,width=${W},height=${H},left=${left},top=${top},resizable=yes,scrollbars=no,toolbar=no,location=no,menubar=no,status=no`;
+    let w = null; try { w = window.open(u.toString(), 'iceberg-game-' + def.id.replace(/\W+/g, '_'), feat); } catch { /* blocked */ }
+    if (w) { try { w.focus(); } catch { /* ignore */ } return; }
+    u.searchParams.delete('popout'); w = window.open(u.toString(), '_blank');
+    if (!w) this.onPlay(def);
+  }
+  /** Sidebar "Download": Install Iceberg (PWA) so games open in their own app window. */
+  showInstall() {
+    const note = h('p.muted.small#install-note', '');
+    const body = h('div#install-body');
+    const draw = () => {
+      clear(body);
+      if (isInstalledApp()) { body.append(h('p', '✅ Iceberg is installed on this computer. Games open in their own window.')); return; }
+      if (canPromptInstall()) body.append(h('button.btn#install-btn', { onclick: async () => { const r = await promptInstall(); note.textContent = r === 'accepted' ? 'Installing…' : 'Install cancelled.'; draw(); } }, '⬇ Install Iceberg'));
+      else body.append(h('p#install-help', installInstructions()));
+    };
+    const off = onInstallChange(draw); draw();
+    const dlg = h('div.dialog-backdrop.pc-dialog#install-dialog', h('div.dialog', h('h2', '⬇ Install Iceberg'),
+      h('p.muted', 'Install Iceberg as an app: it gets its own window, and every game you open pops out in a clean game window.'), body, note,
+      h('div.row', { style: { marginTop: '14px' } }, h('button.btn.secondary#install-close', { onclick: () => { off(); dlg.remove(); } }, 'Close'))));
+    this.root.append(dlg);
+  }
+  /** Sidebar "Studio": reopen the most recently edited game (local drafts + published copies), or start a blank one. */
+  openStudio() {
+    const all = [...drafts.list(), ...backend.loadCustomGames()].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    this.onEdit(all[0] || newGameDoc('blank'));
+  }
+  /** Owner-only: change a published game's name, description and thumbnail. */
+  showEditDetails(doc) {
+    const name = h('input#edit-name', { type: 'text', maxLength: 40, value: doc.name || '' });
+    const desc = h('textarea#edit-desc', { maxLength: 120, rows: 3 }, doc.description || '');
+    const prev = h('div.pc-edit-thumb#edit-thumb', { style: { backgroundImage: `url("${gameThumb(customGameDef(doc))}")` } });
+    let thumbnail = null; const msg = h('p.muted.small#edit-msg', '');
+    const file = h('input#edit-file', { type: 'file', accept: 'image/png,image/jpeg,image/webp', onchange: async (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      try { thumbnail = await imageToThumb(f); prev.style.backgroundImage = `url("${thumbnail}")`; msg.textContent = ''; } catch (err) { msg.textContent = err.message; }
+    } });
+    const dlg = h('div.dialog-backdrop.pc-dialog#details-dialog', h('div.dialog', h('h2', '🖼️ Edit game details'),
+      h('label', 'Name'), name, h('label', 'Description'), desc, h('label', 'Thumbnail'), prev, file, msg,
+      h('div.row', { style: { display: 'flex', gap: '8px', marginTop: '12px' } },
+        h('button.btn#edit-save', { onclick: async (e) => {
+          e.target.disabled = true; msg.textContent = 'Saving…';
+          try { await updateGameMeta(doc.id, { name: name.value, description: desc.value, thumbnail }); this.ui.toast('Game details saved', '✅'); dlg.remove();
+            const sg = (this.serverGames || []).find(g => g.id === doc.id); if (sg) Object.assign(sg, { name: name.value.trim(), description: desc.value, ...(thumbnail ? { thumbnail } : {}) });
+            this.showGames(); }
+          catch (err) { msg.textContent = err.message; e.target.disabled = false; } } }, 'Save'),
+        h('button.btn.secondary', { onclick: () => dlg.remove() }, 'Cancel'))));
+    this.root.append(dlg);
+  }
+  /** Minimal settings for the PC home (music). The full Account / Security settings screen is built on feature/editor-accounts. */
+  showSettings() {
+    const m = this.ui.music;
+    const vol = h('input#set-volume', { type: 'range', min: 0, max: 1, step: 0.05, value: m.volume, oninput: (e) => m.setVolume(+e.target.value) });
+    const mute = h('input#set-mute', { type: 'checkbox', checked: !!m.muted, onchange: () => this.ui.toggleMute() });
+    const dlg = h('div.dialog-backdrop.pc-dialog#settings-dialog', h('div.dialog', h('h2', '⚙️ Settings'),
+      h('label', 'Music volume'), vol, h('label', mute, ' Mute music and sounds'),
+      h('div.row', { style: { marginTop: '14px' } }, h('button.btn#settings-close', { onclick: () => dlg.remove() }, 'Done'))));
+    this.root.append(dlg);
   }
 
   showCreateDialog() {

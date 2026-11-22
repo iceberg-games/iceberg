@@ -90,3 +90,16 @@ body.pc-home-open .dialog label { color: #a59dae; display: block; font-size: 12p
 body.pc-home-open .dialog input[type=text], body.pc-home-open .dialog textarea { width: 100%; background: #14131a; color: #f1ece6; border: 1px solid #373244; border-radius: 8px; padding: 8px 10px; font: inherit; }
 .pc-edit-thumb { height: 120px; width: 213px; border-radius: 10px; background-size: cover; background-position: center; border: 1px solid #373244; margin: 6px 0; }
 body.pc-home-open .fp-fab { display: none !important; }
+.pc-gear { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--pc-line); background: var(--pc-surface); color: var(--pc-text); font-size: 17px; cursor: pointer; }
+.pc-gear:hover { border-color: var(--pc-violet); }
+.pc-home.collapsed .pc-side { width: 64px; flex-basis: 64px; }
+.pc-home.collapsed .pc-lbl, .pc-home.collapsed .pc-name, .pc-home.collapsed .pc-soon { display: none; }
+.pc-home.collapsed .pc-nav { justify-content: center; padding: 10px 0; }
+.pc-collapse { border: 0; background: transparent; color: var(--pc-muted); cursor: pointer; font-size: 14px; padding: 0 4px; }
+.pc-msg { color: var(--pc-amber); min-height: 1.2em; font-size: 13px; }
+.pc-hello { flex: 1; min-width: 0; }
+.pc-friends-row { width: 100%; }
+.pc-home .btn.btn, .pc-dialog .btn.btn { background: var(--pc-accent-grad); color: #fff; border: 0; box-shadow: none; text-shadow: none; }
+.pc-home .btn.btn.secondary, .pc-dialog .btn.btn.secondary, .pc-home .pc-tile .pc-hover .btn.small.secondary { background: var(--pc-surface-2); color: var(--pc-text); border: 1px solid var(--pc-line); }
+.pc-home .pc-tile .pc-hover .btn.small.secondary { background: rgba(255,255,255,.16); border: 0; }
+.pc-home .pc-row-head .btn.btn.secondary { background: var(--pc-surface); }
