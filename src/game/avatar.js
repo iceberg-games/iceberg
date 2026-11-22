@@ -15,7 +15,7 @@ import WIND_MAIN_OGG from '../assets/audio/tornado_hat_wind_loop.ogg?url';
 import WIND_MAIN_MP3 from '../assets/audio/tornado_hat_wind_loop.mp3?url';
 import WIND_HIGH_OGG from '../assets/audio/tornado_hat_wind_loop_high.ogg?url';
 
-const DEFAULT = { skin: '#f6f0c4', torso: '#8a3ff0', legs: '#3e42d8' };   // Vortex-ref default: cream skin, violet torso, indigo legs
+const DEFAULT = { skin: '#f8f1c8', torso: '#8a3ff0', legs: '#3e42d8' };   // Vortex-ref default: warm cream skin, violet torso, indigo legs
 
 // ---------- default face (minimal, matches the ref smile) ----------
 // 128px canvas decal on a nearly-flat plane in front of the head (transparent background).
@@ -63,7 +63,7 @@ function faceTexture() {
 // still read as flush. Geometry is authored at the real part size then normalised to a unit
 // box, so mesh.scale keeps meaning "part dimensions". Shared across avatars.
 // Radii are world units (not fractions).
-export const SOFT_BODY = { gap: 0.002, segments: 2, radius: { head: 0.135, torso: 0.028, limb: 0.02 } };
+export const SOFT_BODY = { gap: 0.002, segments: 2, radius: { head: 0.028, torso: 0.028, limb: 0.02 } };
 const _softGeo = new Map();
 function softPartGeo(w, h, d, r, gap = SOFT_BODY.gap) {
   const key = `${w.toFixed(3)}|${h.toFixed(3)}|${d.toFixed(3)}|${r.toFixed(3)}|${gap.toFixed(3)}`;
@@ -75,12 +75,14 @@ function softPartGeo(w, h, d, r, gap = SOFT_BODY.gap) {
   }
   return g;
 }
-/** Nearly-flat face decal just in front of the (slightly bevelled) head front, unit head space. */
+/** Nearly-flat face decal just in front of the head front, unit head space.
+ *  Plane Y is shrunk by width/height so a non-cube head doesn't stretch the face. */
 const _faceGeo = new Map();
-function faceDecalGeo(hs) {
-  const key = hs.toFixed(3); let g = _faceGeo.get(key); if (g) return g;
-  const z = 0.5 * (hs - SOFT_BODY.gap) / hs + 0.012 / hs;
-  g = new THREE.PlaneGeometry(0.92, 0.92);
+function faceDecalGeo(hw, hh = hw, hd = hw) {
+  const key = `${hw.toFixed(3)}|${hh.toFixed(3)}|${hd.toFixed(3)}`; let g = _faceGeo.get(key); if (g) return g;
+  const z = 0.5 * (hd - SOFT_BODY.gap) / hd + 0.012 / hd;
+  const py = 0.92 * (hw / hh);                          // keep the face square in world space
+  g = new THREE.PlaneGeometry(0.92, py);
   g.translate(0, 0, z);
   g.userData.shared = true; _faceGeo.set(key, g);
   return g;
@@ -2135,7 +2137,8 @@ export class Avatar {
     this.root = new THREE.Group();
     this.root.name = 'avatar';
     const matte = { roughness: 0.98, metalness: 0, envMapIntensity: 0 };
-    this.mats = { skin: std(DEFAULT.skin, matte), torso: std(DEFAULT.torso, matte), arms: std(DEFAULT.skin, matte), legs: std(DEFAULT.legs, matte) };
+    const cream = { ...matte, emissive: DEFAULT.skin, emissiveIntensity: 0.1 };   // slight lift so cream doesn't read grey-khaki under cool lights
+    this.mats = { skin: std(DEFAULT.skin, cream), torso: std(DEFAULT.torso, matte), arms: std(DEFAULT.skin, cream), legs: std(DEFAULT.legs, matte) };
     const faceMat = new THREE.MeshStandardMaterial({ map: faceTexture(), transparent: true, alphaTest: 0.02, depthWrite: false, roughness: 0.98, metalness: 0, envMapIntensity: 0, polygonOffset: true, polygonOffsetFactor: -2 }); // per-avatar face canvas decal
     this.faceMat = faceMat;
     // talking state (driven by animate(); no timers)
@@ -2162,7 +2165,7 @@ export class Avatar {
     // head: rounded skin block + curved expressive face decal (child of the head mesh, scales with it)
     mk('head', this.mats.skin);
     this.headMesh = this.bodyMeshes.head;
-    this.faceMesh = new THREE.Mesh(faceDecalGeo(0.62), faceMat); this.faceMesh.name = 'face'; this.faceMesh.renderOrder = 1;
+    this.faceMesh = new THREE.Mesh(faceDecalGeo(0.6, 0.66, 0.6), faceMat); this.faceMesh.name = 'face'; this.faceMesh.renderOrder = 1;
     this.headMesh.add(this.faceMesh);
     this._blinkIn = 2 + Math.random() * 3; this._blinkLeft = 0; this._blinking = false;
     this.bodyType = null;
@@ -2187,8 +2190,13 @@ export class Avatar {
     for (const n of ['armL', 'armR']) { const m = this.bodyMeshes[n]; m.geometry = armG; m.scale.set(aw, al, ad); m.position.set(0, -al / 2, 0); }
     for (const n of ['legL', 'legR']) { const m = this.bodyMeshes[n]; m.geometry = legG; m.scale.set(lw, ll, ld); m.position.set(0, -ll / 2, 0); }
     this.bodyMeshes.torso.geometry = softPartGeo(...S.torso, R.torso); this.bodyMeshes.torso.scale.set(...S.torso);
-    const hs = S.head; this.bodyMeshes.head.geometry = softPartGeo(hs, hs, hs, R.head); this.bodyMeshes.head.scale.setScalar(hs); this.bodyMeshes.head.position.set(0, hs / 2, 0);
-    this.faceMesh.geometry = faceDecalGeo(hs);
+    // Classic/default: head is ~60% of torso width and a little taller than wide (1.1×).
+    // Other body types keep their authored cube head so pip/glacier/yeti silhouettes stay put.
+    const hw = t === 'classic' ? S.torso[0] * 0.60 : S.head;
+    const hh = t === 'classic' ? hw * 1.1 : S.head, hd = hw;
+    this.bodyMeshes.head.geometry = softPartGeo(hw, hh, hd, R.torso);   // same small bevel as the torso
+    this.bodyMeshes.head.scale.set(hw, hh, hd); this.bodyMeshes.head.position.set(0, hh / 2, 0);
+    this.faceMesh.geometry = faceDecalGeo(hw, hh, hd);
     this._applyBodyMesh(S);
     for (const [bone, slot] of Object.entries(BONE_ANCHOR)) {
       const a = S.anchors[slot], g = this.anchors[bone];
@@ -2198,6 +2206,10 @@ export class Avatar {
       const a = S.anchors[slot], g = this.clothAnchors[bone];
       g.position.set(...a.offset); g.scale.set(...a.scale);
     }
+    // Hats are authored for a classic 0.62 cube; retarget to the actual head so they sit on top on every body type.
+    const hatSx = hw / 0.62, hatSy = hh / 0.62, hatSz = hd / 0.62;
+    this.anchors.head.scale.set(hatSx, hatSy, hatSz);
+    if (this.clothAnchors.head) this.clothAnchors.head.scale.set(hatSx, hatSy, hatSz);
     rigSetBody(this, t);   // R15 seam (src/game/avatarRig.js): external rig re-fits to the body type
     return this;
   }
@@ -2224,10 +2236,16 @@ export class Avatar {
 
   setColors({ skin, shirt, pants }) {
     this._lastColors = { skin, shirt, pants };
-    this.mats.skin.color.set(skin || DEFAULT.skin);
+    const sk = skin || DEFAULT.skin;
+    this.mats.skin.color.set(sk);
     this.mats.torso.color.set(shirt || DEFAULT.torso);
-    this.mats.arms.color.set(shirt || skin || DEFAULT.skin);
+    this.mats.arms.color.set(shirt || sk);
     this.mats.legs.color.set(pants || DEFAULT.legs);
+    // Keep the cream lift in sync with the skin; no extra glow when a shirt recolors the arms.
+    this.mats.skin.emissive.set(sk);
+    this.mats.skin.emissiveIntensity = 0.1;
+    this.mats.arms.emissive.set(shirt || sk);
+    this.mats.arms.emissiveIntensity = shirt ? 0 : 0.1;
   }
 
   /** Apply equipped cosmetics from a profile. */
