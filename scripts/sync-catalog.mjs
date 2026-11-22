@@ -104,6 +104,7 @@ export function validate({ items, phrases, gears = [], games = [], featured = []
     if (!Number.isInteger(c.price) || c.price < 1) errs.push(`consumable ${c.gameId}/${c.itemId}: price must be a positive integer (${c.from})`);
     const k = c.gameId + '/' + c.itemId; if (cseen.has(k)) errs.push(`duplicate consumable ${k}`); cseen.add(k);
   }
+  for (const c of items) if (/^ugc_/.test(c?.id || '')) errs.push(`${c.id}: the ugc_ prefix is reserved for player creations (src/ugc)`);
   const qseen = new Set(), byId = new Map(items.map(c => [c?.id, c]));
   const knownGames = new Set([...games.map(g => g.id), ...gears.map(g => g.gameId), ...consumables.map(c => c.gameId)]);
   for (const qd of quests) {
@@ -186,7 +187,7 @@ on conflict (id) do update set name = excluded.name, slot = excluded.slot, price
   where (catalog_items.name, catalog_items.slot, catalog_items.price, catalog_items.premium, catalog_items.customizable, catalog_items.grant_only, catalog_items.event_id, catalog_items.plus_only, catalog_items.active)
     is distinct from (excluded.name, excluded.slot, excluded.price, excluded.premium, excluded.customizable, excluded.grant_only, excluded.event_id, excluded.plus_only, true);
 update public.catalog_items set active = false, updated_at = now()
-  where active and id not in (${items.map(c => q(c.id)).join(', ')});
+  where active and id not like 'ugc\\_%' and id not in (${items.map(c => q(c.id)).join(', ')});   -- ugc_* rows belong to player creations (0020)
 
 insert into public.chat_phrases (id, section, text, active) values
 ${prow.join(',\n')}

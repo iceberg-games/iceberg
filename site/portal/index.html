@@ -11,6 +11,17 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
 </head>
 <body>
+  <script>
+    // PC: the site root is the SAME home as the play page (one menu). Phones keep the portal (blocked screen); auth-callback
+    // links and ?portal=1 (or localStorage iceberg:v1:portal=1) still open the portal itself.
+    (function () { try {
+      var q = location.search, h = location.hash;
+      var auth = /access_token|refresh_token|type=|[?&]code=|error_description/.test(q + h);
+      var keep = /[?&]portal=1/.test(q) || localStorage.getItem('iceberg:v1:portal') === '1';
+      var phone = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && matchMedia('(pointer:coarse)').matches && !matchMedia('(any-pointer:fine)').matches);
+      if (!auth && !keep && !phone) { window.__icebergGoHome = true; location.replace('play/' + q.replace(/[?&]?(view|sort)=[^&]*/g, '').replace(/^&/, '?')); }
+    } catch (e) { /* stay on the portal */ } })();
+  </script>
   <div id="portal"></div>
   <script type="module" src="/src/portal/portal.js"></script>
 </body>

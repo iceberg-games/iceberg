@@ -38,6 +38,9 @@ import { initUiSounds } from './audio/uiSounds.js';
 import { uiSoundOptions } from './audio/siteSounds.js';
 import './net/install.js';   // captures beforeinstallprompt early (Download button)
 import { isBlockedMobile, showMobileBlock } from './core/mobileGate.js';
+import './ugc/store.js';   // registers saved UGC creations in the catalog before the avatar loadout applies
+import { mountUgcEditor } from './ugc/editor.js';
+import { refreshPublished } from './ugc/store.js';
 
 // Multi-page site: the game lives in play/ and the portal opens it with ?game=<id>.
 const params = new URLSearchParams(location.search);
@@ -165,12 +168,14 @@ async function boot() {
     if (engine.game) { mp.leave(); gameChat.leave(); }
     await play(def, { friend: username });
   } });
+  const ugc = mountUgcEditor({ economy, ui });   // PC-only Accessory Editor (bus 'ugc:open'); hidden on phones
+  refreshPublished().then(() => avatar.applyLoadout(economy.profile)).catch(() => {});
   await showDevicePicker(document.body);
   menu.showTitle();
   if (GAME_PARAM && params.get('autostart') === '1' && menu.mode === 'title') menu.el.querySelector('#start-btn')?.click();   // deep link from a PC tile: boot straight into the game
 
   // Handy hooks for automated tests / debugging in the console.
-  window.iceberg = { engine, mobileStudio, economy, quests, getAudioListener, avatar, models, music, ui, menu, backend, remote, gameChat, mp, friends, play: (id) => play(findGame(id)), edit, goHome };
+  window.iceberg = { engine, ugc, mobileStudio, economy, quests, getAudioListener, avatar, models, music, ui, menu, backend, remote, gameChat, mp, friends, play: (id) => play(findGame(id)), edit, goHome };
   if (SITE_ROOT) registerServiceWorker(SITE_ROOT);
 }
 
