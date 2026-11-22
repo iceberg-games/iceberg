@@ -61,7 +61,7 @@ async function ensureSandboxAccount(username) {
   }
   const pw = Array.from(crypto.getRandomValues(new Uint8Array(24)), b => b.toString(16).padStart(2, '0')).join('');
   localStorage.setItem(ACCOUNT_KEY, JSON.stringify({ username, password: pw, created: new Date().toISOString() }));   // saved first: never lose it
-  try { await signUp(client, { username, password: pw, displayName: username }); return 'created'; }
+  try { await signUp(client, { username, password: pw, displayName: username, dateOfBirth: '1990-01-01' }); return 'created'; }
   catch (e) { console.warn('[dev preview] sandbox account', e.message); return 'taken'; }
 }
 

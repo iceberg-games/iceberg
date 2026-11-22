@@ -14,7 +14,9 @@ import { isMobilePlayable } from '../data/gameMeta.js';
 import { gameThumb } from '../ui/thumbs.js';
 import { accountsEnabled, CONFIG } from '../net/config.js';
 import { getRemote, connectStoredSession } from '../net/session.js';
-import { signIn, signUp, validateCredentials } from '../net/auth.js';
+import { renderAuthForms } from '../ui/accountForms.js';
+import { accountSettingsCard, securitySettingsCard } from '../ui/accountSettings.js';
+import { watchAccountSession } from '../net/account.js';
 import { getDeviceMode, setDeviceMode, onDeviceChange } from '../core/device.js';
 import { isBlockedMobile, showMobileBlock } from '../core/mobileGate.js';
 import { registerServiceWorker } from '../net/pwa.js';
@@ -92,11 +94,27 @@ function banPanel() {
     h('button.btn.secondary', { id: 'revoke-plus-btn', onclick: act((r, u) => grantPlus(r, u, 0, 'dev portal revoke'), 'Revoked Plus for') }, 'Revoke Plus'));
 }
 let plusNow = null;
+let stopWatch = null;
+function startWatch() {
+  stopWatch?.();
+  if (!remote) return;
+  stopWatch = watchAccountSession(remote, { onRevoked: async () => {
+    toast('This session was signed out on another device.', '👋');
+    await leaveAccount();
+  } });
+}
+async function leaveAccount() {
+  stopWatch?.(); stopWatch = null;
+  await chatRoom?.destroy(); chatRoom = null;
+  await getRemote()?.client.signOut();
+  economy.disconnect(); remote = null; dev = false;
+  go('account');
+}
 async function refreshDev() { const p = await syncPlus(remote); const d = remote ? await isDev(remote) : false; if (d !== dev || p !== plusNow) { dev = d; plusNow = p; render(); } }
 function nav() {
+  if (accountsEnabled() && !remote) return null;
   const tab = (id, label) => h('button.p-tab' + (view === id ? '.on' : ''), { 'data-view': id, onclick: () => go(id) }, label);
-  return h('nav.p-nav', tab('games', '🎮 Games'), tab('chat', '💬 Chat'), tab('friends', '🤝 Friends'), tab('settings', '⚙️ Settings'),
-    !remote && accountsEnabled() ? tab('account', '🔑 Sign in') : null);
+  return h('nav.p-nav', tab('games', '🎮 Games'), tab('chat', '💬 Chat'), tab('friends', '🤝 Friends'), tab('settings', '⚙️ Settings'));
 }
 
 function gamesView() {
@@ -170,56 +188,46 @@ function settingsView() {
       h('p.muted.small', 'Mobile shows touch controls and the simple Mobile Studio.')),
     plusCard(h, () => render()),
     h('div.p-card', h('h3', 'Install'), h('p.muted.small', 'Use your browser menu → "Install app" / "Add to Home Screen" to keep Iceberg on your device.')),
-    remote ? h('div.p-card', h('h3', 'Account'), h('p', `Signed in as @${economy.profile.username}`), h('button.btn.secondary', { onclick: signOutNow }, 'Sign out')) : null);
+    remote ? accountSettingsCard({ economy, remote, onSignedOut: async () => { toast('Signed out', '👋'); await leaveAccount(); } }) : null,
+    remote ? securitySettingsCard({ economy, remote, onSignedOut: async () => { toast('Signed out', '👋'); await leaveAccount(); } }) : null);
 }
 
 function accountView() {
   const sec = h('section.p-view#view-account', h('h2', '🔑 Your Iceberg account'));
-  if (!accountsEnabled()) { sec.append(h('p.muted', 'Accounts are not configured on this build. You can still play as a guest.')); return sec; }
-  const mk = (mode) => {
-    const u = h('input', { name: 'username', placeholder: 'Username', autocomplete: 'username', maxLength: 20, required: true });
-    const p = h('input', { name: 'password', type: 'password', placeholder: 'Password (8+ characters)', autocomplete: mode === 'up' ? 'new-password' : 'current-password', required: true });
-    const d = mode === 'up' ? h('input', { name: 'display', placeholder: 'Display name (optional)', maxLength: 24 }) : null;
-    const err = h('p.p-error');
-    const btn = h('button.btn', { type: 'submit' }, mode === 'up' ? 'Create account' : 'Sign in');
-    const form = h(`form.p-card.p-auth#form-sign${mode}`, { onsubmit: async (e) => {
-      e.preventDefault(); err.textContent = '';
-      const bad = mode === 'up' ? validateCredentials(u.value, p.value) : null; if (bad) { err.textContent = bad; return; }
-      btn.disabled = true;
-      try {
-        const client = getRemote().client;
-        if (mode === 'up') await signUp(client, { username: u.value, password: p.value, displayName: d.value });
-        else await signIn(client, { username: u.value, password: p.value });
-        remote = await connectStoredSession(economy);
-        if (await isBanned(remote)) return showBanned();
-        refreshDev();
-        if (!remote) throw new Error('Signed in, but the profile could not be loaded.');
-        toast(mode === 'up' ? 'Welcome to Iceberg!' : 'Welcome back!', '🎉');
-        go('games');
-      } catch (ex) { err.textContent = ex.message; }
-      finally { btn.disabled = false; }
-    } }, h('h3', mode === 'up' ? 'New here? Create an account' : 'Sign in'), u, p, d, btn, err);
-    return form;
-  };
-  sec.append(h('div.p-two', mk('in'), mk('up')),
-    h('p.muted.small', 'Your guest progress on this device (Birg Bucks earned by playing and items) moves to the first account you sign in with. Free demo bucks do not carry over.'));
+  if (remote) {
+    sec.append(h('div.p-card', h('p', `You're signed in as @${economy.profile.username}`), h('button.btn.secondary', { onclick: signOutNow }, 'Sign out')));
+    return sec;
+  }
+  if (!accountsEnabled()) { sec.append(h('p.muted', 'Accounts are not configured on this build.')); return sec; }
+  sec.append(renderAuthForms({ economy, onSignedIn: async (r, { mode }) => {
+    remote = r;
+    if (await isBanned(remote)) return showBanned();
+    startWatch();
+    refreshDev();
+    toast(mode === 'up' ? 'Welcome to Iceberg!' : 'Welcome back!', '🎉');
+    go('games');
+  } }));
   return sec;
 }
 
 async function signOutNow() {
-  await chatRoom?.destroy(); chatRoom = null;
-  await getRemote()?.client.signOut();
-  economy.disconnect(); remote = null; dev = false;
-  toast('Signed out', '👋'); go('games');
+  toast('Signed out', '👋');
+  await leaveAccount();
 }
 
 function go(v) { view = v; const u = new URL(location.href); u.searchParams.set('view', v); history.replaceState(null, '', u); render(); }
 
 function render() {
   chatRoom?.destroy(); chatRoom = null; friendsCtl?.destroy(); friendsCtl = null; banner?.destroy(); banner = null;
+  if (accountsEnabled() && !ready) {
+    clear(root).append(h('div.snowbg'), h('div.p-wrap', header(), h('section.p-view#view-loading', h('p.muted', 'Loading…'))));
+    return;
+  }
+  const gated = accountsEnabled() && !remote;
+  if (gated) view = 'account';
   const views = { games: gamesView, chat: chatView, friends: friendsView, settings: settingsView, account: accountView };
-  clear(root).append(h('div.snowbg'), h('div.p-wrap', header(), devRow(), banPanel(), nav(), (views[view] || gamesView)()));
-  if (ready && (view === 'games' || !views[view])) checkEventPopup();
+  clear(root).append(h('div.snowbg'), h('div.p-wrap', header(), devRow(), banPanel(), nav(), (views[view] || (gated ? accountView : gamesView))()));
+  if (ready && remote && (view === 'games' || !views[view])) checkEventPopup();
 }
 function checkEventPopup() {
   return maybeShowEventPopup({ economy, getRemote, onPlay: openGame, source: eventSource });
@@ -233,8 +241,9 @@ if (mobileBlocked) showMobileBlock(); else render();
   remote = await connectStoredSession(economy);
   if (await isBanned(remote)) return showBanned();
   ready = true;
-  render();
   registerServiceWorker('./');
+  startWatch();
+  render();
   refreshDev();
 })();
 window.icebergPortal = { economy, get remote() { return remote; }, get chatRoom() { return chatRoom; }, get banner() { return banner; }, go, render, playUrl, toast, sounds: uiSounds, eventPopup, checkEventPopup, storm, cardThumb };

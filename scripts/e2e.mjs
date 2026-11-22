@@ -157,8 +157,8 @@ if (want('site')) {
     const BIGM = /\.(glb|gltf|mp3|ogg|wav|m4a)(\?|$)/i, portalMedia = [];
     p1.on('request', r => { if (BIGM.test(r.url()) && !/\/audio\/ui\//.test(r.url())) portalMedia.push(r.url()); });   // UI click sounds (audio/ui/) are the portal's own
     await p1.goto(BASE);
-    await p1.waitForSelector('#view-games .game-card');
-    check('site: portal at root lists games', (await p1.$$('#view-games .game-card')).length >= 2);
+    await p1.waitForSelector('#form-signup', { timeout: 20000 });
+    check('site: sign-up is required (games hidden until signed in)', !(await p1.$('#view-games .game-card')) && !!(await p1.$('#form-signup')));
     const sw = await p1.evaluate(async () => { const r = await navigator.serviceWorker.ready; return r.scope; });
     check('pwa: service worker registered with sub-path scope', sw === BASE, sw);
     const man = await p1.evaluate(async () => { const l = document.querySelector('link[rel=manifest]'); const r = await fetch(l.href); const j = await r.json(); return { ok: r.ok, scope: j.scope, icons: j.icons.length, url: l.href }; });
@@ -169,6 +169,17 @@ if (want('site')) {
     const shellKeys = await p1.evaluate(async () => { const out = []; for (const k of await caches.keys()) for (const r of await (await caches.open(k)).keys()) out.push(r.url); return out; });
     check('pwa: shell precache holds no models/audio (big media load on demand)', shellKeys.length >= 3 && !shellKeys.some(u => BIGM.test(u)), shellKeys.filter(u => BIGM.test(u)).join(' ') || shellKeys.length);
     check('site: portal page downloads no game models/audio (UI click sounds excepted)', portalMedia.length === 0, portalMedia.join(' '));
+    await p1.evaluate(() => localStorage.setItem('iceberg:v1:profile', JSON.stringify({ coins: 300, demoGranted: 0, owned: ['cap', 'icerocket'], equipped: { hat: 'cap', back: 'icerocket' },
+      cosmeticColors: { earmuffs: '#2f6f4a' }, rocketColors: { body: '#ff0000', fins: '#3f8fd0', trim: '#7fe3ff' } })));
+    await p1.click('#p-signin-open');
+    await p1.fill('#form-signup input[name=username]', 'frosty_fox');
+    await p1.fill('#form-signup input[name=password]', 'snowball123');
+    await p1.fill('#form-signup input[name=display]', 'Frosty');
+    await p1.fill('#form-signup input[name=dob]', '2001-04-15');
+    await p1.click('#form-signup button[type=submit]');
+    await p1.waitForSelector('#p-user', { timeout: 15000 });
+    await p1.waitForSelector('#view-games .game-card', { timeout: 15000 });
+    check('site: portal at root lists games after sign-in', (await p1.$$('#view-games .game-card')).length >= 3);
     if (existsSync(resolve(ROOT, 'src/games/cornerBakery'))) {
       const cb = await c1.newPage(); const ecb = []; watch(cb, ecb);
       const glb = cb.waitForResponse(r => /bakery-props-[\w-]+\.glb/.test(r.url()), { timeout: 30000 }).catch(() => null);
@@ -181,14 +192,6 @@ if (want('site')) {
       check('corner-bakery: starts on the site build without errors (HUD up)', ecb.length === 0 && !!(await cb.$('[class*=cbr-]')), ecb.join(' | '));
       await cb.close();
     }
-    await p1.evaluate(() => localStorage.setItem('iceberg:v1:profile', JSON.stringify({ coins: 300, demoGranted: 0, owned: ['cap', 'icerocket'], equipped: { hat: 'cap', back: 'icerocket' },
-      cosmeticColors: { earmuffs: '#2f6f4a' }, rocketColors: { body: '#ff0000', fins: '#3f8fd0', trim: '#7fe3ff' } })));
-    await p1.click('#p-signin-open');
-    await p1.fill('#form-signup input[name=username]', 'frosty_fox');
-    await p1.fill('#form-signup input[name=password]', 'snowball123');
-    await p1.fill('#form-signup input[name=display]', 'Frosty');
-    await p1.click('#form-signup button[type=submit]');
-    await p1.waitForSelector('#p-user', { timeout: 15000 });
     const prof1 = await p1.evaluate(() => window.icebergPortal.economy.profile);
     check('auth: username/password sign-up signs in', prof1.username === 'frosty_fox');
     check('migration: guest coins + cheap items carried, premium dropped', prof1.coins === 300 && prof1.owned.join() === 'cap', JSON.stringify({ c: prof1.coins, o: prof1.owned }));
@@ -276,6 +279,7 @@ if (want('site')) {
     await p2.goto(BASE + '?view=account');
     await p2.fill('#form-signup input[name=username]', 'polar_pal');
     await p2.fill('#form-signup input[name=password]', 'iglooigloo');
+    await p2.fill('#form-signup input[name=dob]', '1999-08-20');
     await p2.click('#form-signup button[type=submit]');
     await p2.waitForSelector('#p-user', { timeout: 15000 });
     await p1.click('.p-tab[data-view="chat"]'); await p2.click('.p-tab[data-view="chat"]');
@@ -336,7 +340,12 @@ if (want('site')) {
     check('featured: Play opens the game in a new tab', fbTab.url() === BASE + 'play/?game=birg-hq', fbTab.url());
     await fbTab.close();
     const rm = await b.newContext({ reducedMotion: 'reduce' }); const rp = await rm.newPage();
-    await rp.goto(BASE); await rp.waitForSelector('#featured-banner .fb-slide');
+    await rp.goto(BASE);
+    await rp.waitForSelector('#form-signin');
+    await rp.fill('#form-signin input[name=username]', 'frosty_fox');
+    await rp.fill('#form-signin input[name=password]', 'snowball123');
+    await rp.click('#form-signin button[type=submit]');
+    await rp.waitForSelector('#featured-banner .fb-slide', { timeout: 20000 });
     check('featured: no auto-rotation with prefers-reduced-motion', await rp.evaluate(() => window.icebergPortal.banner.rotating === false && document.querySelector('#featured-banner').dataset.reducedMotion === 'true'));
     await rm.close();
     // make the ranking deterministic: BIRG HQ gets 2 visits, Frost Fields gets a live player

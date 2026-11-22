@@ -28,6 +28,8 @@ export async function startDevServer({ port = PORT, dataDir = DATA, staticDir = 
   const db = await createDb({ dataDir: dataDir || undefined });
   const access = new Map();   // token -> { uid, exp }
   const refresh = new Map();  // token -> uid
+  const factors = new Map();  // uid -> [{ id, type, status, friendly_name, secret }]
+  const challenges = new Map(); // challenge id -> { uid, factorId, exp }
 
   const hash = (pw) => { const salt = randomBytes(16); return 'scrypt$' + salt.toString('hex') + '$' + scryptSync(pw, salt, 32).toString('hex'); };
   const verify = (pw, stored) => {
@@ -45,7 +47,7 @@ export async function startDevServer({ port = PORT, dataDir = DATA, staticDir = 
   };
 
   const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info, prefer',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' };
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS' };
   const send = (res, status, body) => { res.writeHead(status, { 'Content-Type': 'application/json', ...cors }); res.end(body === undefined ? '' : JSON.stringify(body)); };
   const readBody = (req) => new Promise((ok, bad) => { let b = ''; req.on('data', c => { b += c; if (b.length > 1e6) req.destroy(); }); req.on('end', () => { try { ok(b ? JSON.parse(b) : {}); } catch (e) { bad(e); } }); });
 
@@ -107,10 +109,70 @@ export async function startDevServer({ port = PORT, dataDir = DATA, staticDir = 
         }
         return send(res, 400, { error: 'unsupported_grant_type' });
       }
-      if (url.pathname === '/auth/v1/logout') { access.delete(bearer); return send(res, 204); }
+      if (url.pathname === '/auth/v1/logout') {
+        const scope = url.searchParams.get('scope') || 'local';
+        if (scope === 'global' && uid) {
+          for (const [t, a] of access) if (a.uid === uid) access.delete(t);
+          for (const [t, id] of refresh) if (id === uid) refresh.delete(t);
+        } else if (scope === 'others' && uid) {
+          for (const [t, a] of access) if (a.uid === uid && t !== bearer) access.delete(t);
+        } else {
+          access.delete(bearer);
+        }
+        return send(res, 204);
+      }
       if (url.pathname === '/auth/v1/user') {
         if (!uid) return send(res, 401, { msg: 'invalid token' });
+        if (req.method === 'PUT') {
+          const body = await readBody(req);
+          if (body.password) {
+            if (String(body.password).length < 8) return send(res, 422, { msg: 'Password should be at least 8 characters.' });
+            await db.query('update auth.users set encrypted_password = $2 where id = $1', [uid, hash(body.password)]);
+          }
+          return send(res, 200, (await session(uid)).user);
+        }
         return send(res, 200, (await session(uid)).user);
+      }
+      if (url.pathname === '/auth/v1/factors' && req.method === 'GET') {
+        if (!uid) return send(res, 401, { msg: 'invalid token' });
+        return send(res, 200, { factors: factors.get(uid) || [] });
+      }
+      if (url.pathname === '/auth/v1/factors' && req.method === 'POST') {
+        if (!uid) return send(res, 401, { msg: 'invalid token' });
+        const body = await readBody(req);
+        if ((body.factor_type || body.factorType) !== 'totp') return send(res, 400, { msg: 'unsupported factor type' });
+        const id = randomUUID();
+        const secret = randomBytes(10).toString('hex');
+        const factor = { id, type: 'totp', friendly_name: body.friendly_name || 'Iceberg', status: 'unverified', secret };
+        factors.set(uid, [...(factors.get(uid) || []), factor]);
+        return send(res, 200, { id, type: 'totp', friendly_name: factor.friendly_name, totp: { secret, qr_code: `otpauth://totp/Iceberg:${id}?secret=${secret}&issuer=Iceberg` } });
+      }
+      const factorVerify = url.pathname.match(/^\/auth\/v1\/factors\/([0-9a-f-]+)\/(challenge|verify)$/i);
+      if (factorVerify) {
+        if (!uid) return send(res, 401, { msg: 'invalid token' });
+        const factorId = factorVerify[1], action = factorVerify[2];
+        const list = factors.get(uid) || [];
+        const factor = list.find(f => f.id === factorId);
+        if (!factor) return send(res, 404, { msg: 'factor not found' });
+        if (action === 'challenge') {
+          const id = randomUUID();
+          challenges.set(id, { uid, factorId, exp: Date.now() + 300000 });
+          return send(res, 200, { id, expires_at: new Date(Date.now() + 300000).toISOString() });
+        }
+        const body = await readBody(req);
+        const ch = challenges.get(body.challenge_id);
+        if (!ch || ch.uid !== uid || ch.factorId !== factorId) return send(res, 400, { msg: 'invalid challenge' });
+        const code = String(body.code || '');
+        if (code !== '123456' && code !== String(factor.secret).slice(-6)) return send(res, 400, { msg: 'invalid code' });
+        factor.status = 'verified';
+        challenges.delete(body.challenge_id);
+        return send(res, 200, { id: factor.id, status: 'verified' });
+      }
+      const factorDel = url.pathname.match(/^\/auth\/v1\/factors\/([0-9a-f-]+)$/i);
+      if (factorDel && req.method === 'DELETE') {
+        if (!uid) return send(res, 401, { msg: 'invalid token' });
+        factors.set(uid, (factors.get(uid) || []).filter(f => f.id !== factorDel[1]));
+        return send(res, 200, { id: factorDel[1] });
       }
       const m = url.pathname.match(/^\/rest\/v1\/rpc\/([a-z_][a-z0-9_]*)$/);
       if (m && req.method === 'POST') {

@@ -20,7 +20,7 @@ async function signUp(name) {
   const c = await b.newContext({ viewport: { width: 1280, height: 820 } }); const p = await c.newPage();
   await p.goto(BASE); await p.click('#p-signin-open');
   await p.fill('#form-signup input[name=username]', name); await p.fill('#form-signup input[name=password]', 'zz-ban-' + Date.now());
-  await p.fill('#form-signup input[name=display]', name); await p.click('#form-signup button[type=submit]');
+  await p.fill('#form-signup input[name=display]', name); await p.fill('#form-signup input[name=dob]', '1995-06-01'); await p.click('#form-signup button[type=submit]');
   await p.waitForSelector('#p-user', { timeout: 20000 }).catch(async (e) => { throw new Error(name + ' sign-up: ' + (await p.evaluate(() => document.querySelector('#form-signup .err, #form-signup [class*=err]')?.textContent || document.body.innerText.slice(0, 300)))); });
   return { c, p };
 }

@@ -60,6 +60,7 @@ async function player(name, display) {
   await portal.fill('#form-signup input[name=username]', name);
   await portal.fill('#form-signup input[name=password]', 'zz-mp2-' + Date.now());
   await portal.fill('#form-signup input[name=display]', display);
+  await portal.fill('#form-signup input[name=dob]', '1997-02-02');
   await portal.click('#form-signup button[type=submit]');
   await portal.waitForSelector('#p-user', { timeout: 20000 });
   const session = await portal.evaluate(() => JSON.parse(localStorage.getItem('iceberg:v1:session')));

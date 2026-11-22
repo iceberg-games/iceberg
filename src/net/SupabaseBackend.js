@@ -71,4 +71,16 @@ export class SupabaseBackend {
   sendFriendRequest(username)      { return this.client.rpc('send_friend_request', { p_username: username }); }
   respondFriendRequest(username, accept) { return this.client.rpc('respond_friend_request', { p_username: username, p_accept: !!accept }); }
   removeFriend(username)           { return this.client.rpc('remove_friend', { p_username: username }); }
+
+  // ---- account settings (20261122000020_editor_accounts.sql) ----
+  setDateOfBirth(dob)              { return this.client.rpc('set_date_of_birth', { p_dob: dob }); }
+  deactivateAccount()              { return this.client.rpc('deactivate_account', {}); }
+  deleteAccount()                  { return this.client.rpc('delete_account', {}); }
+  registerAccountSession(clientId, userAgent, deviceLabel) {
+    return this.client.rpc('register_account_session', { p_client_id: clientId, p_user_agent: userAgent || null, p_device_label: deviceLabel || null });
+  }
+  listAccountSessions()            { return this.client.rpc('list_account_sessions'); }
+  heartbeatAccountSession(clientId) { return this.client.rpc('heartbeat_account_session', { p_client_id: clientId }); }
+  revokeAccountSession(sessionId)  { return this.client.rpc('revoke_account_session', { p_session_id: sessionId }); }
+  revokeOtherAccountSessions(clientId) { return this.client.rpc('revoke_other_account_sessions', { p_client_id: clientId }); }
 }

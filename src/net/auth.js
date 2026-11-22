@@ -2,6 +2,7 @@
 // Kids never type an email: "<username>@<VITE_USERNAME_EMAIL_DOMAIN>" is used internally.
 // Supabase project settings needed: Email provider ON, "Confirm email" OFF (see DEPLOY.md).
 import { CONFIG } from './config.js';
+import { validateDateOfBirth, saveLocalDob, formatDob } from './account.js';
 
 export const USERNAME_RE = /^[a-z0-9_]{3,20}$/;
 export const normalizeUsername = (u) => String(u || '').trim().toLowerCase();
@@ -23,15 +24,18 @@ const friendly = (e) => {
   return m;
 };
 
-export async function signUp(client, { username, password, displayName }) {
+export async function signUp(client, { username, password, displayName, dateOfBirth }) {
   const err = validateCredentials(username, password); if (err) throw new Error(err);
+  const dobErr = validateDateOfBirth(dateOfBirth); if (dobErr) throw new Error(dobErr);
   const u = normalizeUsername(username);
+  const dob = formatDob(dateOfBirth);
   let free = true;
   try { free = await client.rpc('username_available', { p_username: u }, { anon: true }); } catch { /* server decides */ }
   if (free === false) throw new Error('That username is taken (or not allowed)');
   try {
-    const s = await client.signUp({ email: usernameToEmail(u), password, data: { username: u, display_name: (displayName || u).slice(0, 24) } });
+    const s = await client.signUp({ email: usernameToEmail(u), password, data: { username: u, display_name: (displayName || u).slice(0, 24), date_of_birth: dob } });
     if (!s) throw new Error('Account created. Email confirmation is on in Supabase; turn it off (DEPLOY.md).');
+    saveLocalDob(s?.user?.id || 'pending', dob);
     return s;
   } catch (e) { throw new Error(friendly(e)); }
 }

@@ -27,6 +27,8 @@ import { showDevicePicker } from './ui/devicePicker.js';
 import { mountTouchControls } from './ui/touchControls.js';
 import { connectStoredSession } from './net/session.js';
 import { CONFIG } from './net/config.js';
+import { mountAuthGate, needsAccountGate } from './ui/accountGate.js';
+import { watchAccountSession } from './net/account.js';
 import { registerServiceWorker } from './net/pwa.js';
 import { mountGameChat } from './chat/gameChat.js';
 import { startPlaySession } from './net/gameStats.js';
@@ -47,8 +49,15 @@ async function boot() {
   if (CONFIG.isSite) document.body.classList.add('iceberg-site');
   const economy = new Economy(backend);
   const quests = bindQuests(economy);   // games: import { quests } from '../core/quests.js' or window.iceberg.quests
-  const remote = await connectStoredSession(economy);   // null = guest (localStorage only)
+  let remote = await connectStoredSession(economy);   // null = guest (localStorage only), or sign-in required when accounts are on
+  if (needsAccountGate(remote)) {
+    await new Promise((resolve) => {
+      mountAuthGate(app, { economy, onSignedIn: (r) => { remote = r; resolve(); } });
+    });
+    app.replaceChildren();
+  }
   if (await isBanned(remote)) return showBanned();      // banned (0012): no game, chat or multiplayer
+  if (remote) watchAccountSession(remote, { onRevoked: async () => { try { await remote.client.signOut(); } catch {} location.reload(); } });
   await syncPlus(remote);                               // Iceberg Plus from the server (0015) before studio perks render
   const settings = modelPrefs.loadSettings();
   const music = new Music(settings, (s) => modelPrefs.saveSettings({ ...modelPrefs.loadSettings(), ...s }));

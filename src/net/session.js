@@ -2,6 +2,7 @@
 import { accountsEnabled } from './config.js';
 import { SupabaseBackend } from './SupabaseBackend.js';
 import { bus } from '../core/events.js';
+import { registerThisSession } from './account.js';
 
 let shared = null;
 /** The SupabaseBackend for this page, or null when accounts are not configured. */
@@ -22,11 +23,12 @@ export async function connectStoredSession(economy, { timeoutMs = 8000 } = {}) {
     if (res?.migration?.ok && (res.migration.coins || res.migration.items?.length)) {
       bus.emit('toast', { text: `Moved your guest progress to your account: +${res.migration.coins} BB, ${res.migration.items.length} items`, icon: '📦' });
     }
+    registerThisSession(remote).catch(() => {});
     return remote;
   } catch (e) {
     if (e.status === 401 || e.status === 403) await remote.client.signOut();
-    console.warn('Sign-in restore failed; playing as guest', e);
-    bus.emit('toast', { text: 'Could not reach your account. Playing as guest on this device.', icon: '⚠️' });
+    console.warn('Sign-in restore failed', e);
+    bus.emit('toast', { text: 'Could not reach your account. Please sign in again.', icon: '⚠️' });
     return null;
   }
 }
