@@ -1,25 +1,29 @@
 <!doctype html><meta charset="utf-8"><title>Iceberg default avatar preview</title>
 <style>body{margin:0;background:#d6ecf8;font:14px system-ui}#l{position:fixed;top:8px;left:8px;background:#fffc;padding:6px 10px;border-radius:8px}</style>
-<div id="l">Iceberg default avatar — soft blocky body + expressive face (left: bare · right: <span id="items"></span>) · ?talk=1 ?items=a,b ?body=classic</div>
+<div id="l">Iceberg default avatar — classic blocky body + minimal face (left: bare · right: <span id="items"></span>) · ?talk=1 ?items=a,b ?body=classic</div>
 <script type="module">
 import * as THREE from 'three';
 import { Avatar } from '/src/game/avatar.js';
 const q = new URLSearchParams(location.search);
-const items = (q.get('items') || 'beanie,scarf,backpack,cocoa_mug').split(',').filter(Boolean);
+const raw = q.get('items'); const items = (raw == null ? 'beanie,scarf,backpack,cocoa_mug' : raw === 'none' ? '' : raw).split(',').filter(Boolean);
 document.getElementById('items').textContent = items.join(', ');
 const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setPixelRatio(Math.min(2, devicePixelRatio)); r.setSize(innerWidth, innerHeight);
 r.shadowMap.enabled = true; document.body.appendChild(r.domElement);
-const sc = new THREE.Scene(); sc.background = new THREE.Color('#d6ecf8');
-sc.add(new THREE.HemisphereLight('#ffffff', '#8fb3d1', 2.0));
-const d = new THREE.DirectionalLight('#fff', 1.6); d.position.set(3, 6, 5); d.castShadow = true; sc.add(d);
-const floor = new THREE.Mesh(new THREE.CircleGeometry(4, 40), new THREE.MeshStandardMaterial({ color: '#eef7fd', roughness: 0.9 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; sc.add(floor);
+const dark = q.get('bg') === 'dark';
+const sc = new THREE.Scene(); sc.background = new THREE.Color(dark ? '#1b1c24' : '#d6ecf8');
+sc.add(new THREE.HemisphereLight(dark ? '#d8d4cc' : '#ffffff', dark ? '#3a3a48' : '#8fb3d1', dark ? 1.15 : 1.8));
+const d = new THREE.DirectionalLight('#fff', dark ? 1.05 : 1.35); d.position.set(2.4, 5.2, 4.2); d.castShadow = true; sc.add(d);
+const floor = new THREE.Mesh(new THREE.CircleGeometry(4, 40), new THREE.MeshStandardMaterial({ color: dark ? '#16161c' : '#eef7fd', roughness: 1 })); floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; sc.add(floor);
 const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.1, 100); cam.position.set(1.4, 2.2, 8.6); cam.lookAt(0, 1.35, 0);
 const avs = [];
-for (const [i, eq] of [[0, []], [1, items]].map(([i, l]) => [i, l])) {
+const single = q.has('single');
+const setups = single ? [[0, items]] : [[0, []], [1, items]];
+for (const [i, eq] of setups) {
   const a = new Avatar(); a.setBodyType(q.get('body') || 'classic');
   const e = {}; eq.forEach((id, n) => e['s' + n] = id); a.applyLoadout({ equipped: e });
-  a.root.position.set(i ? 1.25 : -1.25, 0, 0); a.root.rotation.y = 0.45; sc.add(a.root); avs.push(a);
+  a.root.position.set(single ? 0 : (i ? 1.25 : -1.25), 0, 0); a.root.rotation.y = +(q.get('yaw') || (single ? 0.52 : 0.45)); sc.add(a.root); avs.push(a);
 }
+if (single) { cam.position.set(1.15, 2.35, 6.2); cam.lookAt(0, 1.35, 0); }
 if (q.get('talk')) { avs.forEach(a => a.setTalking(true)); for (let i = 0; i < 3; i++) avs.forEach(a => a.animate(0.13)); }
 window.__avs = avs;
 let last = performance.now();

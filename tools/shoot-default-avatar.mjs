@@ -9,6 +9,10 @@ p.on('pageerror', e => console.error('pageerror', e.message)); p.on('console', m
 const shot = async (qs, file) => { await p.goto(`http://localhost:${port}/tools/default-avatar-preview.html?still=1&${qs}`); await p.waitForFunction('window.__ready', null, { timeout: 60000 }); await p.screenshot({ path: `${out}/${file}` }); console.log(`${out}/${file}`); };
 await shot('', 'default-avatar.png');
 await shot('talk=1', 'default-avatar-talk.png');
+await shot('bg=dark&items=none', 'default-avatar-dark-bare.png');
+await shot('bg=dark', 'default-avatar-dark.png');
+await shot('bg=dark&talk=1', 'default-avatar-dark-talk.png');
+await shot('bg=dark&items=none&single=1', 'default-avatar-dark-single.png');
 await p.goto(`http://localhost:${port}/tools/body-types-preview.html`); await p.waitForFunction('window.__ready', null, { timeout: 60000 });
 await p.setViewportSize({ width: 2000, height: 1400 }); await p.goto(`http://localhost:${port}/tools/body-types-preview.html`); await p.waitForFunction('window.__ready', null, { timeout: 60000 });
 await p.screenshot({ path: `${out}/body-types-grid.png` }); console.log(`${out}/body-types-grid.png`);
