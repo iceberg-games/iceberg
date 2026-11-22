@@ -24,6 +24,16 @@ try {
   await p.click('[data-template=blank]');
   await p.waitForTimeout(1200);
   ok('studio opens', await p.evaluate(() => !!window.iceberg?.engine?.game?.editing) && await p.isVisible('#creator-panel'));
+  const ribbonNull = await p.evaluate(() => {
+    const r = document.querySelector('.st-ribbon');
+    if (!r) return 'missing';
+    const w = document.createTreeWalker(r, NodeFilter.SHOW_TEXT);
+    const hits = [];
+    let n; while ((n = w.nextNode())) if (n.nodeValue === 'null') hits.push(n.nodeValue);
+    return hits.length ? hits.join(',') : '';
+  });
+  ok('ribbon does not show null', ribbonNull === '', ribbonNull);
+
   ok('chat toggle visible', await p.isVisible('#studio-chat-toggle'));
   ok('chat starts closed', await p.locator('#studio-chat-panel').evaluate((el) => el.classList.contains('hidden')));
 

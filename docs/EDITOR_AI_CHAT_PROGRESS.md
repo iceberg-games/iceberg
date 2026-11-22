@@ -54,21 +54,50 @@ chat / GUI toggle / first-person setting) and `src/engine/player.js`
 - Elements save on `doc.gui` (included in undo snapshots) and render in
   play mode.
 
-## Tests
-- `node scripts/studio-chat-tests.mjs` — 37/37
+### Polish (same branch, items 1–5)
+- **Placement:** new builds go in front of the camera (`lookPoint`) or
+  beside the selection, then at the next free spot so they do not overlap.
+- **Broader builder:** house now has a door and windows; also a multi-floor
+  building, shop/stand, fence (optionally around a selection), ladder,
+  tree, lamp post, simple car, N-jump obby, maze, and arena/walls.
+  Sizes, colors, and materials are parsed. Follow-ups on the last build:
+  `make it bigger`, `make it blue`, `undo that`.
+- **Test-play click-through:** HUD stays fixed when the camera orbits; a
+  Get coins button awards 10 coins; first-person toggle hides the avatar
+  and can be toggled back. Button actions run on the click itself (not
+  the next animation frame). The play HUD sits above the site dock.
+- **GUI image picker:** choose from the game thumbnail, remembered
+  textures, existing GUI images, or other saved-game thumbnails, or paste
+  an http(s)/data image URL. Unsafe sources (`javascript:`, etc.) are
+  rejected.
+- **Ribbon:** `renderRibbon` no longer passes `null` to `Element.append`,
+  so the Tools group is not followed by a literal "null" label.
+
+## Tests (after polish)
+- `node scripts/studio-chat-tests.mjs` — 56/56
 - `node scripts/nlscript-tests.mjs` — 219/219
 - `node scripts/script-check-tests.mjs` — 10/10
-- `node scripts/studio-chat-smoke.mjs` (after `npm run build`) — 18/18
-  at 1440×900. Screenshots:
+- `node scripts/studio-chat-smoke.mjs` (after `npm run build`) — 19/19
+  at 1440×900, including the ribbon "null" check.
+- `node scripts/studio-play-hud-smoke.mjs` — 16/16 (fixed HUD, coins
+  button, first-person on and off).
+- Screenshots:
   - `designs/editor-ai-chat/studio-chat-open.png`
   - `designs/editor-ai-chat/studio-gui-editor.png`
+  - `designs/editor-ai-chat/studio-play-hud.png`
 
 ## Phrases that work
-- build a small house / build a large red house
+- build a small house / build a large red house / build a wooden house
+- make a 3 story building
+- make a 10 jump obby
+- make a maze / make an arena
+- add a tree / add a lamp post / add a ladder / add a fence
+- make a simple car / make a shop
 - make a tower 10 high
 - add 5 coins in a line / add five coins in a line
 - make a bridge / make a bridge 30 long
 - add a checkpoint / add a wall / add a platform / add stairs
+- make it bigger / make it blue / undo that
 - make the red part kill players
 - when touched, kill them (and other existing translator phrases)
 - my door doesn't work / something's wrong
@@ -82,13 +111,6 @@ chat / GUI toggle / first-person setting) and `src/engine/player.js`
 ## Known gaps
 - The helper is still rule-based. It will not invent buildings or GUI
   beyond the templates and translator it already knows.
-- Successive builds share one placement point, so a house and a tower
-  can overlap until the creator moves them.
-- GUI images are a placeholder unless `src` is set; there is no asset
-  picker yet.
-- Play-mode HUD and first-person were wired and unit-tested; the smoke
-  covers the editor, not a full Test-play click-through.
-- The pre-existing "null" label in the Studio ribbon is unchanged.
 - Phone Studio is unchanged (this drop is PC).
 - A paid Birg Bucks provider is only a TODO behind the same interface.
 - UGC accessories and custom-model visibility were not part of this drop.

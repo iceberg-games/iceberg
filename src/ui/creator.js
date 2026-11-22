@@ -166,7 +166,7 @@ export class CreatorPanel {
         h('div.st-row', snapSel('move', [0, 0.25, 0.5, 1, 2, 4], '🧲 Move'), snapSel('rot', [0, 5, 15, 45, 90], 'Rotate'),
           h('button.st-mini' + (ed.showGrid() ? '.on' : '') + '#grid-toggle', { onclick: () => ed.toggleGrid(), title: 'Show / hide the snap grid (G). Line spacing follows Move snap.' }, '▦ Grid'),
           h('button.st-mini#space-toggle', { onclick: () => ed.toggleSpace(), title: 'Move in world or local axes (Ctrl+L)' }, ed.space === 'world' ? '🌐 World' : '📐 Local'))),
-      ed.tool === 'terrain' ? this.terrainGroup() : null,
+      ...(ed.tool === 'terrain' ? [this.terrainGroup()] : []),
       h('div.st-group', h('div.st-gl', 'Insert'), h('div.st-row', ins('part', '🧱', 'Block', { shape: 'box' }), ins('part', '⚪', 'Sphere', { shape: 'sphere', size: [3, 3, 3], name: 'Sphere' }), ins('part', '🛢️', 'Cylinder', { shape: 'cylinder', size: [3, 2, 3], name: 'Cylinder' }), ins('part', '📐', 'Wedge', { shape: 'wedge', size: [4, 2, 4], name: 'Wedge' })),
         h('div.st-row', ins('spawn', '📍', 'Spawn'), ins('checkpoint', '🚩', 'Checkpoint'), ins('part', '🔥', 'Kill brick', { name: 'KillBrick', kill: true, material: 'lava', color: '#ff4a1c', size: [4, 1, 4] }), ins('coin', '🪙', 'Coin'))),
       h('div.st-group', h('div.st-gl', 'Edit'), h('div.st-row',
