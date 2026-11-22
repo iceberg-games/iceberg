@@ -77,9 +77,9 @@ export async function createEditor(ctx, doc) {
   st.snap = ed.snap; st.brush = ed.brush; buildGrid();
   const changed = (what = 'doc') => bus.emit('studio:changed', what);
   const instById = (id) => doc.instances.find(i => i.id === id);
-  const snapshot = () => JSON.stringify({ instances: doc.instances, animations: doc.animations, terrain: doc.terrain || null });
+  const snapshot = () => JSON.stringify({ instances: doc.instances, animations: doc.animations, terrain: doc.terrain || null, gui: doc.gui || [], firstPerson: !!doc.firstPerson });
   ed.checkpoint = () => { st.undo.push(snapshot()); if (st.undo.length > 150) st.undo.shift(); st.redo = []; doc.updatedAt = Date.now(); };
-  const restore = (s) => { const o = JSON.parse(s); doc.instances = o.instances; doc.animations = o.animations || []; doc.terrain = o.terrain || undefined; world.rebuildAll(doc.instances); world.setTerrain(doc.terrain); ed.selection = ed.selection.filter(instById); attach(); changed(); };
+  const restore = (s) => { const o = JSON.parse(s); doc.instances = o.instances; doc.animations = o.animations || []; doc.terrain = o.terrain || undefined; if ('gui' in o) doc.gui = o.gui; if ('firstPerson' in o) doc.firstPerson = o.firstPerson; world.rebuildAll(doc.instances); world.setTerrain(doc.terrain); ed.selection = ed.selection.filter(instById); attach(); changed(); bus.emit('studio:changed', 'gui'); };
   ed.undo = () => { if (!st.undo.length) return false; st.redo.push(snapshot()); restore(st.undo.pop()); return true; };
   ed.redo = () => { if (!st.redo.length) return false; st.undo.push(snapshot()); restore(st.redo.pop()); return true; };
   ed.canUndo = () => st.undo.length > 0; ed.canRedo = () => st.redo.length > 0;
@@ -276,6 +276,30 @@ export async function createEditor(ctx, doc) {
     if (ed.tool === 'select') ed.setTool('move');
     changed(); return inst.id;
   };
+  ed.placementPoint = (size = [1, 1, 1]) => placementPoint(size);
+  /** Insert many parts as one undo step. Optionally group them. */
+  ed.insertMany = (specs, { groupName } = {}) => {
+    ed.checkpoint();
+    const ids = [];
+    for (const spec of specs || []) {
+      const type = spec.type || 'part';
+      const inst = makeInstance(type, spec);
+      if (type === 'checkpoint' && (inst.order == null || inst.order === 1) && !spec.order) inst.order = doc.instances.filter(i => i.type === 'checkpoint').length + 1;
+      if (doc.instances.some(i => i.name === inst.name)) inst.name = uniqueName(inst.name);
+      doc.instances.push(inst); world.add(inst); ids.push(inst.id);
+    }
+    let groupId = null;
+    if (groupName && ids.length > 1) {
+      const g = makeInstance('group', { name: uniqueName(groupName) });
+      for (const id of ids) instById(id).parent = g.id;
+      const first = Math.min(...ids.map(id => doc.instances.findIndex(i => i.id === id)));
+      doc.instances.splice(first, 0, g); world.add(g);
+      groupId = g.id; updateGroupCenters(); ed.selection = [g.id];
+    } else ed.selection = ids;
+    attach(); changed();
+    return { ok: true, ids, groupId, count: ids.length };
+  };
+  ed.setGameProp = (key, value) => { ed.checkpoint(); doc[key] = value === 'toggle' ? !doc[key] : value; changed(); };
   const asList = (ids) => (ids == null ? [...ed.selection] : Array.isArray(ids) ? ids : [ids]).filter(id => instById(id));
   /** delete parts/Models (and everything inside them) as one undo step */
   ed.remove = (ids) => {

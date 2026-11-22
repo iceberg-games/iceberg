@@ -117,3 +117,19 @@ body.studio-active #hud, body.studio-active .help, body.studio-active #back-to-e
 
 .st-file-menu { position: absolute; right: 8px; top: 100%; z-index: 40; background: #1a2a3b; border: 1px solid #3f8fd0; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; min-width: 220px; box-shadow: 0 8px 24px #0006; }
 .st-group.st-game { position: relative; }
+
+/* ---- Studio corner chat (offline helper) ---- */
+#studio-ai-chat { position: absolute; right: 308px; bottom: 32px; z-index: 30; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; pointer-events: auto; }
+.st-chat-toggle { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 20px; border: 1px solid #4a535e; background: #23272e; color: #e4edf5; font: 600 13px 'Segoe UI', system-ui, sans-serif; cursor: pointer; box-shadow: 0 6px 16px #0006; }
+.st-chat-toggle:hover, .st-chat-toggle.on { background: #1e5d8f; border-color: #3fa2ea; }
+.st-chat-panel { width: 340px; max-width: calc(100vw - 580px); display: flex; flex-direction: column; background: #1d2128; border: 1px solid #3a414b; border-radius: 12px; box-shadow: 0 12px 32px #0008; overflow: hidden; }
+.st-chat-panel.hidden { display: none; }
+.st-chat-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #23272e; border-bottom: 1px solid #3a414b; }
+.st-chat-free { margin-right: auto; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: #9be15d; }
+.st-chat-log { overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; min-height: 150px; max-height: 240px; }
+.st-chat-bubble { max-width: 92%; padding: 7px 10px; border-radius: 12px; line-height: 1.4; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+.st-chat-bubble.user { align-self: flex-end; background: #1e5d8f; color: #fff; border-bottom-right-radius: 4px; }
+.st-chat-bubble.bot { align-self: flex-start; background: #2d323a; color: #e4edf5; border-bottom-left-radius: 4px; }
+.st-chat-suggest { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 8px 6px; }
+.st-chat-compose { display: flex; gap: 6px; padding: 8px; border-top: 1px solid #3a414b; align-items: flex-end; }
+.st-chat-compose textarea { flex: 1; resize: none; min-height: 40px; }

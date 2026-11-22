@@ -16,6 +16,7 @@ import { upgradeDoc } from '../studio/templates.js';
 import { exportGameJSON, importGameJSON, downloadText } from '../core/share.js';
 import { isMobile, onDeviceChange } from '../core/device.js';
 import { TERRAIN_BRUSHES } from '../studio/terrain.js';
+import { attachStudioChat } from '../studio/chatPanel.js';
 
 /** One source of truth for Studio shortcuts: drives the ? cheat sheet, tooltips and the status bar. */
 export const HOTKEYS = [
@@ -52,6 +53,7 @@ export class CreatorPanel {
     if (what === 'animtime' || what === 'bonepose') { this.renderAnimator(true); return; }
     if (what === 'script') { this.renderScriptPreview(); this.renderLeft(); return; }
     this.renderRibbon(); this.renderLeft(); this.renderProps(); this.renderAnimator();
+    attachStudioChat(this.el, () => this);
   }
   _onKey(e) {
     const ed = this.ed; if (!ed) return;
