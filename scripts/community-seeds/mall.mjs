@@ -7,7 +7,7 @@ export const meta = {
   slug: 'midnight-at-maple-mall',
   id: 'g_midnight_at_maple_mall',
   name: 'Midnight at Maple Mall',
-  description: 'You fell asleep in the beanbag aisle and the mall locked up for the night! Explore the Toy Kingdom, Pet Paradise, Arcade, Cinema and Food Court, find 6 security keycards, hunt 20 lost coins and 3 secret golden ducks, then unlock the Loading Dock and escape before morning. An after-hours adventure by gooberr478.',
+  description: 'You fell asleep in the beanbag aisle and the mall locked up for the night! Explore the Toy Kingdom, Pet Paradise, Arcade, Cinema and Food Court, find 6 security keycards, hunt 24 lost coins and 3 secret golden ducks, then unlock the Loading Dock and escape before morning. An after-hours adventure by gooberr478.',
   tagline: 'Adventure · Scavenger hunt',
 };
 
@@ -25,26 +25,31 @@ export function build() {
   d.slab('Parking Lot', -100, 100, -100, -52, 0.25, 0.25, '#3a3f47');
   for (let i = -8; i <= 8; i++) B('Parking Line', i * 10 - 0.2, i * 10 + 0.2, 0.25, 0.3, -90, -78, '#e8e8ea', { collide: false });
   for (const [x, c] of [[-45, '#e2474b'], [-25, '#3f8fd0'], [35, '#ffd34d'], [55, '#2f9e6a']]) d.group('Parked Car', () => { d.box('Car Body', [x, 1.3, -84], [3.6, 1.6, 8], c); d.box('Car Cabin', [x, 2.7, -84.4], [3.2, 1.3, 4.6], c); d.box('Car Glass', [x, 2.75, -84.4], [3.3, 1.0, 4.8], '#bfe9ff', { material: 'glass', collide: false }); });
-  d.slab('Mall Floor', -70.5, 70.5, -50.5, 68.5, FLOOR, 0.3, C.cream);
-  // concourse runner + atrium rose + foyer carpet
+  // cross-shaped mall: east-west concourse, north food-court hall, south entrance foyer
+  d.slab('Concourse Floor', -70.5, 70.5, -24.5, 24.5, FLOOR, 0.3, C.cream);
+  d.slab('Hall Floor', -22, 22, 24.5, 68.5, FLOOR, 0.3, C.cream);
+  d.slab('Foyer Floor', -22, 22, -50.5, -24.5, FLOOR, 0.3, C.cream);
   B('Runner EW', -70, 70, FLOOR, FLOOR + 0.03, -5, 5, C.tile, { collide: false });
   B('Runner NS', -5, 5, FLOOR, FLOOR + 0.03, -50, 68, C.tile, { collide: false });
   d.cyl('Atrium Rose', [0, FLOOR + 0.03, 0], [30, 0.06, 30], '#d9cdb3', { collide: false });
   d.cyl('Atrium Rose Inner', [0, FLOOR + 0.05, 0], [22, 0.06, 22], '#cbbfa6', { collide: false });
-  B('Foyer Carpet', -14, 14, FLOOR, FLOOR + 0.04, -46, -20, '#7a3a55', { collide: false });
+  B('Foyer Carpet', -14, 14, FLOOR, FLOOR + 0.04, -46, -28, '#7a3a55', { collide: false });
   // perimeter walls (lavender with neon trim)
-  B('South Wall W', -71, -6, 0, 16, -51, -50, C.lav); B('South Wall E', 6, 71, 0, 16, -51, -50, C.lav);
-  B('South Wall Top', -6, 6, 9, 16, -51, -50, C.lav);
-  B('North Wall W', -71, -4, 0, 16, 68, 69, C.lav); B('North Wall E', 4, 71, 0, 16, 68, 69, C.lav); B('North Wall Top', -4, 4, 9, 16, 68, 69, C.lav);
-  B('West Wall', -71, -70, 0, 16, -51, 69, C.lav); B('East Wall', 70, 71, 0, 16, -51, 69, C.lav);
-  B('Trim South', -70, 70, 9, 9.5, -50, -49.6, C.pink, { material: 'neon', collide: false });
-  B('Trim North', -70, 70, 9, 9.5, 67.6, 68, C.cyan, { material: 'neon', collide: false });
-  B('Trim West', -70, -69.6, 9, 9.5, -50, 68, C.purple, { material: 'neon', collide: false });
-  B('Trim East', 69.6, 70, 9, 9.5, -50, 68, C.purple, { material: 'neon', collide: false });
+  B('South Wall W', -23, -6, 0, 16, -51, -50, C.lav); B('South Wall E', 6, 23, 0, 16, -51, -50, C.lav); B('South Wall Top', -6, 6, 9, 16, -51, -50, C.lav);
+  B('Foyer Wall W', -23, -22, 0, 16, -51, -24, C.lav); B('Foyer Wall E', 22, 23, 0, 16, -51, -24, C.lav);
+  B('Hall Wall W', -23, -22, 0, 16, 24, 69, C.lav); B('Hall Wall E', 22, 23, 0, 16, 24, 69, C.lav);
+  B('North Wall W', -23, -4, 0, 16, 68, 69, C.lav); B('North Wall E', 4, 23, 0, 16, 68, 69, C.lav); B('North Wall Top', -4, 4, 9, 16, 68, 69, C.lav);
+  B('End Wall West', -71, -70, 0, 16, -25, 25, C.lav); B('End Wall East', 70, 71, 0, 16, -25, 25, C.lav);
+  B('Concourse Wall N W', -71, -22, 0, 16, 24, 25, C.lav); B('Concourse Wall N E', 22, 71, 0, 16, 24, 25, C.lav);
+  B('Concourse Wall S W', -71, -22, 0, 16, -25, -24, C.lav); B('Concourse Wall S E', 22, 71, 0, 16, -25, -24, C.lav);
+  B('Trim South', -22, 22, 9, 9.5, -50, -49.6, C.pink, { material: 'neon', collide: false });
+  B('Trim North', -22, 22, 9, 9.5, 67.6, 68, C.cyan, { material: 'neon', collide: false });
+  B('Trim West', -70, -69.6, 9, 9.5, -24, 24, C.purple, { material: 'neon', collide: false });
+  B('Trim East', 69.6, 70, 9, 9.5, -24, 24, C.purple, { material: 'neon', collide: false });
   for (const [n, p, s] of [['Edge S', [0, 15, -108], [280, 30, 2]], ['Edge W', [-138, 15, 5], [2, 30, 230]], ['Edge E', [138, 15, 5], [2, 30, 230]], ['Edge N', [0, 15, 118], [280, 30, 2]]]) d.box(n, p, s, '#ffffff', { transparency: 1 });
   // main entrance doors (locked)
   d.group('Main Doors', () => {
-    B('Door Frame', -6, 6, 0, 9, -50.6, -49.9, C.steel);
+    B('Door Frame', -6, 6, 8.4, 9, -50.6, -49.9, C.steel); B('Door Post L', -6, -5.4, 0, 9, -50.6, -49.9, C.steel); B('Door Post R', 5.4, 6, 0, 9, -50.6, -49.9, C.steel);
     B('Door Glass L', -5.4, -0.2, 0.3, 8.4, -50.4, -50.2, '#bfe9ff', { material: 'glass' });
     B('Door Glass R', 0.2, 5.4, 0.3, 8.4, -50.4, -50.2, '#bfe9ff', { material: 'glass' });
     B('Door Lock Bar', -5.6, 5.6, 4, 4.5, -49.9, -49.7, C.red, { material: 'neon', collide: false });
@@ -99,7 +104,7 @@ export function build() {
 
   // ---- Toy Kingdom (x -70..-46, z 8..24)
   d.group('Toy Castle', () => {
-    B('Castle Wall S', -66, -58, Y, Y + 5, 11, 12, '#ff9ecb'); B('Castle Wall E', -58, -57, Y, Y + 5, 11, 19, '#ffb3d9'); B('Castle Wall W', -67, -66, Y, Y + 5, 11, 19, '#ffb3d9'); B('Castle Wall N', -67, -57, Y, Y + 5, 18, 19, '#ff9ecb');
+    B('Castle Wall S1', -66, -63, Y, Y + 5, 11, 12, '#ff9ecb'); B('Castle Wall S2', -61, -58, Y, Y + 5, 11, 12, '#ff9ecb'); B('Castle Wall E', -58, -57, Y, Y + 5, 11, 19, '#ffb3d9'); B('Castle Wall W', -67, -66, Y, Y + 5, 11, 19, '#ffb3d9'); B('Castle Wall N', -67, -57, Y, Y + 5, 18, 19, '#ff9ecb');
     for (const x of [-66.5, -57.5]) for (const z of [11.5, 18.5]) { d.cyl('Castle Tower', [x, Y + 4, z], [2.2, 8, 2.2], '#ff7ac8'); d.add('part', { name: 'Tower Roof', shape: 'cylinder', pos: [x, Y + 8.6, z], size: [1.2, 2, 1.2], color: C.yellow }); }
     B('Castle Gate Gap Sign', -63, -61, Y + 5, Y + 6.2, 11, 11.4, C.yellow, { material: 'neon', collide: false });
   });
@@ -108,7 +113,7 @@ export function build() {
   [[-50, 1.8, 1.9, 21.2], [-53.2, 3.6, 1.9, 21.2], [-56.4, 5.4, 1.9, 21.2]].forEach(([x, top, w, z], i) => B(`Tower Step ${i + 1}`, x - 1.6, x + 1.6, Y, Y + top, z - 1.6, z + 1.6, ['#3f8fd0', '#2f9e6a', '#e2474b'][i]));
   B('Tower Top', -60.2, -56.8, Y, Y + 7.3, 19.6, 22.8, C.yellow);
   for (let i = 0; i < 6; i++) d.ball(`Toy Ball ${i + 1}`, [-48 + i * 0.7, Y + 1.2, 10 + (i % 2)], 2, [C.red, C.cyan, C.yellow, C.green, C.pink, C.purple][i], { collide: false });
-  d.cyl('Toy Drum', [-47.5, Y + 1.2, 22], [3, 2.4, 3], C.red); d.box('Toy Train Car', [-62, Y + 0.9, 8.8], [6, 1.6, 2], C.green, { scripts: [script('Train rolls', program([], [CONT.move('x', 8, 6)]))] }); d.box('Toy Train Cab', [-60, Y + 2.2, 8.8], [2, 1.4, 1.8], C.yellow, { scripts: [script('Train cab', program([], [CONT.move('x', 8, 6)]))] });
+  d.cyl('Toy Drum', [-44.5, Y + 1.2, 15.5], [3, 2.4, 3], C.red); d.box('Toy Train Car', [-62, Y + 0.9, 8.8], [6, 1.6, 2], C.green, { scripts: [script('Train rolls', program([], [CONT.move('x', 8, 6)]))] }); d.box('Toy Train Cab', [-60, Y + 2.2, 8.8], [2, 1.4, 1.8], C.yellow, { scripts: [script('Train cab', program([], [CONT.move('x', 8, 6)]))] });
   d.add('part', { name: 'Teddy', shape: 'sphere', pos: [-48, Y + 3.2, 21], size: [3.2, 3.2, 3.2], color: '#b07a4a', collide: false }); d.ball('Teddy Head', [-48, Y + 5.4, 21], 2.2, '#b07a4a', { collide: false });
 
   // ---- Pet Paradise (x -44..-22, z 8..24)
@@ -139,7 +144,7 @@ export function build() {
   d.group('Cinema Screen', () => { B('Screen Frame', 49, 67, Y + 2, Y + 9, 23.2, 23.6, C.dark); B('Screen Glow', 49.5, 66.5, Y + 2.5, Y + 8.5, 23, 23.2, '#e7f4ff', { material: 'neon', collide: false }); });
   [50, 52, 54, 56, 58].forEach((x, i) => { d.box(`Seat Back ${i + 1}`, [x, Y + 2.4, 13], [1.6, 2.2, 0.5], C.red, { collide: false }); d.add('part', { name: `Seat ${i + 1}`, shape: 'box', pos: [x, Y + 0.9, 12.2], size: [1.6, 1.8, 1.6], color: C.red, scripts: [] }); });
   [51, 53, 55, 57].forEach((x, i) => { d.box(`Front Seat Back ${i + 1}`, [x, Y + 2.4, 17.5], [1.6, 2.2, 0.5], '#b8323a', { collide: false }); d.box(`Front Seat ${i + 1}`, [x, Y + 0.9, 16.8], [1.6, 1.8, 1.6], '#b8323a'); });
-  d.group('Projection Booth', () => { B('Booth Floor', 64.5, 69.5, Y, Y + 0.1, 8.5, 15, '#35141f', { collide: false }); B('Booth Wall Back', 69, 69.6, Y, 9, 8, 15.5, '#6b3040'); B('Booth Wall N', 64, 69.6, Y, 9, 15, 15.5, '#6b3040'); B('Booth Wall S', 64, 69.6, Y, 9, 8, 8.5, '#6b3040'); B('Booth Door', 64, 64.5, Y, 6, 8.5, 15, '#9a3a4a'); d.box('Projector', [67.4, Y + 2.2, 11.7], [2, 1.6, 2.4], C.steel); d.cyl('Projector Lens', [66.2, Y + 2.2, 11.7], [1.1, 0.8, 1.1], C.cyan, { rot: [0, 0, 90], material: 'neon', collide: false }); });
+  d.group('Projection Booth', () => { B('Booth Floor', 64.5, 69.5, Y, Y + 0.1, 8.5, 15, '#35141f', { collide: false }); B('Booth Wall Back', 69, 69.6, Y, 9, 8, 15.5, '#6b3040'); B('Booth Wall N', 64, 69.6, Y, 9, 15, 15.5, '#6b3040'); B('Booth Wall S', 64, 69.6, Y, 9, 8, 8.5, '#6b3040'); B('Booth Door', 64, 64.5, Y, 6, 8.5, 15, '#9a3a4a'); d.box('Projector', [68.2, Y + 2.2, 11.7], [1.8, 1.6, 2.4], C.steel); d.cyl('Projector Lens', [67.0, Y + 2.2, 11.7], [1.1, 0.8, 1.1], C.cyan, { rot: [0, 0, 90], material: 'neon', collide: false }); });
   // marquee ledge for Golden Duck 3 + crate steps
   B('Marquee Ledge', 50, 60, 5.0, 5.6, 6.0, 8.6, '#7a2a3a'); B('Marquee Bulbs', 50, 60, 5.6, 5.9, 6.0, 6.3, C.yellow, { material: 'neon', collide: false });
   B('Ticket Crate', 47.2, 49.6, Y, Y + 2.0, 6.2, 8.0, C.wood);
@@ -163,7 +168,7 @@ export function build() {
     B(`${nm} Menu`, x - s * 4.0 - 0.1, x - s * 4.0 + 0.1, 4.2, 6.6, z - 3, z + 3, C.dark, { collide: false }); B(`${nm} Menu Glow`, x - s * 3.9 - 0.05, x - s * 3.9 + 0.05, 4.4, 6.4, z - 2.8, z + 2.8, awn, { material: 'neon', collide: false });
   });
   stall('Burger Barn', -16, 28, 1, '#b5533c', C.red); stall('Pizza Planet', -16, 44, 1, '#c97b2a', C.orange); stall('Taco Town', 16, 28, -1, '#2f9e6a', C.green); stall('Sushi Spot', 16, 44, -1, '#3f8fd0', C.cyan);
-  d.group('Pizza Oven', () => { B('Oven Body', -19, -16.6, Y, Y + 3.6, 49.5, 52.5, '#7a4a3a'); B('Oven Mouth', -16.6, -16.5, Y + 0.8, Y + 2.4, 50.2, 51.8, C.orange, { material: 'neon', collide: false }); });
+  d.group('Pizza Oven', () => { B('Oven Body', -19, -16.6, Y, Y + 1.5, 49.5, 52.5, '#7a4a3a'); B('Oven Mouth', -16.6, -16.5, Y + 0.8, Y + 2.4, 50.2, 51.8, C.orange, { material: 'neon', collide: false }); });
   [[-6, 30], [6, 30], [-6, 40], [6, 40], [-6, 50], [0, 35], [0, 45]].forEach(([x, z], i) => d.group('Food Table', () => { d.cyl(`Table Top ${i + 1}`, [x, Y + 2.2, z], [3.2, 0.3, 3.2], C.white); d.cyl(`Table Pole ${i + 1}`, [x, Y + 1.1, z], [0.6, 2.2, 0.6], C.steel); for (const [dx, dz] of [[-2.4, 0], [2.4, 0]]) d.cyl('Stool', [x + dx, Y + 1.3, z + dz], [1.3, 0.3, 1.3], [C.red, C.cyan, C.yellow][i % 3], { collide: false }); }));
   d.ball('Pretzel Health 1', [0, Y + 1.0, 24], 1.4, '#d9a05b', { collide: false, scripts: [script('Pretzel heals', program([R.touch([A.heal(50), A.say('🥨 A warm pretzel! +50 health.'), A.hide(null, 25)])]))] });
   d.ball('Pretzel Health 2', [-52, Y + 1.0, 0], 1.4, '#d9a05b', { collide: false, scripts: [script('Pretzel heals', program([R.touch([A.heal(50), A.say('🥨 A warm pretzel! +50 health.'), A.hide(null, 25)])]))] });
@@ -179,9 +184,9 @@ export function build() {
     R.enter([A.say('💤 Gus: "Zzz... last one on the rooftop telescope... service elevator needs 3 cards... Zzz..."')], { if: IF('keycards', '==', 5) }),
     R.enter([A.say('💤 Gus: "Zzz... all six! Dock gate is right behind me... Zzz..."')], { if: IF('keycards', '>=', 6) }),
   ]))] });
-  d.group('Janitor Closet', () => { B('Closet Floor', 7, 17, Y, Y + 0.1, 62, 67.5, '#2a2250', { collide: false }); B('Closet Wall E', 17, 17.6, Y, 7, 62, 67.6, C.steel); B('Closet Wall N', 7, 17, Y, 7, 67, 67.6, C.steel); B('Closet Wall W', 6.4, 7, Y, 7, 62, 67.6, C.steel); B('Closet Door Frame L', 7, 10.2, Y, 7, 61.4, 62, C.steel); B('Closet Door Frame R', 13.8, 17, Y, 7, 61.4, 62, C.steel); B('Closet Header', 10.2, 13.8, 5.6, 7, 61.4, 62, C.steel); B('Closet Door', 10.2, 13.8, Y, 5.6, 61.5, 61.9, '#7a8da0'); B('Closet Plaque', 11.2, 12.8, 4.2, 5.2, 61.3, 61.5, C.yellow, { material: 'neon', collide: false });
-    B('Trophy Base', 11, 13, Y, Y + 1.2, 64, 66, C.dark); d.cyl('Trophy Cup', [12, Y + 2.6, 65], [1.6, 2.4, 1.6], C.yellow, { material: 'neon', collide: false }); d.ball('Trophy Star', [12, Y + 4.4, 65], 1.2, '#fff6b0', { material: 'neon', collide: false }); });
-  for (let i = 0; i < 5; i++) d.coin([8.5 + i * 1.8, Y + 1.4, 63], 1, 'Vault Coin');
+  d.group('Janitor Closet', () => { B('Closet Floor', 5, 12, Y, Y + 0.1, 62, 67.5, '#2a2250', { collide: false }); B('Closet Wall E', 12, 12.6, Y, 7, 62, 67.6, C.steel); B('Closet Wall N', 5, 12, Y, 7, 67, 67.6, C.steel); B('Closet Wall W', 4.4, 5, Y, 7, 62, 67.6, C.steel); B('Closet Door Frame L', 5, 6.9, Y, 7, 61.4, 62, C.steel); B('Closet Door Frame R', 10.1, 12, Y, 7, 61.4, 62, C.steel); B('Closet Header', 6.9, 10.1, 5.6, 7, 61.4, 62, C.steel); B('Closet Door', 6.9, 10.1, Y, 5.6, 61.5, 61.9, '#7a8da0'); B('Closet Plaque', 7.6, 9.4, 4.2, 5.2, 61.3, 61.5, C.yellow, { material: 'neon', collide: false });
+    B('Trophy Base', 7.5, 9.5, Y, Y + 1.2, 65, 67, C.dark); d.cyl('Trophy Cup', [8.5, Y + 2.6, 66], [1.6, 2.4, 1.6], C.yellow, { material: 'neon', collide: false }); d.ball('Trophy Star', [8.5, Y + 4.4, 66], 1.2, '#fff6b0', { material: 'neon', collide: false }); });
+  for (let i = 0; i < 5; i++) d.coin([6.2 + i * 1.3, Y + 1.4, 63.5], 1, 'Vault Coin');
   d.group('Dock Gate', () => { B('Dock Gate Frame L', -7, -4, Y, 9, 68, 69.2, C.steel); B('Dock Gate Frame R', 4, 7, Y, 9, 68, 69.2, C.steel); B('Dock Gate', -4, 4, Y, 8.6, 68.2, 69, '#5b6b7a'); B('Dock Gate Stripe', -4, 4, 6.5, 7.5, 67.9, 68.2, C.yellow, { collide: false }); B('Dock Gate Light', -1.5, 1.5, 8.7, 9.3, 67.9, 68.3, C.red, { material: 'neon', collide: false }); });
   d.slab('Loading Dock', -30, 30, 69, 100, 0.3, 0.3, '#8b8f96'); d.group('Truck', () => { d.box('Truck Box', [10, 4.5, 84], [8, 8, 18], C.white); d.box('Truck Cab', [10, 3, 74], [7, 5.5, 5], C.red); d.box('Truck Stripe', [10, 4.5, 84], [8.2, 1.2, 18.2], C.cyan, { collide: false }); });
   d.box('Dock Exit Sign', [-8, 6, 71], [6, 1.6, 0.3], C.green, { material: 'neon', collide: false });
@@ -189,9 +194,9 @@ export function build() {
   d.cyl('Night Moon', [30, 70, 130], [14, 1, 14], '#fff6d0', { rot: [90, 0, 0], collide: false, material: 'neon' });
 
   // ============================== SERVICE ELEVATOR + ROOFTOP GARDEN ==============================
-  B('Roof Deck', -18, 14, ROOF - 0.5, ROOF, 38, 62, '#6bbf6a'); B('Roof Deck Edge', -18, 14, ROOF - 1.2, ROOF - 0.5, 38, 62, '#8a96a3');
+  B('Roof Deck', -18, 13.65, ROOF - 0.5, ROOF, 38, 62, '#6bbf6a'); B('Roof Deck Edge', -18, 13.65, ROOF - 1.2, ROOF - 0.5, 38, 62, '#8a96a3');
   for (const [x, z] of [[-17, 39], [13, 39], [-17, 61], [-17, 50], [13, 50]]) B('Roof Support', x - 0.6, x + 0.6, Y, ROOF - 1.2, z - 0.6, z + 0.6, '#8a96a3');
-  for (const [n, x0, x1, z0, z1] of [['Roof Rail S', -18, 14, 38, 38.3], ['Roof Rail W', -18, -17.7, 38, 62], ['Roof Rail N', -18, 19, 61.7, 62]]) B(n, x0, x1, ROOF, ROOF + 1.3, z0, z1, '#bfe9ff', { material: 'glass' });
+  for (const [n, x0, x1, z0, z1] of [['Roof Rail S', -18, 13.65, 38, 38.3], ['Roof Rail W', -18, -17.7, 38, 62], ['Roof Rail N', -18, 13.65, 61.7, 62]]) B(n, x0, x1, ROOF, ROOF + 1.3, z0, z1, '#bfe9ff', { material: 'glass' });
   d.group('Service Elevator', () => {
     B('Shaft East', 19.5, 20.3, Y, 25, 52, 62.5, '#6b7685'); B('Shaft North', 13.5, 20.3, Y, 25, 62, 62.7, '#6b7685');
     B('Shaft West', 13, 13.6, Y, 21, 55.5, 62.5, '#6b7685'); B('Shaft South L', 13, 15.4, Y, 25, 55, 55.6, '#6b7685'); B('Shaft South R', 18.2, 20.3, Y, 25, 55, 55.6, '#6b7685'); B('Shaft South Top', 15.4, 18.2, 6.4, 25, 55, 55.6, '#6b7685');
@@ -211,26 +216,25 @@ export function build() {
   const pickup = (name, pos, color, v, text, pts, extra = []) => d.box(name, pos, [1.5, 1.0, 0.25], color, { material: 'neon', collide: false, scripts: [
     script(`Collect ${name}`, program([R.touch([A.add(v, 1), A.add('points', pts), A.hide(), A.sound('chime'), A.fx('sparkles', null, 1.2), A.say(text), ...extra], { once: true })], [CONT.spin('y', 120), CONT.move('y', 0.5, 2)]))] });
   const kc = (n, pos, where) => pickup(`Keycard ${n}`, pos, '#ffe066', 'keycards', `🔑 Keycard ${n}/6 from ${where}! You now have {keycards} of 6.`, 100);
-  kc(1, [-17.2, Y + 5.2, 51], 'the Food Court');
+  kc(1, [-18.4, Y + 2.9, 51], 'the Food Court');
   kc(2, [-62, Y + 1.8, 15], 'the Toy Kingdom');
   kc(3, [-24.6, Y + 4.6, 21.5], 'Pet Paradise');
   kc(4, [34, Y + 2.2, 21.8], 'the Arcade prize case');
-  kc(5, [67.4, Y + 3.8, 11.7], 'the Cinema projection booth');
-  kc(6, [0, ROOF + 4.0, 57.5], 'the Rooftop telescope');
+  kc(5, [65.7, Y + 2.0, 11.7], 'the Cinema projection booth');
+  kc(6, [0, ROOF + 2.0, 56.6], 'the Rooftop telescope');
   const duck = (n, pos, text) => d.ball(`Golden Duck ${n}`, pos, 1.5, '#ffcc00', { material: 'neon', collide: false, scripts: [script(`Collect Golden Duck ${n}`, program([R.touch([A.add('ducks', 1), A.add('points', 250), A.hide(), A.sound('win'), A.fx('stars', null, 1.5), A.say(text)], { once: true })], [CONT.spin('y', 90), CONT.move('y', 0.4, 1.6)]))] });
   duck(1, [-48.8, Y + 1.3, -23.2], '🦆 Golden Duck {ducks}/3: hidden behind the Bookworm shelf!');
   duck(2, [-58.5, Y + 8.4, 21.2], '🦆 Golden Duck {ducks}/3: top of the toy-block tower!');
   duck(3, [55, 5.6 + 1.2, 7.3], '🦆 Golden Duck {ducks}/3: the cinema marquee ledge!');
-  const coins = [[-3, Y + 1.4, -40], [4, Y + 1.4, -34], [0, Y + 1.4, -18], [-12, Y + 1.4, 3], [12, Y + 1.4, -3], [0, Y + 6.2, 12.4],
-    [-50, Y + 1.4, 12], [-47, Y + 1.4, 20], [-36, Y + 1.4, 14], [-30, Y + 1.4, 20], [-55, Y + 1.4, -12], [-62, Y + 1.4, -20], [-30, Y + 1.4, -20],
-    [26, Y + 1.4, 11], [40, Y + 1.4, 18], [52, Y + 1.4, 20], [28, Y + 1.4, -12], [62, Y + 1.4, -12], [-4, Y + 1.4, 36], [6, Y + 1.4, 46], [0, MEZ + 1.4, -13.5], [-18.5, MEZ + 1.4, -6]];
-  coins.slice(0, 20).forEach((p, i) => d.coin(p, 1, `Lost Change ${i + 1}`));
-  d.coin([-18.5, MEZ + 1.4, 6], 1, 'Lost Change 21');
+  const coins = [[-3, Y + 1.4, -40], [4, Y + 1.4, -34], [0, Y + 1.4, -18], [-12, Y + 1.4, 3], [12, Y + 1.4, -3], [0, MEZ + 1.4, 13.5], [0, MEZ + 1.4, -13.5], [-18.5, MEZ + 1.4, 0],
+    [-50, Y + 1.4, 12], [-47, Y + 1.4, 20], [-60, Y + 1.4, 20], [-38, Y + 1.4, 16], [-30, Y + 1.4, 21], [-55, Y + 1.4, -12], [-62, Y + 1.4, -20], [-30, Y + 1.4, -20],
+    [26, Y + 1.4, 11], [40, Y + 1.4, 17], [52, Y + 1.4, 20], [63, Y + 1.4, 20], [28, Y + 1.4, -12], [62, Y + 1.4, -12], [-4, Y + 1.4, 36], [6, Y + 1.4, 47]];
+  coins.forEach((p, i) => d.coin(p, 1, `Lost Change ${i + 1}`));
 
   // ============================== HINT SIGNS ==============================
   const sign = (nm, x, z, text, y = 0) => d.group(nm, () => { d.cyl(`${nm} Post`, [x, Y + 1.6 + y, z], [0.35, 3.2, 0.35], '#5b6b7a', { collide: false }); d.box(`${nm} Board`, [x, Y + 3.6 + y, z], [2.6, 1.8, 0.25], C.yellow, { material: 'neon', collide: false }); d.zone(`${nm} Zone`, [x, Y + 2 + y, z], [7, 5, 7], [script(`${nm} text`, program([R.enter([A.say(text)])]))]); });
-  sign('Directory Kiosk', 6, -34, '🗺️ MAPLE MALL DIRECTORY: Toy Kingdom & Pet Paradise (west) · Arcade & Cinema (east) · Food Court & Loading Dock (north). Find 6 keycards to unlock the dock!');
-  sign('Info Sign', -6, -22, '💡 Tip: touch glowing keycards 🔑, spin-y coins 🪙 and secret golden ducks 🦆. Stairs to the upper walkway are on the left.');
+  sign('Directory Kiosk', 6, -34, '🗺️ MAPLE MALL DIRECTORY: Toy Kingdom, Pet Paradise, Bookworm & Sneaker Hub (right wing) · Arcade, Cinema, Tech Zone & Sweets (left wing) · Food Court & Loading Dock (straight ahead). Find 6 keycards to unlock the dock!');
+  sign('Info Sign', -6, -22, '💡 Tip: touch glowing keycards 🔑, spin-y coins 🪙 and secret golden ducks 🦆. Stairs to the upper walkway are on your right.');
   sign('Atrium Sign', 14, -2, '⛲ Beware the cleaning bots! They bump you a little when you touch them.');
   sign('Toy Sign', -48, 6, '🧸 Toy Kingdom: "A keycard glitters in the castle courtyard... and something golden sits atop the tallest block tower."');
   sign('Pet Sign', -33, 6, '🐹 Pet Paradise: "The hamsters hoard shiny things up on their shelf. Hop the crates!"');
@@ -240,7 +244,7 @@ export function build() {
   sign('Cinema Sign', 58, 6, '🎬 Starlight Cinema: "The projectionist always sat dead center of the back row." The ledge above holds a golden duck.');
   sign('Tech Sign', 33, -6, '💻 Tech Zone: a sticky note says "Booth door opens from the middle seat - row nearest the exit."');
   sign('Sweets Sign', 58, -6, '🍭 Sweet Treats: sugar rush! Coins hide behind the candy jars.');
-  sign('Food Sign', 0, 20, '🍔 Food Court: a keycard sits on the pizza oven. The service elevator (back right) needs 3 keycards.', 0);
+  sign('Food Sign', 0, 20, '🍔 Food Court: a keycard sits on the pizza oven. The service elevator (back left) needs 3 keycards.', 0);
   sign('Roof Sign', -12, 45, '🌃 Rooftop Garden: the telescope holds the last keycard. Look through it! (touch the glowing card)', ROOF - Y);
   sign('Mezzanine Sign', -4, -13.5, '🛍️ Upper walkway: the view is great and the loose change is even better.', MEZ - Y);
   sign('Dock Sign', 0, 62, '🚪 Loading Dock gate: it needs all 6 keycards. Gus has the key reader... if he would stop snoring.');
@@ -275,7 +279,7 @@ export function build() {
   d.zone('Mall Manager', [0, 1, -40], [1, 1, 1], [
     script('Setup', program([R.start([A.board(true), A.timer(true), ...lights.map(n => A.light(true, null, n)), A.wait(1.0),
       A.say('🌙 Midnight at Maple Mall: the doors are locked and the lights are low. Find 6 keycards 🔑 to unlock the Loading Dock!'), A.wait(6),
-      A.say('🪙 Bonus: 21 Lost Change coins, 3 secret golden ducks 🦆. Speedrun clock is top-center.')])])),
+      A.say('🪙 Bonus: 24 Lost Change coins, 3 secret golden ducks 🦆. Speedrun clock is top-center.')])])),
     script('Milestones', program([
       R.reach('keycards', '>=', 1, [A.say('🔑 One down, five to go!')], { once: true }),
       R.reach('keycards', '>=', 3, [A.say('🛗 3 keycards: the service elevator to the rooftop is now unlocked!')], { once: true }),

@@ -90,7 +90,8 @@ async function suds(browser) {
   // fast-forward through the whole chain with generous cash (proves every pad + the wing + the finale)
   const chain = ['Pad Washer 2', 'Pad Dryer 1', 'Pad Washer 3', 'Pad Dryer 2', 'Pad Vending', 'Pad Expand', 'Pad Press', 'Pad Robot', 'Pad Arcade', 'Pad Coffee'];
   const skills = ['Pad Cart', 'Pad Helper', 'Pad Cards'];
-  for (const pad of skills) { await setVar(p, 'cash', 1e6); await goTo(p, pad); await sim(p, 1.2); }
+  const buyUntil = async (pad, check) => { for (let k = 0; k < 4; k++) { await setVar(p, 'cash', 1e6); await goTo(p, pad); await sim(p, 1.2); if (check(await vars(p))) return true; } return false; };
+  let sk = 1; for (const pad of skills) { sk++; await buyUntil(pad, (v) => v.skill >= sk); }
   for (const pad of chain) {
     await setVar(p, 'cash', 1e6); await goTo(p, pad); await sim(p, 1.3);
     if (pad === 'Pad Dryer 2') { await view(p, { yaw: Math.PI, pitch: 0.35, dist: 15 }); await p.waitForTimeout(500); await shot(p, `${OUT}/${slug}-5-store-full.png`); }
