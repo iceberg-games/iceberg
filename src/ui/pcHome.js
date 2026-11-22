@@ -6,6 +6,7 @@ import { avatarSnapshot } from './avatarThumb.js';
 import { fmt, CURRENCY } from '../core/currency.js';
 import { groups } from '../core/groups.js';
 import { getRemote } from '../net/session.js';
+import { accountSettingsCard, securitySettingsCard } from './accountSettings.js';
 import './pcHome.css';
 
 const NAV = [
@@ -106,18 +107,27 @@ export function renderPcHome(menu, { custom, community }) {
   const profileView = () => { const pr = economy.profile; const remote = getRemote();
     return h('div.pc-panel#pc-profile', h('div.pc-profile', avatarFigure(menu), h('div', h('h2', username), h('p', remote?.signedIn ? `@${pr.username}` : 'Guest (sign in on the Iceberg site to keep your progress)'),
       h('dl', h('dt', 'Birg Bucks'), h('dd', fmt(economy.coins)), h('dt', 'Games made'), h('dd', String(custom.length)), h('dt', 'Cosmetics owned'), h('dd', String((pr.owned || []).length)))))); };
+  const settingsView = () => {
+    const m = menu.ui.music; const remote = getRemote();
+    const vol = h('input#set-volume', { type: 'range', min: 0, max: 1, step: 0.05, value: m.volume, oninput: (e) => m.setVolume(+e.target.value) });
+    const mute = h('input#set-mute', { type: 'checkbox', checked: !!m.muted, onchange: () => menu.ui.toggleMute() });
+    const out = async () => { try { location.reload(); } catch { /* ignore */ } };
+    return h('div.pc-panel#pc-settings-view', h('h2', '⚙️ Settings'),
+      h('div.pc-form', h('label', 'Music volume'), vol, h('label', mute, ' Mute music and sounds')),
+      remote?.signedIn ? h('div.pc-light.ib-settings-wrap#pc-account-settings', accountSettingsCard({ economy, remote, onSignedOut: out }), securitySettingsCard({ economy, remote, onSignedOut: out })) : h('p', 'Sign in on the Iceberg site to manage your account and security.'));
+  };
   const main = h('main.pc-main#pc-main');
   const bucks = h('button.bucks', { onclick: () => ui.openDrawer('store') }, h('span.bb-ico', CURRENCY.icon), h('span.bucks-amount', fmt(economy.coins)), h('span.plus', '+'));
   const search = h('input#pc-search', { type: 'search', placeholder: 'Search games or creators', autocomplete: 'off', 'aria-label': 'Search games',
     oninput: (e) => { state.q = e.target.value; if (state.view !== 'home') { state.view = 'home'; menu.pcView = 'home'; renderMain(); setActive(); } drawRows(); } });
-  const top = h('div.pc-top', h('div.pc-search', search), bucks, h('button.pc-gear#pc-settings', { title: 'Settings', 'aria-label': 'Settings', onclick: () => menu.showSettings() }, '⚙️'));
-  const renderMain = () => { clear(main).append(top, state.view === 'groups' ? groupsView() : state.view === 'profile' ? profileView() : homeView()); if (state.q && state.view === 'home') search.value = state.q; };
+  const top = h('div.pc-top', h('div.pc-search', search), bucks, h('button.pc-gear#pc-settings', { title: 'Settings', 'aria-label': 'Settings', onclick: () => act.settings() }, '⚙️'));
+  const renderMain = () => { clear(main).append(top, state.view === 'groups' ? groupsView() : state.view === 'profile' ? profileView() : state.view === 'settings' ? settingsView() : homeView()); if (state.q && state.view === 'home') search.value = state.q; };
 
   const act = {
     home: () => { state.view = 'home'; menu.pcView = 'home'; renderMain(); setActive(); },
     friends: () => menu.onFriends?.(), catalog: () => ui.openDrawer('shop'), inventory: () => ui.openDrawer('locker'), avatar: () => ui.openDrawer('locker'),
     profile: () => { state.view = 'profile'; menu.pcView = 'profile'; renderMain(); setActive(); },
-    groups: () => { state.view = 'groups'; menu.pcView = 'groups'; renderMain(); setActive(); }, settings: () => menu.showSettings(),
+    groups: () => { state.view = 'groups'; menu.pcView = 'groups'; renderMain(); setActive(); }, settings: () => { state.view = 'settings'; menu.pcView = 'settings'; renderMain(); setActive(); },
     studio: () => menu.openStudio(), create: () => menu.showCreateDialog(), download: () => menu.showInstall(),
   };
   const navBtn = ([id, ico, label, soon]) => h('button.pc-nav#nav-' + id, { 'data-nav': id, disabled: !!soon, title: soon ? 'Coming soon' : label, onclick: () => act[id]?.() },

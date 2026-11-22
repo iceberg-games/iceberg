@@ -111,3 +111,8 @@ body.pc-home-open .ib-toasts-top .ib-toast { background: #2c2837; color: #f1ece6
 .pc-profile dt { color: var(--pc-muted); } .pc-profile dd { margin: 0; font-weight: 700; }
 .pc-avatar img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 8px 14px rgba(0,0,0,.45)); }
 .pc-avatar { width: 112px; height: 150px; flex-basis: 112px; }
+.pc-panel { max-width: 860px; }
+.pc-light { background: #f4f1fb; color: #1d1a26; border-radius: 12px; padding: 4px 16px 12px; margin-top: 14px; }
+.pc-light h2, .pc-light h3, .pc-light p, .pc-light label, .pc-light dt, .pc-light dd, .pc-light li, .pc-light small, .pc-light .muted { color: #1d1a26; }
+.pc-light .muted, .pc-light small { color: #5d566b; }
+.pc-light input { background: #fff; color: #1d1a26; border: 1px solid #cfc8de; border-radius: 8px; padding: 8px 10px; }

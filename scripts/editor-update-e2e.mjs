@@ -16,7 +16,7 @@ const web = await serveStatic(OUT, WEB, { prefix: '/iceberg/' });
 const b = await chromium.launch();
 async function signUp(name) {
   const c = await b.newContext({ viewport: { width: 1440, height: 900 } }); const p = await c.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
-  await p.goto(BASE); await p.click('#p-signin-open'); await p.fill('#form-signup input[name=username]', name); await p.fill('#form-signup input[name=password]', 'snowball123'); await p.fill('#form-signup input[name=display]', name);
+  await p.goto(BASE); await p.waitForSelector('#form-signup', { timeout: 20000 }); await p.fill('#form-signup input[name=dob]', '2001-04-15'); await p.fill('#form-signup input[name=username]', name); await p.fill('#form-signup input[name=password]', 'snowball123'); await p.fill('#form-signup input[name=display]', name);
   await p.click('#form-signup button[type=submit]'); await p.waitForSelector('#p-user', { timeout: 15000 }); return { c, p, errs };
 }
 try {

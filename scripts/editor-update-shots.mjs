@@ -41,7 +41,7 @@ const fake = [['Lava Run', '#ff6b4a', '#f5b13d', 'zed'], ['Sky Obby', '#8b6cf0',
   await p.click('#nav-create'); ok('Create opens template picker', !!(await p.waitForSelector('#create-dialog [data-template]', { timeout: 3000 }).catch(() => null)));
   await p.screenshot({ path: OUT + 'pc-create-picker.png' }); await p.click('#create-dialog .btn.secondary');
   await p.click('#nav-download'); await p.waitForSelector('#install-dialog'); await p.screenshot({ path: OUT + 'pc-download.png' }); await p.click('#install-close');
-  await p.click('#pc-settings'); await p.waitForSelector('#settings-dialog'); await p.click('#settings-close');
+  await p.click('#pc-settings'); await p.waitForSelector('#pc-settings-view'); await p.screenshot({ path: OUT + 'pc-settings.png' }); await p.click('#nav-home');
   // pop-out
   const [pop] = await Promise.all([p.waitForEvent('popup', { timeout: 8000 }).catch(() => null), p.click('#games-carousel .game-card[data-game="frost-fields"]')]);
   ok('tile opens a pop-out window', !!pop);

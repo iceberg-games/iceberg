@@ -848,6 +848,7 @@ await t('seed: Studio copies of BIRG HQ + Frost Fields go to gooberr478 (idempot
   assert.deepEqual(rows.map(r => r.game_key), ['g_birg_hq_studio', 'g_frost_fields_studio']);
   assert.ok(rows.every(r => r.owner === G && r.published));
   const list = await rpc(db, G, 'list_my_games', {}); assert.equal(list.filter(x => x.game_key.endsWith('_studio')).length, 2);
+});
 
 
 await t('editor accounts: date of birth, deactivate (reversible), delete, sessions', async () => {

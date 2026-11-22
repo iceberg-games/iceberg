@@ -164,16 +164,8 @@ export class Menu {
         h('button.btn.secondary', { onclick: () => dlg.remove() }, 'Cancel'))));
     this.root.append(dlg);
   }
-  /** Minimal settings for the PC home (music). The full Account / Security settings screen is built on feature/editor-accounts. */
-  showSettings() {
-    const m = this.ui.music;
-    const vol = h('input#set-volume', { type: 'range', min: 0, max: 1, step: 0.05, value: m.volume, oninput: (e) => m.setVolume(+e.target.value) });
-    const mute = h('input#set-mute', { type: 'checkbox', checked: !!m.muted, onchange: () => this.ui.toggleMute() });
-    const dlg = h('div.dialog-backdrop.pc-dialog#settings-dialog', h('div.dialog', h('h2', '⚙️ Settings'),
-      h('label', 'Music volume'), vol, h('label', mute, ' Mute music and sounds'),
-      h('div.row', { style: { marginTop: '14px' } }, h('button.btn#settings-close', { onclick: () => dlg.remove() }, 'Done'))));
-    this.root.append(dlg);
-  }
+  /** Settings = the PC home's Settings view (music + Account + Security & Privacy from the accounts work). */
+  showSettings() { this.pcView = 'settings'; this.showGames(); }
 
   showCreateDialog() {
     const dlg = h('div.dialog-backdrop#create-dialog',
