@@ -15,7 +15,7 @@ const dev = await startDevServer({ port: API, quiet: true });
 const web = await serveStatic(OUT, WEB, { prefix: '/iceberg/' });
 const b = await chromium.launch();
 async function signUp(name) {
-  const c = await b.newContext({ viewport: { width: 1440, height: 900 } }); const p = await c.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));
+  const c = await b.newContext({ viewport: { width: 1440, height: 900 } }); await c.addInitScript(() => localStorage.setItem('iceberg:v1:portal', '1')); const p = await c.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message));   // sign up on the portal page (site root otherwise redirects to the home)
   await p.goto(BASE); await p.waitForSelector('#form-signup', { timeout: 20000 }); await p.fill('#form-signup input[name=dob]', '2001-04-15'); await p.fill('#form-signup input[name=username]', name); await p.fill('#form-signup input[name=password]', 'snowball123'); await p.fill('#form-signup input[name=display]', name);
   await p.click('#form-signup button[type=submit]'); await p.waitForSelector('#p-user', { timeout: 15000 }); return { c, p, errs };
 }
@@ -33,7 +33,7 @@ try {
   ok('owner sees the details (🖼️) button on their tile', !!(await pa.$('#your-games .game-card[data-game="g_e2e_meta"] .details-btn')));
   await pa.hover('#your-games .game-card[data-game="g_e2e_meta"]'); await pa.click('#your-games .game-card[data-game="g_e2e_meta"] .details-btn');
   await pa.waitForSelector('#details-dialog'); await pa.fill('#edit-name', 'Lava Dash 2'); await pa.fill('#edit-desc', 'jump over the lava!');
-  await pa.setInputFiles('#edit-file', '/tmp/eu-thumb.png'); await pa.waitForFunction(() => /data:image\/jpeg/.test(document.querySelector('#edit-thumb').style.backgroundImage));
+  await pa.setInputFiles('#edit-file', { name: 'thumb.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAEAAAAAkCAIAAAC2bqvFAAAAU0lEQVR4nO3PwQkAIBDAsJvPVdz/rUP4CEKhA6Rz9vq64YIGtKABLWhACxrQgga0oAEtaEALGtCCBrSgAS1oQAsa0IIGtKABLWhACxrQgga04LELkVBU4qK/WugAAAAASUVORK5CYII=', 'base64') }); await pa.waitForFunction(() => /data:image\/jpeg/.test(document.querySelector('#edit-thumb').style.backgroundImage));
   await pa.screenshot({ path: SHOTS + '/pc-edit-details.png' });
   await pa.click('#edit-save'); await pa.waitForSelector('#details-dialog', { state: 'detached', timeout: 10000 });
   const srv = await pa.evaluate(() => window.iceberg.remote.getPublishedGame('g_e2e_meta'));
@@ -59,7 +59,7 @@ try {
   const cdp = await pw.newCDPSession(pp); await cdp.send('Page.enable');
   const inst = await cdp.send('Page.getInstallabilityErrors').catch(e => ({ installabilityErrors: [{ errorId: 'cdp-failed:' + e.message }] }));
   ok('Chrome installability check: no errors', inst.installabilityErrors.length === 0, JSON.stringify(inst.installabilityErrors));
-  const sw = await pp.evaluate(async () => { const r = await navigator.serviceWorker.getRegistration(); return !!r; }); ok('service worker registered (existing sw.js, network-first navigation)', sw);
+  const sw = await pp.waitForFunction(async () => !!(await navigator.serviceWorker.getRegistration()), null, { timeout: 15000 }).then(() => true, () => false); ok('service worker registered (existing sw.js, network-first navigation)', sw);
   await pa.screenshot({ path: SHOTS + '/pc-home-signed-in.png' });
   ok('no page errors', [...A.errs, ...B.errs].length === 0, [...A.errs, ...B.errs].join(' | '));
 } catch (e) { ok('script ran without exceptions', false, e.message); }

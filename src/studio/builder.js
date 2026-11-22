@@ -42,6 +42,8 @@ const DEFAULTS = {
   obby: { count: 10, spacing: 8, width: 4 },
   maze: { width: 7, height: 5, count: 7 },
   arena: { width: 30, length: 30, height: 6 },
+  town: {},
+  fountain: {},
 };
 
 function dims(intent) {
@@ -54,6 +56,7 @@ function dims(intent) {
   if (intent.template === 'stairs' && intent.height != null) d.steps = Math.max(2, Math.round(intent.height));
   if (intent.stories != null) d.stories = intent.stories;
   if (intent.material) d.material = intent.material;
+  if (intent.city) d.city = true;
   if (s !== 1) {
     for (const k of ['width', 'length', 'height', 'spacing', 'rise', 'run']) if (d[k]) d[k] = Math.max(0.5, +(d[k] * s).toFixed(2));
   }
@@ -335,13 +338,51 @@ function arena(d, color) {
   ];
 }
 
-const MAKERS = { house, building, tower, bridge, coins, checkpoint: checkpoints, wall, platform, stairs, shop, fence, ladder, tree, lamp, car, obby, maze, arena };
+function fountain(d, color) {
+  const c = color || '#5cc3f0';
+  return [
+    part({ name: 'FountainBasin', shape: 'cylinder', pos: [0, 0.4, 0], size: [10, 0.8, 10], color: '#aab4be', material: 'metal' }),
+    part({ name: 'FountainWater', shape: 'cylinder', pos: [0, 0.85, 0], size: [8.4, 0.5, 8.4], color: c, material: 'glass' }),
+    part({ name: 'FountainPillar', shape: 'cylinder', pos: [0, 2.2, 0], size: [1.2, 3, 1.2], color: '#aab4be', material: 'metal' }),
+    part({ name: 'FountainBowl', shape: 'cylinder', pos: [0, 3.8, 0], size: [3.8, 0.5, 3.8], color: '#aab4be', material: 'metal' }),
+    part({ name: 'FountainSpray', shape: 'sphere', pos: [0, 4.8, 0], size: [1.6, 1.8, 1.6], color: c, material: 'glass' }),
+  ];
+}
+
+/** A small town: main road + two cross roads, a shop, houses (taller buildings for a city), trees, lamp posts and a fountain. */
+function town(d, color) {
+  const out = [];
+  const add = (prefix, list, at) => {
+    for (const p of list) p.name = `${prefix}_${p.name}`;
+    offsetAll(list, at);
+    out.push(...list);
+  };
+  const houseD = { width: 12, length: 12, height: 6 };
+  const row = d.city ? building : house;
+  const rowD = d.city ? { width: 14, length: 12, height: 4, stories: 3 } : houseD;
+  const cols = ['#d9534f', '#e0a33a', '#4f9bd9', '#6bbf6b'];
+  const roadC = '#4a4f57';
+  add('Road', [part({ name: 'Main', pos: [0, 0.1, 0], size: [76, 0.2, 8], color: roadC, material: 'plastic', collide: true })], [0, 0, 0]);
+  add('Road', [part({ name: 'CrossWest', pos: [0, 0.12, 0], size: [6, 0.2, 76], color: roadC })], [-34, 0, 0]);
+  add('Road', [part({ name: 'CrossEast', pos: [0, 0.12, 0], size: [6, 0.2, 76], color: roadC })], [34, 0, 0]);
+  add('Shop', shop({ width: 8, length: 6, height: 4 }, null), [0, 0, -14]);
+  add('Fountain', fountain(d), [0, 0, 14]);
+  add('House1', row(rowD, color || cols[0]), [-14, 0, -14]);
+  add('House2', row(rowD, color || cols[1]), [14, 0, -14]);
+  add('House3', row(rowD, color || cols[2]), [-14, 0, 14]);
+  add('House4', row(rowD, color || cols[3]), [14, 0, 14]);
+  [[-25, -26], [25, -26], [-25, 26], [25, 26]].forEach(([x, z], i) => add(`Tree${i + 1}`, tree({ height: 7, width: 2 }), [x, 0, z]));
+  [[-24, 5.5], [-8, -5.5], [8, 5.5], [24, -5.5]].forEach(([x, z], i) => add(`Lamp${i + 1}`, lamp({ height: 9 }), [x, 0, z]));
+  return out;
+}
+
+const MAKERS = { town, fountain, house, building, tower, bridge, coins, checkpoint: checkpoints, wall, platform, stairs, shop, fence, ladder, tree, lamp, car, obby, maze, arena };
 
 const LABELS = {
   house: 'house', building: 'building', tower: 'tower', bridge: 'bridge', coins: 'coins',
   checkpoint: 'checkpoint', wall: 'wall', platform: 'platform', stairs: 'stairs',
   shop: 'shop stand', fence: 'fence', ladder: 'ladder', tree: 'tree', lamp: 'lamp post',
-  car: 'car', obby: 'obby', maze: 'maze', arena: 'arena',
+  car: 'car', obby: 'obby', maze: 'maze', arena: 'arena', town: 'town', fountain: 'fountain',
 };
 
 
@@ -433,7 +474,7 @@ export function planBuild(intent, ctx = {}) {
   if (!maker) return { ok: false, reason: 'unknown-template', instances: [] };
   const d = dims(intent);
   let instances = maker.length >= 3 ? maker(d, intent.color, ctx.around) : maker(d, intent.color);
-  if ((intent.color || intent.material) && template !== 'coins' && template !== 'checkpoint') paint(instances, intent.color, undefined, intent.material);
+  if ((intent.color || intent.material) && template !== 'coins' && template !== 'checkpoint' && template !== 'town') paint(instances, intent.color, undefined, intent.material);
   const origin = (ctx.existing || ctx.selection || ctx.lookPoint)
     ? resolveBuildOrigin(instances, ctx)
     : (ctx.origin || [0, 0, 0]);
@@ -442,6 +483,7 @@ export function planBuild(intent, ctx = {}) {
   const bits = [];
   if (template === 'coins') bits.push(`${d.count} coin${d.count === 1 ? '' : 's'}${intent.line || d.count > 1 ? ' in a line' : ''}`);
   else if (template === 'tower') bits.push(`a tower ${d.height} high`);
+  else if (template === 'town') bits.push(intent.city ? 'a little city' : 'a little town');
   else if (template === 'house') bits.push(intent.scale < 1 ? 'a small house' : intent.scale > 1 ? 'a large house' : 'a house');
   else if (template === 'building') bits.push(`a ${d.stories || 3} story building`);
   else if (template === 'obby') bits.push(`a ${d.count} jump obby`);

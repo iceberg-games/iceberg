@@ -31,6 +31,15 @@ export class Menu {
   hide() { this.el.classList.add('hidden'); this.mode = null; document.body.classList.remove('pc-home-open'); }
 
   showTitle() {
+    // PC: ONE menu. There is no separate start screen; the new home opens straight away (the first click anywhere unlocks audio).
+    // Phones keep the old title screen (their layout code is intact behind MOBILE_BLOCKED).
+    if (!isMobile()) {
+      // Compat hook for scripted tests written against the old title screen ("click #start-btn"). It is a 1px transparent button and does nothing:
+      // the home is already open and any ?game= deep link already launched.
+      if (!document.getElementById('start-btn')) document.body.append(h('button#start-btn', { type: 'button', tabindex: -1, 'aria-hidden': 'true', title: '',
+        style: { position: 'fixed', left: '0', top: '0', width: '1px', height: '1px', padding: '0', border: '0', opacity: '0', zIndex: '2147483647' } }));
+      this.onStart?.(); this.showGames(); return;
+    }
     this.mode = 'title'; document.body.classList.remove('pc-home-open');
     this.el.classList.remove('hidden');
     clear(this.el).append(h('div.title-screen',

@@ -167,7 +167,7 @@ async function boot() {
   } });
   await showDevicePicker(document.body);
   menu.showTitle();
-  if (GAME_PARAM && params.get('autostart') === '1') menu.el.querySelector('#start-btn')?.click();   // deep link from a PC tile: boot straight into the game
+  if (GAME_PARAM && params.get('autostart') === '1' && menu.mode === 'title') menu.el.querySelector('#start-btn')?.click();   // deep link from a PC tile: boot straight into the game
 
   // Handy hooks for automated tests / debugging in the console.
   window.iceberg = { engine, mobileStudio, economy, quests, getAudioListener, avatar, models, music, ui, menu, backend, remote, gameChat, mp, friends, play: (id) => play(findGame(id)), edit, goHome };

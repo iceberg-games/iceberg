@@ -120,7 +120,7 @@ export function handleChat(text, ctx = {}) {
       role: 'assistant',
       intent,
       plan,
-      text: `Built ${plan.summary}. That's one undo if you want it gone.`,
+      text: `${intent.note ? intent.note + ' ' : ''}Built ${plan.summary}. That's one undo if you want it gone.`,
       applied: false,
       needsApply: true,
     };
@@ -258,13 +258,14 @@ export function applyChat(ed, result, ctx = {}) {
     const around = result.intent.around ? (selection.length ? selection : lastBuildParts(ed)) : null;
     const plan = planBuild(result.intent, { existing, selection, lookPoint, origin: ctx.origin || [0, 0, 0], around });
     const out = applyBuild(ed, plan);
+    if (out.ok) { try { ed.focus?.(out.groupId || out.ids?.[0]); } catch { /* camera framing is best-effort */ } }
     return {
       ...result,
       plan,
       applied: !!out.ok,
       ids: out.ids,
       groupId: out.groupId,
-      text: out.ok ? `Built ${plan.summary}. That's one undo if you want it gone.` : 'I planned the build but could not add the parts.',
+      text: out.ok ? `${result.intent.note ? result.intent.note + ' ' : ''}Built ${plan.summary}. That's one undo if you want it gone.` : 'I planned the build but could not add the parts.',
     };
   }
   if (result.kind === 'undoLast' || result.kind === 'tweak') {

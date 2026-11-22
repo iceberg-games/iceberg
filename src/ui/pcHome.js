@@ -63,12 +63,13 @@ export function renderPcHome(menu, { custom, community }) {
     const popular = [...it.community].sort((a, b) => countOf(b.def.id) - countOf(a.def.id) || at(b) - at(a));
     const recent = [...it.community].sort((a, b) => at(b) - at(a));
     const none = menu.serverError ? `Couldn't load community games: ${menu.serverError}` : 'No community games yet. Press Create, make a game and publish it!';
-    rowsEl.append(
+    rowsEl.append(...[
       row('Popular right now', popular, { id: 'community-games', empty: none }),
-      row('Recently added', recent, { id: 'community-recent' }),
+      recent.length ? row('Recently added', recent, { id: 'community-recent' }) : null,
+      // Built-in games (BIRG HQ, Frost Fields) are for everyone: always visible right under the community rows, no ownership check.
+      row('Iceberg games', it.builtin, { id: 'games-carousel' }),
       row('Your Games', it.yours, { id: 'your-games', empty: 'No games yet. Press Create in the sidebar to start one!',
-        right: h('div.row', menu.importInput(), h('button.btn.small.secondary#import-btn', { onclick: () => menu.importInput().click() }, '📥 Import (.json)')) }),
-      row('Iceberg games', it.builtin, { id: 'games-carousel' }));
+        right: h('div.row', menu.importInput(), h('button.btn.small.secondary#import-btn', { onclick: () => menu.importInput().click() }, '📥 Import (.json)')) })].filter(Boolean));
   };
 
   const friendsRow = h('div.pc-friends-row#pc-friends-row', 'No friends yet.');

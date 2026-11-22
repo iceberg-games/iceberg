@@ -116,3 +116,19 @@ chat / GUI toggle / first-person setting) and `src/engine/player.js`
 - UGC accessories and custom-model visibility were not part of this drop.
 
 Do not publish. Do not push to main. Do not sign up for or call a paid API.
+
+## fix/ai-chat-live (hotfix off main 23212fb)
+Colin reported the live chat "can't make anything" ("make me a town", "make me a house").
+Reproduced with a production build (`vite build` + `vite preview`, and `build:site` + `/play/`):
+- **town / city / village / "i want a house" were not understood** — no town template and no
+  forgiving parser (cause of the "didn't understand" replies).
+- **"make me a house" did build** in the prod build, but on non-blank templates (e.g. Glacier island)
+  it was placed at the next free spot **out of view**, and on the blank baseplate the camera sat
+  almost on top of it — so it looked like nothing happened. Fixed by framing the camera on every build.
+- Not the cause: `me` in the phrase, prod-only bundling, wiring (chat mounts in the live PC Studio), or builder
+  exceptions (none; no page errors). Phone "Mobile Studio" still has no chat (PC only, unchanged).
+Fixes: TOWN template (main road + 2 cross roads, shop, 4 houses — or taller buildings for a city —
+trees, lamp posts, fountain, no overlap); `fountain` template; `polish()` strips me/please/can you/
+i want/a little/some; noun-only phrases ("a house"); any build request with no template falls back to the
+closest one with a friendly note (never "can't"); every build now focuses the camera on the new group.
+Tests: `studio-chat-tests.mjs` 71/71, `studio-chat-live-smoke.mjs` 22/22 (prod build, preview and site build).
